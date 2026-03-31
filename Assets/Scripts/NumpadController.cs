@@ -19,11 +19,14 @@ public class NumpadController : MonoBehaviour
             if (currentCode.Length > 0)
                 currentCode = currentCode[..^1];
         }
+        else if (value == "ENT")
+        {
+            if (currentCode.Length > 0)
+                OnCodeEntered?.Invoke(currentCode);
+        }
         else if (currentCode.Length < maxDigits)
         {
             currentCode += value;
-            if (currentCode.Length == maxDigits)
-                OnCodeEntered?.Invoke(currentCode);
         }
 
         UpdateDisplay();

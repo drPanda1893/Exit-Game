@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 using UnityEditor.Animations;
+using UnityEditor.Events;
 using UnityEditor.SceneManagement;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -35,10 +36,14 @@ public class BuildLevel1PrisonCell : EditorWindow
         SceneManager.MoveGameObjectToScene(environmentRoot, scene);
 
         var (numpadPanel, hintText) = BuildUI(scene);
-        BuildCellEnvironment(environmentRoot.transform, numpadPanel, hintText);
+        GameObject exitDoor = BuildCellEnvironment(environmentRoot.transform, numpadPanel, hintText);
 
-        GameObject bigYahu = AddBigYahuToScene(scene);
+        // Puzzle-Handler auf NumpadPanel: prüft Code 1642 und öffnet Tür
+        CellPuzzleHandler handler = numpadPanel.AddComponent<CellPuzzleHandler>();
+        if (exitDoor != null)
+            handler.exitDoor = exitDoor.GetComponent<DoorController>();
 
+        // Kamera zuerst erstellen — garantiert vorhanden auch wenn BigYahu-Setup fehlschlägt
         GameObject camGO = new GameObject("Main Camera");
         Camera cam = camGO.AddComponent<Camera>();
         cam.clearFlags       = CameraClearFlags.SolidColor;
@@ -50,8 +55,10 @@ public class BuildLevel1PrisonCell : EditorWindow
         camGO.transform.position = new Vector3(0, 11f, 0);
         camGO.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
         TopDownCameraFollow follow = camGO.AddComponent<TopDownCameraFollow>();
-        if (bigYahu != null) follow.SetTarget(bigYahu.transform);
         SceneManager.MoveGameObjectToScene(camGO, scene);
+
+        GameObject bigYahu = AddBigYahuToScene(scene);
+        if (bigYahu != null) follow.SetTarget(bigYahu.transform);
 
         // Weak directional fill — ensures the cell is never pitch-black
         GameObject fillGO = new GameObject("FillLight");
@@ -106,8 +113,9 @@ public class BuildLevel1PrisonCell : EditorWindow
 
     // ─── Environment ─────────────────────────────────────────────────────────
 
-    private void BuildCellEnvironment(Transform root, GameObject numpadPanel, TextMeshProUGUI hintText)
+    private GameObject BuildCellEnvironment(Transform root, GameObject numpadPanel, TextMeshProUGUI hintText)
     {
+        GameObject exitDoorGO = null;
         Material concreteMat     = CreateMaterial(new Color(0.30f, 0.28f, 0.25f), 0.04f, 0.08f);
         Material darkConcreteMat = CreateMaterial(new Color(0.18f, 0.16f, 0.14f), 0.02f, 0.04f);
         Material darkMetalMat    = CreateMaterial(new Color(0.12f, 0.12f, 0.13f), 0.88f, 0.50f);
@@ -134,7 +142,24 @@ public class BuildLevel1PrisonCell : EditorWindow
         // ── Walls ──────────────────────────────────────────────────────────────
         CreateSolid("BackWall",  new Vector3( 0,    2.5f,  2.5f), new Vector3(5f,   5f, 0.3f), concreteMat, root);
         CreateSolid("LeftWall",  new Vector3(-2.5f, 2.5f,  0f  ), new Vector3(0.3f, 5f, 5f  ), concreteMat, root);
-        CreateSolid("RightWall", new Vector3( 2.5f, 2.5f,  0f  ), new Vector3(0.3f, 5f, 5f  ), concreteMat, root);
+        // Rechte Wand – mit Türöffnung bei z=0 (1.4 m breit, 2.4 m hoch)
+        CreateSolid("RightWall_Front",  new Vector3(2.5f, 2.5f, -1.6f), new Vector3(0.3f, 5f,  1.8f), concreteMat, root);
+        CreateSolid("RightWall_Back",   new Vector3(2.5f, 2.5f,  1.6f), new Vector3(0.3f, 5f,  1.8f), concreteMat, root);
+        CreateSolid("RightWall_Lintel", new Vector3(2.5f, 3.7f,  0f  ), new Vector3(0.3f, 2.6f, 1.4f), concreteMat, root);
+
+        // Tür (schiebt sich bei korrektem Code in -Z-Richtung hinter den vorderen Wandabschnitt)
+        Material doorMat = CreateMaterial(new Color(0.22f, 0.17f, 0.12f), 0.12f, 0.22f);
+        exitDoorGO = new GameObject("ExitDoor");
+        exitDoorGO.transform.position = new Vector3(2.35f, 1.2f, 0f);
+        exitDoorGO.transform.SetParent(root);
+        GameObject doorPanel = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        doorPanel.transform.SetParent(exitDoorGO.transform, false);
+        doorPanel.transform.localPosition = Vector3.zero;
+        doorPanel.transform.localScale    = new Vector3(0.15f, 2.4f, 1.4f);
+        doorPanel.GetComponent<Renderer>().material = doorMat;
+        DoorController doorCtrl = exitDoorGO.AddComponent<DoorController>();
+        doorCtrl.openDistance = 1.4f;
+        doorCtrl.openDuration = 1.2f;
 
         // Stone block mortar lines
         AddMortarLines(root, darkConcreteMat);
@@ -200,6 +225,8 @@ public class BuildLevel1PrisonCell : EditorWindow
         sc.convex = true;
         stone.tag = "Stone";
         stone.transform.SetParent(root);
+
+        return exitDoorGO;
     }
 
     // Creates a primitive with collider (structural / solid)
@@ -598,7 +625,7 @@ public class BuildLevel1PrisonCell : EditorWindow
         GameObject codeGO = new GameObject("BlanketCode_66A");
         codeGO.transform.SetParent(g.transform);
         codeGO.transform.localPosition = new Vector3(0f, 0.572f, -0.08f); // knapp über Decke
-        codeGO.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);  // nach oben zeigend
+        codeGO.transform.localRotation = Quaternion.Euler(-90f, 180f, 0f);  // nach oben zeigend, korrekt ausgerichtet
         TextMeshPro tmp = codeGO.AddComponent<TextMeshPro>();
         tmp.text            = "66A";
         tmp.fontStyle       = FontStyles.Bold;
@@ -979,7 +1006,7 @@ public class BuildLevel1PrisonCell : EditorWindow
 
     private GameObject AddBigYahuToScene(Scene scene)
     {
-        GameObject idleModel    = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Big Yahu/prisoner+running.glb");
+        GameObject idleModel    = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Big Yahu/Big Yahu standing.fbx");
         GameObject runningModel = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Big Yahu/Big Yahu jogging.fbx");
         Material mat            = AssetDatabase.LoadAssetAtPath<Material>("Assets/Big Yahu/Big Yahu material.mat");
 
@@ -992,12 +1019,15 @@ public class BuildLevel1PrisonCell : EditorWindow
             idle.name = "IdleModel";
             idle.transform.SetParent(character.transform, false);
             idle.SetActive(true);
+            try { SetupStandingAnimation(idle); }
+            catch (System.Exception e) { Debug.LogWarning("SetupStandingAnimation fehlgeschlagen: " + e.Message); }
 
             GameObject running = (GameObject)PrefabUtility.InstantiatePrefab(runningModel);
             running.name = "RunningModel";
             running.transform.SetParent(character.transform, false);
             running.SetActive(false);
-            SetupRunAnimation(running);
+            try { SetupRunAnimation(running); }
+            catch (System.Exception e) { Debug.LogWarning("SetupRunAnimation fehlgeschlagen: " + e.Message); }
 
             if (mat != null)
                 foreach (Renderer r in character.GetComponentsInChildren<Renderer>(true))
@@ -1072,6 +1102,46 @@ public class BuildLevel1PrisonCell : EditorWindow
         animator.runtimeAnimatorController = controller;
     }
 
+    private void SetupStandingAnimation(GameObject standingInstance)
+    {
+        Object[] fbxAssets = AssetDatabase.LoadAllAssetsAtPath("Assets/Big Yahu/Big Yahu standing.fbx");
+        AnimationClip sourceClip = null;
+        foreach (Object asset in fbxAssets)
+            if (asset is AnimationClip clip && !clip.name.StartsWith("__preview__"))
+            { sourceClip = clip; break; }
+
+        if (sourceClip == null)
+        {
+            Debug.LogWarning("Keine AnimationClip in 'Big Yahu standing.fbx' gefunden.");
+            return;
+        }
+
+        const string clipPath = "Assets/Big Yahu/BigYahu_Stand_Loop.anim";
+        if (AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath) != null)
+            AssetDatabase.DeleteAsset(clipPath);
+
+        AnimationClip loopClip = Object.Instantiate(sourceClip);
+        loopClip.name = "BigYahu_Stand_Loop";
+        AnimationClipSettings s = AnimationUtility.GetAnimationClipSettings(loopClip);
+        s.loopTime = true;
+        AnimationUtility.SetAnimationClipSettings(loopClip, s);
+        AssetDatabase.CreateAsset(loopClip, clipPath);
+
+        const string controllerPath = "Assets/Big Yahu/BigYahu_Stand.controller";
+        if (AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath) != null)
+            AssetDatabase.DeleteAsset(controllerPath);
+
+        AnimatorController controller = AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
+        AnimatorStateMachine sm = controller.layers[0].stateMachine;
+        AnimatorState standState = sm.AddState("Stand");
+        standState.motion = loopClip;
+        sm.defaultState = standState;
+        AssetDatabase.SaveAssets();
+
+        Animator animator = standingInstance.GetComponent<Animator>() ?? standingInstance.AddComponent<Animator>();
+        animator.runtimeAnimatorController = controller;
+    }
+
     // ─── UI ──────────────────────────────────────────────────────────────────
 
     private (GameObject numpadPanel, TextMeshProUGUI hintText) BuildUI(Scene scene)
@@ -1140,18 +1210,15 @@ public class BuildLevel1PrisonCell : EditorWindow
         grid.spacing        = new Vector2(10, 10);
         grid.childAlignment = TextAnchor.UpperCenter;
 
-        string[] buttons    = { "7", "8", "9", "4", "5", "6", "1", "2", "3", "", "0", "DEL" };
-        Color deleteColor   = new Color(0.6f, 0.2f, 0.2f);
-        Color digitColor    = new Color(0.3f, 0.3f, 0.3f);
+        string[] buttons  = { "7", "8", "9", "4", "5", "6", "1", "2", "3", "ENT", "0", "DEL" };
+        Color deleteColor = new Color(0.6f, 0.2f, 0.2f);
+        Color enterColor  = new Color(0.15f, 0.55f, 0.15f);
+        Color digitColor  = new Color(0.3f, 0.3f, 0.3f);
 
         foreach (string btn in buttons)
         {
-            if (string.IsNullOrEmpty(btn))
-            {
-                new GameObject("Empty").transform.SetParent(gridGO.transform, false);
-                continue;
-            }
-            CreateButton(btn, gridGO.transform, btn == "DEL" ? deleteColor : digitColor, numpadCtrl);
+            Color btnColor = btn == "DEL" ? deleteColor : btn == "ENT" ? enterColor : digitColor;
+            CreateButton(btn, gridGO.transform, btnColor, numpadCtrl);
         }
 
         return (numpadPanel, hintText);
@@ -1189,7 +1256,7 @@ public class BuildLevel1PrisonCell : EditorWindow
         btnGO.transform.SetParent(parent, false);
         btnGO.AddComponent<Image>().color = bgColor;
         Button btn = btnGO.AddComponent<Button>();
-        btn.onClick.AddListener(() => controller.ButtonPressed(text));
+        UnityEventTools.AddStringPersistentListener(btn.onClick, controller.ButtonPressed, text);
 
         GameObject textGO = new GameObject("Text");
         textGO.transform.SetParent(btnGO.transform, false);
