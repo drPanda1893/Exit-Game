@@ -18,9 +18,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
     {
         GUILayout.Label("Level 2 – Geheimer Wartungsraum", EditorStyles.boldLabel);
         GUILayout.Space(8);
-        EditorGUILayout.HelpBox(
-            "Erstellt einen versteckten High-End Wartungsraum mit Joshi als sitzendem NPC.",
-            MessageType.Info);
+        EditorGUILayout.HelpBox("Versteckter High-End Wartungsraum mit Joshi (sitzt, redet).", MessageType.Info);
         GUILayout.Space(12);
         if (GUILayout.Button("Wartungsraum bauen", GUILayout.Height(34)))
             Build();
@@ -34,9 +32,8 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
     {
         Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
         EditorSceneManager.SaveScene(scene, "Assets/Scenes/Level2.unity");
-        Debug.Log("[Level2] Starte Aufbau...");
 
-        // Kamera zuerst – damit sie auch bei späteren Fehlern existiert
+        // ── Kamera (zuerst, damit sie auch bei Fehlern existiert) ─────────────
         GameObject camGO = new GameObject("Main Camera");
         Camera cam = camGO.AddComponent<Camera>();
         cam.clearFlags      = CameraClearFlags.SolidColor;
@@ -47,23 +44,28 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         camGO.AddComponent<AudioListener>();
         camGO.transform.position = new Vector3(0f, 11f, 0f);
         camGO.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+        TopDownCameraFollow follow = camGO.AddComponent<TopDownCameraFollow>();
         SceneManager.MoveGameObjectToScene(camGO, scene);
 
-        // Umgebung
+        // ── Umgebung ──────────────────────────────────────────────────────────
         GameObject root = new GameObject("Environment");
         SceneManager.MoveGameObjectToScene(root, scene);
         BuildRoom(root.transform);
 
-        // NPC Joshi
-        try { AddJoshi(scene); }
-        catch (System.Exception e) { Debug.LogWarning("[Level2] Joshi-Setup fehlgeschlagen: " + e.Message); }
+        // ── Spieler-Charakter ─────────────────────────────────────────────────
+        GameObject player = AddPlayer(scene);
+        if (player != null) follow.SetTarget(player.transform);
 
-        // Globales Licht
+        // ── Joshi NPC ─────────────────────────────────────────────────────────
+        try { AddJoshi(scene); }
+        catch (System.Exception e) { Debug.LogWarning("[Level2] Joshi fehlgeschlagen: " + e.Message); }
+
+        // ── Globales Licht ────────────────────────────────────────────────────
         RenderSettings.ambientMode  = UnityEngine.Rendering.AmbientMode.Flat;
-        RenderSettings.ambientLight = new Color(0.07f, 0.09f, 0.16f);
+        RenderSettings.ambientLight = new Color(0.06f, 0.08f, 0.14f);
 
         EditorSceneManager.SaveScene(scene);
-        Debug.Log("[Level2] Fertig.");
+        Debug.Log("[Level2] Wartungsraum fertig.");
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -73,8 +75,8 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
     private Material M(Color c, float metal = 0f, float smooth = 0.35f)
     {
         var m = new Material(Shader.Find("Standard")) { color = c };
-        m.SetFloat("_Metallic",    metal);
-        m.SetFloat("_Glossiness",  smooth);
+        m.SetFloat("_Metallic",   metal);
+        m.SetFloat("_Glossiness", smooth);
         return m;
     }
 
@@ -86,21 +88,31 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         return m;
     }
 
+    private Material Trans(Color c)
+    {
+        var m = new Material(Shader.Find("Standard")) { color = c };
+        m.SetFloat("_Mode", 3f);
+        m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+        m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+        m.SetInt("_ZWrite", 0);
+        m.EnableKeyword("_ALPHABLEND_ON");
+        m.renderQueue = 3000;
+        return m;
+    }
+
     // ═══════════════════════════════════════════════════════════════════════
     // Primitive-Helfer
     // ═══════════════════════════════════════════════════════════════════════
 
     private GameObject Box(string name, Vector3 pos, Vector3 scale, Material mat, Transform parent,
-                           Quaternion? rot = null, bool collider = true)
+                           Quaternion? rot = null, bool col = true)
     {
         var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        go.name = name;
-        go.transform.SetParent(parent);
-        go.transform.position   = pos;
-        go.transform.localScale = scale;
+        go.name = name; go.transform.SetParent(parent);
+        go.transform.position = pos; go.transform.localScale = scale;
         if (rot.HasValue) go.transform.rotation = rot.Value;
         go.GetComponent<Renderer>().material = mat;
-        if (!collider) Object.DestroyImmediate(go.GetComponent<Collider>());
+        if (!col) Object.DestroyImmediate(go.GetComponent<Collider>());
         return go;
     }
 
@@ -108,30 +120,23 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
                             Quaternion? rot = null)
     {
         var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        go.name = name;
-        go.transform.SetParent(parent);
-        go.transform.position   = pos;
-        go.transform.localScale = scale;
+        go.name = name; go.transform.SetParent(parent);
+        go.transform.position = pos; go.transform.localScale = scale;
         if (rot.HasValue) go.transform.rotation = rot.Value;
         go.GetComponent<Renderer>().material = mat;
         Object.DestroyImmediate(go.GetComponent<Collider>());
         return go;
     }
 
-    private void Light(string name, Transform parent, Vector3 localPos,
-                       LightType type, Color color, float intensity, float range,
-                       float spotAngle = 60f, LightShadows shadows = LightShadows.None)
+    private void AddLight(string name, Transform parent, Vector3 localPos,
+                          LightType type, Color color, float intensity, float range,
+                          float spotAngle = 60f, LightShadows shadows = LightShadows.None)
     {
-        var go   = new GameObject(name);
-        go.transform.SetParent(parent);
-        go.transform.localPosition = localPos;
-        var l    = go.AddComponent<Light>();
-        l.type       = type;
-        l.color      = color;
-        l.intensity  = intensity;
-        l.range      = range;
-        l.spotAngle  = spotAngle;
-        l.shadows    = shadows;
+        var go = new GameObject(name);
+        go.transform.SetParent(parent); go.transform.localPosition = localPos;
+        var l = go.AddComponent<Light>();
+        l.type = type; l.color = color; l.intensity = intensity;
+        l.range = range; l.spotAngle = spotAngle; l.shadows = shadows;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -141,216 +146,260 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
     private void BuildRoom(Transform root)
     {
         // ── Materialien ──────────────────────────────────────────────────────
-        var steelDark   = M(new Color(0.09f, 0.10f, 0.12f), 0.80f, 0.58f);
-        var steelMid    = M(new Color(0.14f, 0.15f, 0.18f), 0.72f, 0.50f);
-        var steelBright = M(new Color(0.26f, 0.28f, 0.33f), 0.88f, 0.72f);
-        var floorMat    = M(new Color(0.10f, 0.11f, 0.13f), 0.55f, 0.68f);
-        var grateMat    = M(new Color(0.07f, 0.07f, 0.08f), 0.90f, 0.45f);
-        var woodDark    = M(new Color(0.14f, 0.09f, 0.05f), 0.04f, 0.18f);
-        var concrete    = M(new Color(0.22f, 0.22f, 0.24f), 0.05f, 0.10f);
-        var whiteMat    = M(new Color(0.86f, 0.89f, 0.94f), 0.05f, 0.20f);
-        var rubberMat   = M(new Color(0.08f, 0.08f, 0.09f), 0.01f, 0.05f);
+        var steelDark   = M(new Color(0.08f, 0.09f, 0.11f), 0.82f, 0.60f);
+        var steelMid    = M(new Color(0.14f, 0.15f, 0.18f), 0.72f, 0.52f);
+        var steelBright = M(new Color(0.28f, 0.30f, 0.36f), 0.90f, 0.75f);
+        var steelGold   = M(new Color(0.28f, 0.22f, 0.09f), 0.88f, 0.70f);
+        var floorMat    = M(new Color(0.09f, 0.10f, 0.12f), 0.60f, 0.72f);
+        var grateMat    = M(new Color(0.07f, 0.07f, 0.08f), 0.92f, 0.48f);
+        var woodDark    = M(new Color(0.13f, 0.08f, 0.04f), 0.04f, 0.18f);
+        var rubberMat   = M(new Color(0.07f, 0.07f, 0.08f), 0.01f, 0.04f);
+        var whiteMat    = M(new Color(0.88f, 0.91f, 0.96f), 0.05f, 0.22f);
+        var concreteMat = M(new Color(0.20f, 0.20f, 0.22f), 0.05f, 0.08f);
 
         // Emissive
-        var ledBlue   = Emit(new Color(0.05f, 0.10f, 0.25f), new Color(0.15f, 0.45f, 1.00f), 2.0f);
-        var ledAmber  = Emit(new Color(0.30f, 0.18f, 0.02f), new Color(1.00f, 0.62f, 0.08f), 1.8f);
-        var ledGreen  = Emit(new Color(0.03f, 0.22f, 0.05f), new Color(0.08f, 1.00f, 0.18f), 1.5f);
-        var ledRed    = Emit(new Color(0.28f, 0.03f, 0.03f), new Color(1.00f, 0.08f, 0.08f), 1.6f);
-        var screenMat = Emit(new Color(0.04f, 0.10f, 0.22f), new Color(0.10f, 0.40f, 0.95f), 2.8f);
-        var screenGrn = Emit(new Color(0.03f, 0.15f, 0.06f), new Color(0.05f, 0.95f, 0.15f), 2.2f);
+        var ledBlue  = Emit(new Color(0.04f, 0.08f, 0.22f), new Color(0.12f, 0.40f, 1.00f), 2.2f);
+        var ledAmber = Emit(new Color(0.28f, 0.16f, 0.02f), new Color(1.00f, 0.58f, 0.06f), 1.8f);
+        var ledGreen = Emit(new Color(0.03f, 0.20f, 0.05f), new Color(0.06f, 1.00f, 0.16f), 1.6f);
+        var ledRed   = Emit(new Color(0.26f, 0.03f, 0.03f), new Color(1.00f, 0.06f, 0.06f), 1.8f);
+        var ledCyan  = Emit(new Color(0.03f, 0.18f, 0.20f), new Color(0.08f, 0.80f, 1.00f), 1.4f);
+        var scrBlue  = Emit(new Color(0.03f, 0.08f, 0.20f), new Color(0.08f, 0.38f, 0.95f), 3.0f);
+        var scrGrn   = Emit(new Color(0.03f, 0.14f, 0.05f), new Color(0.04f, 0.92f, 0.14f), 2.4f);
+        var hazardYel= M(new Color(0.70f, 0.60f, 0.04f), 0f, 0.20f);
+        var hazardBlk= M(new Color(0.06f, 0.06f, 0.06f), 0f, 0.06f);
 
         // ── Boden ────────────────────────────────────────────────────────────
-        Box("Floor", new Vector3(0, -0.08f, 0), new Vector3(5f, 0.16f, 5f), floorMat, root);
+        Box("Floor", new Vector3(0, -0.08f, 0), new Vector3(6f, 0.16f, 6f), floorMat, root);
 
-        // Gitter-Overlay (dekorativ)
-        for (int i = -2; i <= 2; i++)
+        // Metallgitter-Platten (große Quadrate)
+        for (int x = -2; x <= 2; x++)
+        for (int z = -2; z <= 2; z++)
         {
-            Box("GrateX", new Vector3(i * 1.0f, 0.005f, 0), new Vector3(0.035f, 0.005f, 5f), grateMat, root, collider: false);
-            Box("GrateZ", new Vector3(0, 0.005f, i * 1.0f), new Vector3(5f, 0.005f, 0.035f), grateMat, root, collider: false);
+            Box($"FloorTile_{x}_{z}", new Vector3(x * 1.0f, 0.002f, z * 1.0f),
+                new Vector3(0.96f, 0.003f, 0.96f), steelMid, root, col: false);
+            // Zwischenlinien
+            Box($"TileGrateX_{x}_{z}", new Vector3(x + 0.48f, 0.006f, z),
+                new Vector3(0.04f, 0.003f, 0.96f), grateMat, root, col: false);
+            Box($"TileGrateZ_{x}_{z}", new Vector3(x, 0.006f, z + 0.48f),
+                new Vector3(0.96f, 0.003f, 0.04f), grateMat, root, col: false);
         }
 
-        // Boden-LED-Linien
-        Box("FLed1", new Vector3(-1.85f, 0.008f, 0), new Vector3(0.012f, 0.004f, 4.7f), ledBlue,  root, collider: false);
-        Box("FLed2", new Vector3( 1.85f, 0.008f, 0), new Vector3(0.012f, 0.004f, 4.7f), ledBlue,  root, collider: false);
-        Box("FLed3", new Vector3(0,      0.008f, -1.85f), new Vector3(4.7f, 0.004f, 0.012f), ledAmber, root, collider: false);
+        // Boden-LED-Linien (blau + gold, rahmen den Raum ein)
+        Box("FLedBlue1", new Vector3(-2.35f, 0.010f, 0), new Vector3(0.018f, 0.006f, 5.60f), ledBlue,  root, col: false);
+        Box("FLedBlue2", new Vector3( 2.35f, 0.010f, 0), new Vector3(0.018f, 0.006f, 5.60f), ledBlue,  root, col: false);
+        Box("FLedAmber1",new Vector3(0, 0.010f, -2.35f), new Vector3(5.60f, 0.006f, 0.018f), ledAmber, root, col: false);
+        Box("FLedAmber2",new Vector3(0, 0.010f,  2.35f), new Vector3(5.60f, 0.006f, 0.018f), ledAmber, root, col: false);
+
+        // Gefahrenstreifen am Eingang (Vorderwand)
+        for (int i = -3; i <= 3; i++)
+        {
+            var hazMat = (i % 2 == 0) ? hazardYel : hazardBlk;
+            Box($"Haz_{i}", new Vector3(i * 0.18f, 0.005f, -2.15f), new Vector3(0.16f, 0.003f, 0.5f),
+                hazMat, root, Quaternion.Euler(0, 45f, 0), false);
+        }
 
         // ── Wände ────────────────────────────────────────────────────────────
         // Rückwand (+Z)
-        Box("BackWall",      new Vector3(0,    2.5f,  2.5f), new Vector3(5.0f, 5f, 0.22f), steelDark, root);
+        Box("BackWall",       new Vector3(0,     2.5f,  3.0f), new Vector3(6.0f, 5f, 0.24f), steelDark, root);
         // Linke Wand (-X)
-        Box("LeftWall",      new Vector3(-2.5f, 2.5f, 0),    new Vector3(0.22f, 5f, 5.0f), steelDark, root);
+        Box("LeftWall",       new Vector3(-3.0f, 2.5f,  0f  ), new Vector3(0.24f, 5f, 6.0f), steelDark, root);
         // Rechte Wand (+X)
-        Box("RightWall",     new Vector3( 2.5f, 2.5f, 0),    new Vector3(0.22f, 5f, 5.0f), steelDark, root);
-        // Vorderwand (-Z) mit Durchgang (1.4 m breit) – Spieler kommt hier rein
-        Box("FrontWall_L",   new Vector3(-1.8f, 2.5f, -2.5f), new Vector3(1.4f, 5f, 0.22f), steelDark, root);
-        Box("FrontWall_R",   new Vector3( 1.8f, 2.5f, -2.5f), new Vector3(1.4f, 5f, 0.22f), steelDark, root);
-        Box("FrontWall_Top", new Vector3(0,     3.7f, -2.5f), new Vector3(5.0f, 2.6f, 0.22f), steelDark, root);
+        Box("RightWall",      new Vector3( 3.0f, 2.5f,  0f  ), new Vector3(0.24f, 5f, 6.0f), steelDark, root);
+        // Vorderwand (-Z) mit Eingang
+        Box("FrontWall_L",    new Vector3(-2.0f, 2.5f, -3.0f), new Vector3(2.0f, 5f, 0.24f), steelDark, root);
+        Box("FrontWall_R",    new Vector3( 2.0f, 2.5f, -3.0f), new Vector3(2.0f, 5f, 0.24f), steelDark, root);
+        Box("FrontWall_Top",  new Vector3( 0f,   3.8f, -3.0f), new Vector3(6.0f, 2.4f, 0.24f), steelDark, root);
 
-        // Wandpaneel-Unterteilung (horizontale Trenner)
-        float[] strips = { 0.6f, 1.2f, 2.0f, 3.0f, 4.0f };
-        foreach (float h in strips)
+        // Eingangsrahmen (gold-metall, dramatisch)
+        Box("DoorFrame_L",  new Vector3(-1.0f, 1.3f, -2.92f), new Vector3(0.06f, 2.6f, 0.06f), steelGold, root, col: false);
+        Box("DoorFrame_R",  new Vector3( 1.0f, 1.3f, -2.92f), new Vector3(0.06f, 2.6f, 0.06f), steelGold, root, col: false);
+        Box("DoorFrame_Top",new Vector3( 0f,   2.62f,-2.92f), new Vector3(2.06f, 0.06f, 0.06f), steelGold, root, col: false);
+
+        // LED-Eingangsrahmen (cyan)
+        Box("EntryLED_L",  new Vector3(-1.04f, 1.3f, -2.91f), new Vector3(0.012f, 2.5f, 0.012f), ledCyan, root, col: false);
+        Box("EntryLED_R",  new Vector3( 1.04f, 1.3f, -2.91f), new Vector3(0.012f, 2.5f, 0.012f), ledCyan, root, col: false);
+        Box("EntryLED_Top",new Vector3( 0f, 2.65f,   -2.91f), new Vector3(2.1f, 0.012f, 0.012f), ledCyan, root, col: false);
+
+        // Wandpaneel-Horizontalstreifen
+        float[] hStrips = { 0.55f, 1.10f, 1.80f, 2.60f, 3.40f, 4.20f };
+        foreach (float h in hStrips)
         {
-            Box("BW_S",  new Vector3(0,     h, 2.39f), new Vector3(4.85f, 0.028f, 0.012f), steelBright, root, collider: false);
-            Box("LW_S",  new Vector3(-2.39f, h, 0),    new Vector3(0.012f, 0.028f, 4.85f), steelBright, root, collider: false);
-            Box("RW_S",  new Vector3(2.39f,  h, 0),    new Vector3(0.012f, 0.028f, 4.85f), steelBright, root, collider: false);
+            Box("BS", new Vector3(0,      h, 2.88f), new Vector3(5.85f, 0.030f, 0.015f), steelBright, root, col: false);
+            Box("LS", new Vector3(-2.88f, h, 0),    new Vector3(0.015f, 0.030f, 5.85f), steelBright, root, col: false);
+            Box("RS", new Vector3( 2.88f, h, 0),    new Vector3(0.015f, 0.030f, 5.85f), steelBright, root, col: false);
         }
 
-        // Wand-LED-Streifen (oben)
-        Box("LedBack_Top",  new Vector3(0,      4.62f, 2.37f), new Vector3(4.70f, 0.038f, 0.016f), ledBlue,  root, collider: false);
-        Box("LedLeft_Top",  new Vector3(-2.37f, 4.62f, 0),     new Vector3(0.016f, 0.038f, 4.70f), ledBlue,  root, collider: false);
-        Box("LedRight_Top", new Vector3( 2.37f, 4.62f, 0),     new Vector3(0.016f, 0.038f, 4.70f), ledBlue,  root, collider: false);
+        // Wandpaneel-Vertikalstreifen (Rückwand, dekorativ)
+        for (int i = -2; i <= 2; i++)
+            Box($"BVS_{i}", new Vector3(i * 1.1f, 2.5f, 2.87f), new Vector3(0.018f, 4.85f, 0.012f), steelBright, root, col: false);
 
-        // Sockel-LED (bernstein, bodennah)
-        Box("LedBack_Low",  new Vector3(0,     0.18f, 2.37f), new Vector3(4.70f, 0.030f, 0.012f), ledAmber, root, collider: false);
-        Box("LedLeft_Low",  new Vector3(-2.37f, 0.18f, 0),    new Vector3(0.012f, 0.030f, 4.70f), ledAmber, root, collider: false);
+        // Wand-LED oben (blau)
+        Box("LedBack_T",  new Vector3(0,      4.70f,  2.86f), new Vector3(5.70f, 0.040f, 0.018f), ledBlue,  root, col: false);
+        Box("LedLeft_T",  new Vector3(-2.86f, 4.70f,  0),     new Vector3(0.018f, 0.040f, 5.70f), ledBlue,  root, col: false);
+        Box("LedRight_T", new Vector3( 2.86f, 4.70f,  0),     new Vector3(0.018f, 0.040f, 5.70f), ledBlue,  root, col: false);
 
-        // ── Deckenkabelkanal ──────────────────────────────────────────────────
-        Box("CableTray_Z", new Vector3(-0.7f, 4.72f, 0.4f), new Vector3(0.20f, 0.055f, 4.85f), grateMat, root, collider: false);
-        Box("CableTray_X", new Vector3(0.3f,  4.72f, 1.4f), new Vector3(4.85f, 0.055f, 0.20f), grateMat, root, collider: false);
-        // Kabel im Kanal
-        Color[] cableColors = {
+        // Sockel-LED (amber)
+        Box("LedBack_B",  new Vector3(0,     0.20f, 2.86f), new Vector3(5.70f, 0.030f, 0.014f), ledAmber, root, col: false);
+        Box("LedLeft_B",  new Vector3(-2.86f, 0.20f, 0),    new Vector3(0.014f, 0.030f, 5.70f), ledAmber, root, col: false);
+        Box("LedRight_B", new Vector3( 2.86f, 0.20f, 0),    new Vector3(0.014f, 0.030f, 5.70f), ledAmber, root, col: false);
+
+        // ── Decke ─────────────────────────────────────────────────────────────
+        Box("Ceiling", new Vector3(0, 4.98f, 0), new Vector3(6.0f, 0.08f, 6.0f), steelDark, root, col: false);
+        // Deckenplatten-Raster
+        for (int x = -2; x <= 2; x++)
+        for (int z = -2; z <= 2; z++)
+            Box($"CeilTile_{x}_{z}", new Vector3(x, 4.94f, z), new Vector3(0.96f, 0.012f, 0.96f),
+                M(new Color(0.10f, 0.11f, 0.13f), 0.6f, 0.5f), root, col: false);
+
+        // Kabelkanal (Decke)
+        Box("CableTray_Z1", new Vector3(-0.8f, 4.82f, 0.5f), new Vector3(0.22f, 0.055f, 5.6f), grateMat, root, col: false);
+        Box("CableTray_X1", new Vector3(0.4f,  4.82f, 1.5f), new Vector3(5.6f, 0.055f, 0.22f), grateMat, root, col: false);
+        Color[] cc = {
             new Color(0.10f, 0.10f, 0.55f), new Color(0.55f, 0.10f, 0.10f),
-            new Color(0.10f, 0.45f, 0.10f), new Color(0.45f, 0.40f, 0.05f),
-            new Color(0.45f, 0.45f, 0.45f)
+            new Color(0.10f, 0.45f, 0.10f), new Color(0.45f, 0.38f, 0.04f),
+            new Color(0.40f, 0.40f, 0.42f), new Color(0.42f, 0.08f, 0.42f)
         };
-        for (int i = 0; i < 5; i++)
-            Box($"CabZ_{i}", new Vector3(-0.66f + i * 0.04f, 4.695f, 0.4f),
-                new Vector3(0.016f, 0.016f, 4.6f), M(cableColors[i], 0f, 0.08f), root, collider: false);
+        for (int i = 0; i < 6; i++)
+            Box($"CabZ_{i}", new Vector3(-0.76f + i * 0.035f, 4.796f, 0.5f),
+                new Vector3(0.018f, 0.018f, 5.5f), M(cc[i], 0f, 0.08f), root, col: false);
 
-        // ── Workstation (hinten rechts) ───────────────────────────────────────
-        BuildWorkstation(new Vector3(1.15f, 0f, 1.55f), root,
-            woodDark, steelMid, steelBright, screenMat, screenGrn, ledGreen, ledAmber);
+        // ── Workstation (rechts hinten) ───────────────────────────────────────
+        BuildWorkstation(new Vector3(1.6f, 0f, 1.8f), root, woodDark, steelMid, steelBright, scrBlue, scrGrn, ledGreen, ledAmber);
 
-        // ── Serverrack (linke Wand) ───────────────────────────────────────────
-        BuildServerRack(new Vector3(-2.05f, 0f, 1.1f), root,
-            steelDark, grateMat, ledGreen, ledAmber, ledBlue, ledRed);
+        // ── Serverrack (linke Wand, 2 Racks) ─────────────────────────────────
+        BuildServerRack(new Vector3(-2.45f, 0f, 0.5f),  root, steelDark, grateMat, ledGreen, ledAmber, ledBlue, ledRed);
+        BuildServerRack(new Vector3(-2.45f, 0f, -0.8f), root, steelDark, grateMat, ledGreen, ledGreen, ledBlue, ledAmber);
 
-        // ── Notfall-Kontrollpanel (rechte Wand) ───────────────────────────────
-        BuildControlPanel(new Vector3(2.06f, 1.85f, -0.7f), root,
-            steelMid, ledRed, ledGreen, ledAmber, steelBright);
+        // ── Kontrollpanel (rechte Wand) ────────────────────────────────────────
+        BuildControlPanel(new Vector3(2.88f, 1.85f, -0.8f), root, steelMid, ledRed, ledGreen, ledAmber, steelBright);
 
-        // ── Joshis Sessel (Mitte-Links) ────────────────────────────────────────
-        BuildErgonomicChair(new Vector3(-0.55f, 0f, -0.25f), root, steelDark, rubberMat, steelBright);
+        // ── Wandbildschirm (Rückwand, groß) ──────────────────────────────────
+        BuildWallScreen(new Vector3(0f, 2.4f, 2.86f), root, scrBlue, steelBright, ledCyan);
 
-        // ── Beistelltisch ─────────────────────────────────────────────────────
-        BuildSideTable(new Vector3(0.60f, 0f, -0.25f), root, woodDark, whiteMat, ledBlue, screenGrn);
+        // ── Locker / Spindwand (rechts vorne) ─────────────────────────────────
+        BuildLockers(new Vector3(2.55f, 0f, -1.8f), root, steelMid, steelBright, ledBlue);
 
-        // ── Lüftungsöffnung (Vorderwand links – Eingang) ──────────────────────
-        BuildVentEntry(new Vector3(0f, 1.2f, -2.39f), root, grateMat, steelBright);
+        // ── Joshis Sessel ─────────────────────────────────────────────────────
+        BuildErgonomicChair(new Vector3(-0.6f, 0f, 0.1f), root, steelDark, rubberMat, steelBright);
 
-        // ── Wandsafe / Verteilerkasten (links, Ecke) ──────────────────────────
-        BuildDistributionBox(new Vector3(-2.39f, 1.8f, -1.4f), root, steelMid, ledGreen, ledAmber);
+        // ── Beistelltisch (neben Joshi) ───────────────────────────────────────
+        BuildSideTable(new Vector3(0.55f, 0f, 0.1f), root, woodDark, whiteMat, ledBlue, scrGrn);
 
-        // ── Lichtquellen ──────────────────────────────────────────────────────
+        // ── Lüftungsgitter Eingang ─────────────────────────────────────────────
+        BuildVentGrille(new Vector3(0f, 1.4f, -2.88f), root, grateMat, steelBright);
+
+        // ── Sicherungskasten (links, Ecke) ────────────────────────────────────
+        BuildDistributionBox(new Vector3(-2.88f, 1.85f, -1.6f), root, steelMid, ledGreen, ledAmber);
+
+        // ── Rohrystem (Decke links) ────────────────────────────────────────────
+        BuildPipes(root, steelGold);
+
+        // ── Warnschilder ──────────────────────────────────────────────────────
+        BuildWarningSigns(root, steelDark, ledRed, ledAmber);
+
+        // ── Deckenprojektions-Licht (atmosphärisch) ───────────────────────────
+        BuildCeilingLight(new Vector3(-0.5f, 5.0f, -0.5f), root, steelDark, ledBlue);
+
+        // ── Lichter ───────────────────────────────────────────────────────────
         AddLights(root);
     }
 
     // ─── Workstation ─────────────────────────────────────────────────────────
 
     private void BuildWorkstation(Vector3 pos, Transform root,
-        Material wood, Material steel, Material steelBright,
-        Material screen1, Material screen2, Material ledG, Material ledA)
+        Material wood, Material steel, Material bright, Material scr1, Material scr2,
+        Material ledG, Material ledA)
     {
-        var g = new GameObject("Workstation");
-        g.transform.position = pos;
-        g.transform.SetParent(root);
+        var g = new GameObject("Workstation"); g.transform.position = pos; g.transform.SetParent(root);
 
-        // L-förmiger Schreibtisch
-        // Hauptplatte (entlang Z)
-        Box("Desk_Main", new Vector3(0, 0.74f, 0), new Vector3(1.10f, 0.055f, 0.72f), wood, g.transform);
-        // Seitenflügel (entlang X)
-        Box("Desk_Wing", new Vector3(-0.55f, 0.74f, 0.38f), new Vector3(0.58f, 0.055f, 0.52f), wood, g.transform);
+        // L-Tisch
+        Box("Main",   new Vector3(0,      0.74f, 0),      new Vector3(1.20f, 0.055f, 0.80f), wood, g.transform);
+        Box("Wing",   new Vector3(-0.60f, 0.74f, 0.44f),  new Vector3(0.58f, 0.055f, 0.58f), wood, g.transform);
+        Box("Edge_F", new Vector3(0,      0.705f,-0.37f), new Vector3(1.20f, 0.030f, 0.055f), bright, g.transform, col: false);
 
         // Beine
-        foreach (var (dx, dz) in new[] { (0.48f, -0.32f), (-0.48f, -0.32f), (0.48f, 0.32f) })
-            Cyl($"Leg_{dx}", new Vector3(dx, 0.37f, dz), new Vector3(0.04f, 0.37f, 0.04f), steel, g.transform);
+        foreach (var (dx, dz) in new[]{(0.52f,-0.35f),(-0.52f,-0.35f),(0.52f,0.35f)})
+            Cyl("Leg", new Vector3(dx, 0.37f, dz), new Vector3(0.04f, 0.37f, 0.04f), steel, g.transform);
 
-        // Hauptmonitor (leicht geneigt)
-        Box("Monitor1_Stand", new Vector3(0.05f, 0.80f, 0.10f), new Vector3(0.04f, 0.26f, 0.04f), steel, g.transform, collider: false);
-        Box("Monitor1", new Vector3(0.05f, 1.14f, 0.14f), new Vector3(0.72f, 0.42f, 0.032f),
-            screen1, g.transform, Quaternion.Euler(8f, 0f, 0f), false);
-        Box("Monitor1_Bezel", new Vector3(0.05f, 1.14f, 0.138f), new Vector3(0.76f, 0.46f, 0.018f),
-            steel, g.transform, Quaternion.Euler(8f, 0f, 0f), false);
+        // Monitor 1 (groß, blau)
+        Box("M1Stand", new Vector3(0.08f, 0.80f, 0.14f), new Vector3(0.04f, 0.28f, 0.04f), steel, g.transform, col: false);
+        Box("M1Bezel", new Vector3(0.08f, 1.16f, 0.17f), new Vector3(0.80f, 0.50f, 0.025f), steel, g.transform,
+            Quaternion.Euler(7f, 0f, 0f), false);
+        Box("M1Screen",new Vector3(0.08f, 1.16f, 0.168f),new Vector3(0.74f, 0.44f, 0.018f), scr1, g.transform,
+            Quaternion.Euler(7f, 0f, 0f), false);
 
-        // Zweitmonitor (links, gedreht)
-        Box("Monitor2_Stand", new Vector3(-0.52f, 0.80f, 0.54f), new Vector3(0.04f, 0.22f, 0.04f), steel, g.transform, collider: false);
-        Box("Monitor2", new Vector3(-0.52f, 1.08f, 0.56f), new Vector3(0.55f, 0.34f, 0.028f),
-            screen2, g.transform, Quaternion.Euler(8f, 20f, 0f), false);
-        Box("Monitor2_Bezel", new Vector3(-0.52f, 1.08f, 0.558f), new Vector3(0.59f, 0.38f, 0.015f),
-            steel, g.transform, Quaternion.Euler(8f, 20f, 0f), false);
+        // Monitor 2 (seitlich, grün)
+        Box("M2Stand", new Vector3(-0.58f, 0.80f, 0.58f), new Vector3(0.04f, 0.22f, 0.04f), steel, g.transform, col: false);
+        Box("M2Bezel", new Vector3(-0.58f, 1.09f, 0.60f), new Vector3(0.58f, 0.38f, 0.022f), steel, g.transform,
+            Quaternion.Euler(7f, 22f, 0f), false);
+        Box("M2Screen",new Vector3(-0.58f, 1.09f, 0.598f),new Vector3(0.52f, 0.32f, 0.016f), scr2, g.transform,
+            Quaternion.Euler(7f, 22f, 0f), false);
 
-        // Tastatur
-        Box("Keyboard", new Vector3(0.05f, 0.762f, -0.08f), new Vector3(0.40f, 0.012f, 0.14f),
-            M(new Color(0.10f, 0.10f, 0.11f), 0.3f, 0.25f), g.transform, collider: false);
+        // Kleines drittes Display (stehend)
+        Box("M3Bezel", new Vector3(-0.08f, 0.83f, 0.00f), new Vector3(0.22f, 0.30f, 0.022f), steel, g.transform,
+            Quaternion.Euler(80f, 0f, 0f), false);
+        Box("M3Screen",new Vector3(-0.08f, 0.83f, 0.002f),new Vector3(0.18f, 0.024f, 0.26f), scr1, g.transform,
+            Quaternion.Euler(80f, 0f, 0f), false);
 
-        // LED-Streifen unterm Schreibtisch
-        Box("DeskLED", new Vector3(0, 0.62f, -0.35f), new Vector3(1.0f, 0.018f, 0.010f), ledA, g.transform, collider: false);
+        // Tastatur + Maus
+        Box("Keyboard", new Vector3(0.08f, 0.763f,-0.06f), new Vector3(0.44f, 0.012f, 0.16f),
+            M(new Color(0.09f, 0.09f, 0.10f), 0.3f, 0.25f), g.transform, col: false);
+        Box("Mouse",    new Vector3(0.38f, 0.762f,-0.02f), new Vector3(0.065f, 0.010f, 0.10f),
+            M(new Color(0.10f, 0.10f, 0.11f), 0.5f, 0.5f), g.transform, col: false);
 
-        // Kleine grüne Statuslichter am Monitorrahmen
-        for (int i = 0; i < 3; i++)
-            Box($"StatLED_{i}", new Vector3(-0.28f + i * 0.28f, 0.945f, 0.126f),
-                new Vector3(0.018f, 0.018f, 0.010f), ledG, g.transform, collider: false);
+        // Headset am Monitor-Ständer
+        Box("HeadsetBand",new Vector3(0.08f, 1.46f, 0.15f), new Vector3(0.24f, 0.022f, 0.022f),
+            M(new Color(0.12f,0.12f,0.13f),0.6f,0.4f), g.transform, col: false);
 
-        // Boxkollider für ganzen Tisch
+        // Kaffeebecher
+        Cyl("Mug", new Vector3(0.50f, 0.77f,-0.14f), new Vector3(0.050f, 0.055f, 0.050f), whiteMat(0.82f), g.transform);
+        Cyl("MugContent", new Vector3(0.50f, 0.814f,-0.14f), new Vector3(0.036f, 0.010f, 0.036f),
+            M(new Color(0.14f,0.08f,0.03f), 0f, 0.04f), g.transform);
+
+        // LED unter Tischkante
+        Box("DeskLED", new Vector3(0, 0.62f,-0.36f), new Vector3(1.10f, 0.018f, 0.010f), ledA, g.transform, col: false);
+
+        // Status-LEDs Monitore
+        for (int i = 0; i < 4; i++)
+            Box($"SL_{i}", new Vector3(-0.32f + i*0.22f, 0.948f, 0.128f),
+                new Vector3(0.016f, 0.016f, 0.010f), ledG, g.transform, col: false);
+
+        // Monitor-Glows
+        AddLight("Glow1", g.transform, new Vector3(0.08f, 1.05f,-0.25f),  LightType.Point, new Color(0.12f,0.38f,1.0f), 1.0f, 2.5f);
+        AddLight("Glow2", g.transform, new Vector3(-0.58f, 1.00f, 0.3f),  LightType.Point, new Color(0.08f,0.92f,0.2f), 0.7f, 2.0f);
+
         var bc = g.AddComponent<BoxCollider>();
-        bc.center = new Vector3(0, 0.38f, 0.1f);
-        bc.size   = new Vector3(1.15f, 0.78f, 0.78f);
-
-        // Kleines Point-Light für Monitor-Glow
-        Light("MonitorGlow", g.transform, new Vector3(0.05f, 1.05f, -0.2f),
-            LightType.Point, new Color(0.15f, 0.42f, 1.00f), 0.9f, 2.2f);
-        Light("Monitor2Glow", g.transform, new Vector3(-0.52f, 1.05f, 0.3f),
-            LightType.Point, new Color(0.10f, 0.92f, 0.25f), 0.7f, 1.8f);
+        bc.center = new Vector3(0, 0.38f, 0.12f); bc.size = new Vector3(1.25f, 0.80f, 0.90f);
     }
+
+    private Material whiteMat(float brightness) =>
+        M(new Color(brightness, brightness * 0.98f, brightness * 0.96f), 0.05f, 0.22f);
 
     // ─── Serverrack ──────────────────────────────────────────────────────────
 
     private void BuildServerRack(Vector3 pos, Transform root,
-        Material chassis, Material grate,
-        Material ledG, Material ledA, Material ledB, Material ledR)
+        Material chassis, Material grate, Material ledG, Material ledA, Material ledB, Material ledR)
     {
-        var g = new GameObject("ServerRack");
-        g.transform.position = pos;
-        g.transform.SetParent(root);
+        var g = new GameObject("ServerRack"); g.transform.position = pos; g.transform.SetParent(root);
 
-        // Gehäuse
-        Box("Chassis", new Vector3(0, 1.05f, 0), new Vector3(0.58f, 2.10f, 0.55f), chassis, g.transform);
+        Box("Chassis",    new Vector3(0, 1.05f, 0),     new Vector3(0.52f, 2.10f, 0.52f), chassis, g.transform);
+        Box("FrontGrate", new Vector3(0, 1.05f,-0.248f),new Vector3(0.46f, 2.00f, 0.022f), grate,  g.transform, col: false);
+        Box("TopVent",    new Vector3(0, 2.07f, 0),     new Vector3(0.48f, 0.055f, 0.48f), grate,  g.transform, col: false);
 
-        // Vorderes Gitter
-        Box("FrontGrate", new Vector3(0, 1.05f, -0.265f), new Vector3(0.52f, 2.0f, 0.025f), grate, g.transform, collider: false);
-
-        // Server-Einschübe (je 8 U)
-        Material[] slotColors = {
-            M(new Color(0.12f, 0.12f, 0.14f), 0.6f, 0.4f),
-            M(new Color(0.10f, 0.10f, 0.12f), 0.6f, 0.4f)
-        };
-        for (int i = 0; i < 10; i++)
+        Material[] rowLeds = { ledG, ledG, ledA, ledG, ledR, ledG, ledG, ledA, ledG, ledG, ledG, ledG };
+        for (int i = 0; i < 12; i++)
         {
-            float y = 0.12f + i * 0.19f;
-            Box($"Slot_{i}", new Vector3(0, y, -0.262f), new Vector3(0.50f, 0.16f, 0.020f),
-                slotColors[i % 2], g.transform, collider: false);
+            float y = 0.08f + i * 0.16f;
+            Box($"Slot_{i}", new Vector3(0, y, -0.246f), new Vector3(0.44f, 0.13f, 0.018f),
+                M(new Color(0.09f + (i%2)*0.03f, 0.09f, 0.10f), 0.6f, 0.4f), g.transform, col: false);
+            Box($"LED_{i}", new Vector3(0.18f, y, -0.252f), new Vector3(0.016f, 0.016f, 0.008f),
+                rowLeds[i], g.transform, col: false);
         }
+        AddLight("RackGlow", g.transform, new Vector3(0, 1.1f,-0.5f),
+            LightType.Point, new Color(0.06f, 0.95f, 0.18f), 0.45f, 1.4f);
 
-        // Status-LEDs pro Einschub
-        Material[] rackLeds = { ledG, ledG, ledA, ledG, ledR, ledG, ledG, ledA, ledG, ledG };
-        for (int i = 0; i < 10; i++)
-            Box($"LED_{i}", new Vector3(0.22f, 0.12f + i * 0.19f, -0.270f),
-                new Vector3(0.018f, 0.018f, 0.008f), rackLeds[i], g.transform, collider: false);
-
-        // Lüftungsgitter oben
-        Box("TopVent", new Vector3(0, 2.07f, 0), new Vector3(0.52f, 0.06f, 0.50f), grate, g.transform, collider: false);
-
-        // Kabelauslass unten
-        Box("CableOut", new Vector3(0.10f, 0.04f, -0.24f), new Vector3(0.22f, 0.04f, 0.10f), M(new Color(0.08f, 0.08f, 0.09f)), g.transform, collider: false);
-
-        // Kollider
         var bc = g.AddComponent<BoxCollider>();
-        bc.center = new Vector3(0, 1.05f, 0);
-        bc.size   = new Vector3(0.60f, 2.12f, 0.58f);
-
-        // Light
-        Light("RackGlow", g.transform, new Vector3(0, 1.1f, -0.5f),
-            LightType.Point, new Color(0.08f, 0.95f, 0.20f), 0.5f, 1.5f);
+        bc.center = new Vector3(0, 1.05f, 0); bc.size = new Vector3(0.54f, 2.12f, 0.54f);
     }
 
     // ─── Kontrollpanel ───────────────────────────────────────────────────────
@@ -358,230 +407,377 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
     private void BuildControlPanel(Vector3 pos, Transform root,
         Material panel, Material ledR, Material ledG, Material ledA, Material trim)
     {
-        var g = new GameObject("ControlPanel");
-        g.transform.position = pos;
-        g.transform.SetParent(root);
+        var g = new GameObject("ControlPanel"); g.transform.position = pos; g.transform.SetParent(root);
 
-        // Gehäuse (an der Wand)
-        Box("Body", new Vector3(0, 0, 0), new Vector3(0.75f, 1.0f, 0.12f), panel, g.transform);
-        Box("Frame", new Vector3(0, 0, -0.055f), new Vector3(0.81f, 1.06f, 0.015f), trim, g.transform, collider: false);
+        Box("Body",  new Vector3(0, 0, 0),       new Vector3(0.80f, 1.10f, 0.12f), panel, g.transform);
+        Box("Frame", new Vector3(0, 0, -0.058f), new Vector3(0.86f, 1.16f, 0.014f), trim, g.transform, col: false);
 
-        // Großes Display oben
-        Box("MainDisplay", new Vector3(0, 0.25f, -0.062f), new Vector3(0.58f, 0.30f, 0.015f),
-            Emit(new Color(0.04f, 0.08f, 0.18f), new Color(0.10f, 0.35f, 0.95f), 2.0f),
-            g.transform, collider: false);
+        // Großes Statusdisplay
+        Box("Display", new Vector3(0, 0.28f,-0.065f), new Vector3(0.62f, 0.32f, 0.014f),
+            Emit(new Color(0.03f,0.07f,0.18f), new Color(0.08f,0.32f,0.92f), 2.2f), g.transform, col: false);
+
+        // 3 kleine Anzeigen
+        for (int i = 0; i < 3; i++)
+        {
+            var sC = (i == 0) ? ledG : (i == 1) ? ledA : ledR;
+            Box($"MiniScr_{i}", new Vector3(-0.22f + i*0.22f, -0.08f,-0.065f),
+                new Vector3(0.16f, 0.10f, 0.010f), sC, g.transform, col: false);
+        }
 
         // Schalterreihe
-        Material[] switchLeds = { ledR, ledG, ledG, ledA, ledR, ledG };
-        for (int i = 0; i < 6; i++)
+        Material[] swLeds = { ledR, ledG, ledG, ledA, ledR, ledG, ledG, ledG };
+        for (int i = 0; i < 8; i++)
         {
-            float x = -0.25f + i * 0.10f;
-            Box($"Switch_{i}", new Vector3(x, -0.05f, -0.068f), new Vector3(0.042f, 0.055f, 0.030f),
-                M(new Color(0.15f, 0.15f, 0.16f), 0.5f, 0.4f), g.transform, collider: false);
-            Box($"SwitchLED_{i}", new Vector3(x, -0.07f, -0.073f), new Vector3(0.016f, 0.016f, 0.008f),
-                switchLeds[i], g.transform, collider: false);
+            float x = -0.31f + i * 0.089f;
+            Box($"Sw_{i}", new Vector3(x,-0.22f,-0.070f), new Vector3(0.040f, 0.052f, 0.028f),
+                M(new Color(0.14f,0.14f,0.15f),0.5f,0.4f), g.transform, col: false);
+            Box($"SwLED_{i}", new Vector3(x,-0.235f,-0.075f), new Vector3(0.015f,0.015f,0.007f),
+                swLeds[i], g.transform, col: false);
         }
 
-        // Drehregler-Reihe
-        for (int i = 0; i < 4; i++)
-            Cyl($"Knob_{i}", new Vector3(-0.15f + i * 0.10f, -0.22f, -0.076f),
-                new Vector3(0.038f, 0.020f, 0.038f),
-                M(new Color(0.12f, 0.12f, 0.13f), 0.7f, 0.5f), g.transform,
-                Quaternion.Euler(90f, 0f, 0f));
+        // Drehregler
+        for (int i = 0; i < 5; i++)
+            Cyl($"Knob_{i}", new Vector3(-0.18f+i*0.09f,-0.34f,-0.078f),
+                new Vector3(0.036f,0.018f,0.036f), M(new Color(0.11f,0.11f,0.12f),0.7f,0.5f),
+                g.transform, Quaternion.Euler(90f,0f,0f));
 
-        // Großer roter Notfall-Knopf
-        Cyl("EmergencyBtn", new Vector3(0.28f, -0.24f, -0.078f),
-            new Vector3(0.06f, 0.028f, 0.06f),
-            Emit(new Color(0.7f, 0.05f, 0.05f), new Color(1f, 0.05f, 0.05f), 2.0f),
-            g.transform, Quaternion.Euler(90f, 0f, 0f));
+        // Großer Notfall-Knopf
+        Cyl("EmrBtn", new Vector3(0.32f,-0.36f,-0.080f), new Vector3(0.066f,0.026f,0.066f),
+            Emit(new Color(0.7f,0.04f,0.04f), new Color(1f,0.04f,0.04f), 2.2f),
+            g.transform, Quaternion.Euler(90f,0f,0f));
 
-        // Label über Notfall-Knopf
-        var label = new GameObject("EmergencyLabel");
-        label.transform.SetParent(g.transform);
-        label.transform.localPosition = new Vector3(0.28f, -0.13f, -0.065f);
-        label.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
-        var tmp = label.AddComponent<TextMeshPro>();
-        tmp.text      = "NOTFALL";
-        tmp.fontSize  = 0.6f;
-        tmp.color     = new Color(1f, 0.2f, 0.2f);
-        tmp.alignment = TextAlignmentOptions.Center;
-        var rt = label.GetComponent<RectTransform>();
-        rt.sizeDelta = new Vector2(0.3f, 0.12f);
+        // "NOTFALL" Text
+        var lbl = new GameObject("EmrLabel"); lbl.transform.SetParent(g.transform);
+        lbl.transform.localPosition = new Vector3(0.32f,-0.24f,-0.065f);
+        lbl.transform.localRotation = Quaternion.Euler(0f,180f,0f);
+        var t = lbl.AddComponent<TextMeshPro>();
+        t.text = "NOTFALL"; t.fontSize = 0.55f;
+        t.color = new Color(1f,0.18f,0.18f); t.alignment = TextAlignmentOptions.Center;
+        lbl.GetComponent<RectTransform>().sizeDelta = new Vector2(0.28f, 0.10f);
 
-        Light("PanelGlow", g.transform, new Vector3(0, 0.25f, -0.3f),
-            LightType.Point, new Color(0.95f, 0.15f, 0.08f), 0.35f, 1.2f);
+        AddLight("PanelGlow", g.transform, new Vector3(0, 0.28f,-0.35f),
+            LightType.Point, new Color(0.95f,0.12f,0.06f), 0.38f, 1.3f);
     }
 
-    // ─── Ergonomischer Sessel ─────────────────────────────────────────────────
+    // ─── Wandbildschirm ───────────────────────────────────────────────────────
 
-    private void BuildErgonomicChair(Vector3 pos, Transform root,
-        Material chassis, Material rubber, Material trim)
+    private void BuildWallScreen(Vector3 pos, Transform root, Material scr, Material trim, Material led)
     {
-        var g = new GameObject("ErgonomicChair");
-        g.transform.position = pos;
-        g.transform.SetParent(root);
-        // Joshi schaut Richtung Workstation (+Z leicht)
-        g.transform.rotation = Quaternion.Euler(0f, 30f, 0f);
+        var g = new GameObject("WallScreen"); g.transform.position = pos; g.transform.SetParent(root);
 
-        // Sitzfläche
-        Box("Seat", new Vector3(0, 0.46f, 0), new Vector3(0.50f, 0.075f, 0.48f), rubber, g.transform);
-        // Sitz-Polsterung (leicht erhöht)
-        Box("SeatPad", new Vector3(0, 0.502f, 0), new Vector3(0.44f, 0.032f, 0.42f),
-            M(new Color(0.11f, 0.11f, 0.12f), 0.01f, 0.06f), g.transform, collider: false);
+        Box("Bezel",  new Vector3(0,0,0),      new Vector3(2.20f, 1.10f, 0.040f), trim, g.transform, col: false);
+        Box("Screen", new Vector3(0,0,-0.018f),new Vector3(2.10f, 1.00f, 0.022f), scr,  g.transform, col: false);
+
+        // LED-Rahmen
+        Box("LedT",  new Vector3(0,  0.56f,-0.022f), new Vector3(2.20f, 0.014f, 0.010f), led, g.transform, col: false);
+        Box("LedB",  new Vector3(0, -0.56f,-0.022f), new Vector3(2.20f, 0.014f, 0.010f), led, g.transform, col: false);
+        Box("LedL",  new Vector3(-1.12f,0,-0.022f),  new Vector3(0.014f,1.10f, 0.010f), led, g.transform, col: false);
+        Box("LedR",  new Vector3( 1.12f,0,-0.022f),  new Vector3(0.014f,1.10f, 0.010f), led, g.transform, col: false);
+
+        // "HEX SYSTEMS - CLASSIFIED" Text
+        var lbl = new GameObject("ScreenTitle"); lbl.transform.SetParent(g.transform);
+        lbl.transform.localPosition = new Vector3(0f, 0.32f, -0.038f);
+        lbl.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+        var t = lbl.AddComponent<TextMeshPro>();
+        t.text = "HEX SYSTEMS  //  CLASSIFIED"; t.fontSize = 0.38f;
+        t.color = new Color(0.55f, 0.90f, 1.0f); t.alignment = TextAlignmentOptions.Center;
+        lbl.GetComponent<RectTransform>().sizeDelta = new Vector2(2.0f, 0.25f);
+
+        AddLight("ScreenGlow", g.transform, new Vector3(0,0,-0.8f),
+            LightType.Point, new Color(0.10f,0.38f,0.95f), 1.2f, 3.0f);
+    }
+
+    // ─── Locker ───────────────────────────────────────────────────────────────
+
+    private void BuildLockers(Vector3 pos, Transform root, Material panel, Material trim, Material led)
+    {
+        var g = new GameObject("Lockers"); g.transform.position = pos; g.transform.SetParent(root);
+
+        for (int i = 0; i < 3; i++)
+        {
+            float z = i * 0.55f;
+            Box($"Door_{i}", new Vector3(0, 1.0f, z), new Vector3(0.08f, 2.0f, 0.48f), panel, g.transform);
+            Box($"Handle_{i}", new Vector3(-0.048f, 1.0f, z+0.10f), new Vector3(0.014f, 0.016f, 0.16f),
+                trim, g.transform, col: false);
+            Box($"LockerLED_{i}", new Vector3(-0.044f, 1.5f, z+0.20f), new Vector3(0.010f, 0.040f, 0.010f),
+                led, g.transform, col: false);
+            // Namensschildchen
+            Box($"NameTag_{i}", new Vector3(-0.043f, 1.72f, z+0.05f), new Vector3(0.008f, 0.10f, 0.14f),
+                M(new Color(0.18f,0.19f,0.22f),0.5f,0.4f), g.transform, col: false);
+        }
+        var bc = g.AddComponent<BoxCollider>();
+        bc.center = new Vector3(0, 1.0f, 0.55f); bc.size = new Vector3(0.12f, 2.02f, 1.72f);
+    }
+
+    // ─── Sessel ───────────────────────────────────────────────────────────────
+
+    private void BuildErgonomicChair(Vector3 pos, Transform root, Material chassis, Material rubber, Material trim)
+    {
+        var g = new GameObject("ErgonomicChair"); g.transform.position = pos; g.transform.SetParent(root);
+        g.transform.rotation = Quaternion.Euler(0f, 35f, 0f);
+
+        // Sitz
+        Box("Seat",    new Vector3(0, 0.46f, 0), new Vector3(0.52f, 0.075f, 0.50f), rubber, g.transform);
+        Box("SeatPad", new Vector3(0, 0.503f,0), new Vector3(0.46f, 0.032f, 0.44f),
+            M(new Color(0.10f,0.10f,0.11f),0.01f,0.06f), g.transform, col: false);
 
         // Rückenlehne
-        Box("Backrest", new Vector3(0, 0.90f, 0.22f), new Vector3(0.46f, 0.78f, 0.07f), rubber, g.transform);
-        Box("BackrestPad", new Vector3(0, 0.90f, 0.188f), new Vector3(0.40f, 0.70f, 0.025f),
-            M(new Color(0.12f, 0.12f, 0.13f), 0.01f, 0.06f), g.transform, collider: false);
-        // Kopfstütze
-        Box("Headrest", new Vector3(0, 1.32f, 0.19f), new Vector3(0.26f, 0.22f, 0.07f), rubber, g.transform, collider: false);
+        Box("Back",    new Vector3(0, 0.92f, 0.24f), new Vector3(0.48f, 0.80f, 0.07f), rubber, g.transform);
+        Box("BackPad", new Vector3(0, 0.92f, 0.20f), new Vector3(0.42f, 0.72f, 0.025f),
+            M(new Color(0.11f,0.11f,0.12f),0.01f,0.06f), g.transform, col: false);
+        Box("Head",    new Vector3(0, 1.35f, 0.22f), new Vector3(0.28f, 0.24f, 0.07f), rubber, g.transform, col: false);
 
         // Armstützen
-        foreach (float sx in new[] { -0.26f, 0.26f })
+        foreach (float sx in new[]{-0.27f, 0.27f})
         {
-            Box($"Armrest_{sx}", new Vector3(sx, 0.62f, 0.06f), new Vector3(0.055f, 0.045f, 0.38f), rubber, g.transform, collider: false);
-            Cyl($"ArmPost_{sx}", new Vector3(sx, 0.54f, 0.05f), new Vector3(0.032f, 0.09f, 0.032f), chassis, g.transform);
+            Box($"Arm_{sx}", new Vector3(sx, 0.63f, 0.08f), new Vector3(0.055f, 0.045f, 0.40f), rubber, g.transform, col: false);
+            Cyl($"ArmP_{sx}", new Vector3(sx, 0.545f, 0.06f), new Vector3(0.030f, 0.088f, 0.030f), chassis, g.transform);
         }
 
-        // Gasfeder / Säule
+        // Gasfeder + Fußkreuz
         Cyl("Stem", new Vector3(0, 0.23f, 0), new Vector3(0.055f, 0.23f, 0.055f), chassis, g.transform);
-        // Fußkreuz (5 Arme)
         for (int i = 0; i < 5; i++)
         {
             float a = i * 72f * Mathf.Deg2Rad;
-            var armDir = new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a));
-            var arm = Box($"FootArm_{i}", new Vector3(armDir.x * 0.20f, 0.032f, armDir.z * 0.20f),
-                new Vector3(0.04f, 0.032f, 0.40f), chassis, g.transform, collider: false);
-            arm.transform.rotation = Quaternion.Euler(0f, -i * 72f, 0f);
-            // Rollen
-            Cyl($"Wheel_{i}", new Vector3(armDir.x * 0.38f, 0.022f, armDir.z * 0.38f),
-                new Vector3(0.045f, 0.022f, 0.045f), rubber, g.transform);
+            var d = new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a));
+            var arm = Box($"FA_{i}", new Vector3(d.x*0.20f, 0.030f, d.z*0.20f),
+                new Vector3(0.040f, 0.030f, 0.42f), chassis, g.transform, col: false);
+            arm.transform.rotation = Quaternion.Euler(0, -i*72f, 0);
+            Cyl($"Wh_{i}", new Vector3(d.x*0.38f, 0.020f, d.z*0.38f),
+                new Vector3(0.042f, 0.020f, 0.042f), rubber, g.transform);
         }
 
-        // Blauer Akzentstreifen (Rückenlehne oben)
-        Box("AccentStrip", new Vector3(0, 1.265f, 0.185f), new Vector3(0.38f, 0.014f, 0.012f),
-            Emit(new Color(0.05f, 0.10f, 0.30f), new Color(0.15f, 0.45f, 1.00f), 1.2f),
-            g.transform, collider: false);
+        // Blauer Akzentstreifen
+        Box("Accent", new Vector3(0, 1.29f, 0.197f), new Vector3(0.40f, 0.013f, 0.011f),
+            Emit(new Color(0.04f,0.10f,0.28f), new Color(0.12f,0.42f,1.0f), 1.2f), g.transform, col: false);
 
-        // Kollider
         var bc = g.AddComponent<BoxCollider>();
-        bc.center = new Vector3(0, 0.65f, 0.05f);
-        bc.size   = new Vector3(0.58f, 1.30f, 0.68f);
+        bc.center = new Vector3(0, 0.65f, 0.08f); bc.size = new Vector3(0.60f, 1.32f, 0.72f);
     }
 
     // ─── Beistelltisch ───────────────────────────────────────────────────────
 
-    private void BuildSideTable(Vector3 pos, Transform root,
-        Material wood, Material white, Material ledB, Material ledG)
+    private void BuildSideTable(Vector3 pos, Transform root, Material wood, Material white, Material ledB, Material ledG)
     {
-        var g = new GameObject("SideTable");
-        g.transform.position = pos;
-        g.transform.SetParent(root);
+        var g = new GameObject("SideTable"); g.transform.position = pos; g.transform.SetParent(root);
 
-        // Tischplatte
-        Box("Top", new Vector3(0, 0.64f, 0), new Vector3(0.42f, 0.038f, 0.42f), wood, g.transform);
-        // Beine
-        foreach (var (dx, dz) in new[] { (0.17f, 0.17f), (-0.17f, 0.17f), (0.17f, -0.17f), (-0.17f, -0.17f) })
-            Cyl($"Leg", new Vector3(dx, 0.32f, dz), new Vector3(0.028f, 0.32f, 0.028f),
-                M(new Color(0.20f, 0.20f, 0.22f), 0.85f, 0.55f), g.transform);
+        Box("Top", new Vector3(0, 0.65f, 0), new Vector3(0.44f, 0.038f, 0.44f), wood, g.transform);
+        foreach (var (dx,dz) in new[]{(0.18f,0.18f),(-0.18f,0.18f),(0.18f,-0.18f),(-0.18f,-0.18f)})
+            Cyl("Leg", new Vector3(dx, 0.325f, dz), new Vector3(0.028f, 0.325f, 0.028f),
+                M(new Color(0.20f,0.20f,0.22f),0.88f,0.58f), g.transform);
 
-        // Kaffeetasse
-        Cyl("Cup", new Vector3(-0.10f, 0.70f, 0.05f), new Vector3(0.055f, 0.060f, 0.055f), white, g.transform);
-        Cyl("CupContent", new Vector3(-0.10f, 0.748f, 0.05f), new Vector3(0.042f, 0.008f, 0.042f),
-            M(new Color(0.18f, 0.10f, 0.04f), 0f, 0.05f), g.transform);
-
-        // Mini-Tablet / Datenpanel
-        Box("Tablet", new Vector3(0.08f, 0.662f, -0.04f), new Vector3(0.18f, 0.008f, 0.13f),
-            M(new Color(0.10f, 0.10f, 0.11f), 0.7f, 0.6f), g.transform, collider: false);
-        Box("TabletScreen", new Vector3(0.08f, 0.668f, -0.04f), new Vector3(0.15f, 0.006f, 0.10f),
-            ledG, g.transform, collider: false);
-
-        // LED-Unterkante Tisch
-        Box("TableLED", new Vector3(0, 0.618f, 0), new Vector3(0.40f, 0.010f, 0.40f), ledB, g.transform, collider: false);
+        // Kaffee
+        Cyl("Cup",    new Vector3(-0.10f, 0.705f, 0.06f), new Vector3(0.052f, 0.058f, 0.052f), white, g.transform);
+        Cyl("Coffee", new Vector3(-0.10f, 0.752f, 0.06f), new Vector3(0.040f, 0.008f, 0.040f),
+            M(new Color(0.16f,0.09f,0.03f),0f,0.04f), g.transform);
+        // Tablet
+        Box("Tablet", new Vector3(0.09f, 0.664f,-0.04f), new Vector3(0.19f, 0.008f, 0.13f),
+            M(new Color(0.09f,0.09f,0.10f),0.7f,0.62f), g.transform, col: false);
+        Box("TabScr",  new Vector3(0.09f, 0.670f,-0.04f), new Vector3(0.16f, 0.006f, 0.10f),
+            ledG, g.transform, col: false);
+        // Kleiner Energydrink
+        Cyl("Drink",  new Vector3(0.14f, 0.705f, 0.12f), new Vector3(0.032f, 0.065f, 0.032f),
+            Emit(new Color(0.05f,0.28f,0.04f), new Color(0.08f,1.00f,0.12f), 0.8f), g.transform);
+        // LED Tischunterkante
+        Box("TableLED", new Vector3(0, 0.620f, 0), new Vector3(0.42f, 0.010f, 0.42f), ledB, g.transform, col: false);
     }
 
-    // ─── Lüftungsöffnung / Eingang ────────────────────────────────────────────
+    // ─── Lüftungsgitter ───────────────────────────────────────────────────────
 
-    private void BuildVentEntry(Vector3 pos, Transform root, Material grate, Material trim)
+    private void BuildVentGrille(Vector3 pos, Transform root, Material grate, Material trim)
     {
-        var g = new GameObject("VentEntry");
-        g.transform.position = pos;
-        g.transform.SetParent(root);
-
-        // Rahmen
-        Box("Frame", new Vector3(0, 0, 0), new Vector3(1.46f, 0.82f, 0.055f), trim, g.transform, collider: false);
-        // Gitterstäbe horizontal
-        for (int i = 0; i < 5; i++)
-            Box($"Bar_{i}", new Vector3(0, -0.32f + i * 0.16f, -0.01f),
-                new Vector3(1.36f, 0.025f, 0.040f), grate, g.transform, collider: false);
-        // Gitterstäbe vertikal
-        for (int i = 0; i < 8; i++)
-            Box($"VBar_{i}", new Vector3(-0.59f + i * 0.17f, 0, -0.01f),
-                new Vector3(0.025f, 0.74f, 0.040f), grate, g.transform, collider: false);
+        var g = new GameObject("VentGrille"); g.transform.position = pos; g.transform.SetParent(root);
+        Box("Frame", new Vector3(0,0,0), new Vector3(2.0f, 0.90f, 0.060f), trim, g.transform, col: false);
+        for (int i = 0; i < 6; i++)
+            Box($"H_{i}", new Vector3(0, -0.36f + i*0.145f, -0.012f), new Vector3(1.88f, 0.024f, 0.042f), grate, g.transform, col: false);
+        for (int i = 0; i < 10; i++)
+            Box($"V_{i}", new Vector3(-0.85f + i*0.19f, 0, -0.012f), new Vector3(0.024f, 0.82f, 0.042f), grate, g.transform, col: false);
     }
 
     // ─── Verteilerkasten ──────────────────────────────────────────────────────
 
-    private void BuildDistributionBox(Vector3 pos, Transform root,
-        Material panel, Material ledG, Material ledA)
+    private void BuildDistributionBox(Vector3 pos, Transform root, Material panel, Material ledG, Material ledA)
     {
-        var g = new GameObject("DistributionBox");
-        g.transform.position = pos;
-        g.transform.SetParent(root);
-
-        Box("Body",  new Vector3(0, 0, 0),     new Vector3(0.50f, 0.65f, 0.08f),  panel, g.transform);
-        Box("Door",  new Vector3(0, 0, -0.048f), new Vector3(0.46f, 0.61f, 0.015f),
-            M(new Color(0.18f, 0.19f, 0.22f), 0.7f, 0.5f), g.transform, collider: false);
-
-        // Sicherungsreihe
-        for (int i = 0; i < 8; i++)
+        var g = new GameObject("DistributionBox"); g.transform.position = pos; g.transform.SetParent(root);
+        Box("Body", new Vector3(0,0,0),       new Vector3(0.52f,0.68f,0.08f), panel, g.transform);
+        Box("Door", new Vector3(0,0,-0.048f), new Vector3(0.48f,0.64f,0.015f),
+            M(new Color(0.17f,0.18f,0.21f),0.7f,0.5f), g.transform, col: false);
+        for (int i = 0; i < 10; i++)
         {
-            float x = -0.17f + (i % 4) * 0.115f;
-            float y = (i < 4) ? 0.10f : -0.10f;
-            Box($"Fuse_{i}", new Vector3(x, y, -0.058f), new Vector3(0.08f, 0.12f, 0.012f),
-                M(new Color(0.15f, 0.15f, 0.16f), 0.4f, 0.3f), g.transform, collider: false);
-            Box($"FuseLED_{i}", new Vector3(x, y + 0.07f, -0.062f),
-                new Vector3(0.014f, 0.014f, 0.006f),
-                i == 4 ? ledA : ledG, g.transform, collider: false);
+            float x = -0.18f + (i%5) * 0.09f;
+            float y = (i < 5) ? 0.12f : -0.10f;
+            Box($"F_{i}", new Vector3(x,y,-0.060f), new Vector3(0.06f,0.11f,0.012f),
+                M(new Color(0.14f,0.14f,0.15f),0.4f,0.3f), g.transform, col: false);
+            Box($"FL_{i}", new Vector3(x,y+0.065f,-0.065f), new Vector3(0.013f,0.013f,0.006f),
+                i==4 ? ledA : ledG, g.transform, col: false);
         }
-
-        // Kollider
         var bc = g.AddComponent<BoxCollider>();
-        bc.center = new Vector3(0, 0, 0);
-        bc.size   = new Vector3(0.52f, 0.67f, 0.10f);
+        bc.center = Vector3.zero; bc.size = new Vector3(0.54f,0.70f,0.10f);
+    }
+
+    // ─── Rohrsystem ───────────────────────────────────────────────────────────
+
+    private void BuildPipes(Transform root, Material pipeMat)
+    {
+        // Horizontale Rohre oben links
+        Box("PipeH1", new Vector3(-1.4f, 4.60f, 2.7f), new Vector3(3.0f, 0.08f, 0.08f), pipeMat, root, col: false);
+        Box("PipeH2", new Vector3(-2.7f, 3.8f, -0.5f), new Vector3(0.08f, 0.08f, 3.2f), pipeMat, root, col: false);
+        Box("PipeH3", new Vector3(0.5f, 4.55f, 2.7f),  new Vector3(2.5f, 0.06f, 0.06f), pipeMat, root, col: false);
+        // Vertikale Rohre
+        Box("PipeV1", new Vector3(-2.75f, 2.2f,  2.7f), new Vector3(0.08f, 3.2f, 0.08f), pipeMat, root, col: false);
+        Box("PipeV2", new Vector3( 2.75f, 2.5f, -0.5f), new Vector3(0.06f, 2.8f, 0.06f), pipeMat, root, col: false);
+        // Knöchel / Verbindungen
+        Box("PipeKnee1", new Vector3(-2.75f, 4.60f, 2.7f),  new Vector3(0.12f, 0.12f, 0.12f), pipeMat, root, col: false);
+        Box("PipeKnee2", new Vector3(-2.70f, 3.8f, -2.75f), new Vector3(0.10f, 0.10f, 0.10f), pipeMat, root, col: false);
+    }
+
+    // ─── Warnschilder ─────────────────────────────────────────────────────────
+
+    private void BuildWarningSigns(Transform root, Material signBg, Material ledR, Material ledA)
+    {
+        // "RESTRICTED ACCESS" – links oben
+        var s1 = new GameObject("SignRestricted"); s1.transform.SetParent(root);
+        s1.transform.position = new Vector3(-2.87f, 3.2f, -0.8f);
+        s1.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
+        Box("Bg", new Vector3(0,0,0.01f), new Vector3(0.55f, 0.20f, 0.025f), signBg, s1.transform, col: false);
+        var t1o = new GameObject("Text"); t1o.transform.SetParent(s1.transform);
+        t1o.transform.localPosition = new Vector3(0, 0, -0.015f);
+        var t1 = t1o.AddComponent<TextMeshPro>();
+        t1.text = "⚠ RESTRICTED ACCESS"; t1.fontSize = 0.28f;
+        t1.color = new Color(1f, 0.62f, 0.04f); t1.alignment = TextAlignmentOptions.Center;
+        t1o.GetComponent<RectTransform>().sizeDelta = new Vector2(0.50f, 0.18f);
+        Box("LEDs", new Vector3(0, 0.12f, 0.005f), new Vector3(0.52f, 0.014f, 0.008f), ledA, s1.transform, col: false);
+
+        // "HEX-7 MAINTENANCE" – Rückwand rechts oben
+        var s2 = new GameObject("SignMaintenance"); s2.transform.SetParent(root);
+        s2.transform.position = new Vector3(1.6f, 4.1f, 2.87f);
+        s2.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+        Box("Bg", new Vector3(0,0,0.01f), new Vector3(0.80f, 0.18f, 0.020f), signBg, s2.transform, col: false);
+        var t2o = new GameObject("Text"); t2o.transform.SetParent(s2.transform);
+        t2o.transform.localPosition = new Vector3(0, 0, -0.012f);
+        var t2 = t2o.AddComponent<TextMeshPro>();
+        t2.text = "HEX-7  //  MAINTENANCE SECTOR"; t2.fontSize = 0.22f;
+        t2.color = new Color(0.50f, 0.88f, 1.0f); t2.alignment = TextAlignmentOptions.Center;
+        t2o.GetComponent<RectTransform>().sizeDelta = new Vector2(0.78f, 0.16f);
+    }
+
+    // ─── Deckenlampe (gestalterisch) ──────────────────────────────────────────
+
+    private void BuildCeilingLight(Vector3 pos, Transform root, Material chassis, Material led)
+    {
+        var g = new GameObject("CeilingLightRig"); g.transform.position = pos; g.transform.SetParent(root);
+
+        // Schiene
+        Box("Rail", new Vector3(0,0,0), new Vector3(1.80f, 0.055f, 0.055f), chassis, g.transform, col: false);
+        // 3 Pendelleuchten
+        for (int i = -1; i <= 1; i++)
+        {
+            float x = i * 0.56f;
+            Box($"Cord_{i}", new Vector3(x, -0.25f, 0), new Vector3(0.012f, 0.50f, 0.012f), chassis, g.transform, col: false);
+            Cyl($"Shade_{i}", new Vector3(x, -0.56f, 0), new Vector3(0.18f, 0.10f, 0.18f), chassis, g.transform);
+            Cyl($"Bulb_{i}",  new Vector3(x, -0.54f, 0), new Vector3(0.08f, 0.08f, 0.08f),
+                Emit(new Color(0.85f,0.92f,1.0f), new Color(0.65f,0.82f,1.0f), 3.0f), g.transform);
+            AddLight($"PL_{i}", g.transform, new Vector3(x, -0.62f, 0),
+                LightType.Point, new Color(0.72f, 0.84f, 1.0f), 1.8f, 4.5f, shadows: LightShadows.Soft);
+        }
     }
 
     // ─── Lichter ──────────────────────────────────────────────────────────────
 
     private void AddLights(Transform root)
     {
-        // Hauptlicht – kühles Deckenlicht
-        Light("CeilingMain", root, new Vector3(0, 4.9f, 0.3f),
-            LightType.Point, new Color(0.72f, 0.82f, 1.00f), 2.8f, 9f, shadows: LightShadows.Soft);
+        AddLight("CeilMain",   root, new Vector3(0,    4.9f,  0.5f), LightType.Point,       new Color(0.72f,0.82f,1.00f), 2.4f, 10f, shadows: LightShadows.Soft);
+        AddLight("FillAmber",  root, new Vector3(-1.5f,3.8f, -1.2f), LightType.Point,       new Color(1.00f,0.72f,0.30f), 0.9f, 5f);
+        AddLight("WorkSpot",   root, new Vector3(1.6f, 3.2f,  1.8f), LightType.Spot,        new Color(0.58f,0.80f,1.00f), 2.0f, 5f, 52f, LightShadows.Soft);
+        AddLight("JoshiSpot",  root, new Vector3(-0.6f,3.0f,  0.1f), LightType.Spot,        new Color(0.80f,0.76f,0.65f), 1.5f, 4f, 45f, LightShadows.Soft);
+        AddLight("RackGlow",   root, new Vector3(-2.4f,2.5f,  0.0f), LightType.Point,       new Color(0.08f,1.00f,0.20f), 0.5f, 2.5f);
+        AddLight("PanelGlow",  root, new Vector3(2.4f, 2.5f, -0.8f), LightType.Point,       new Color(1.00f,0.16f,0.08f), 0.38f,2.0f);
+        AddLight("ScreenGlow", root, new Vector3(0,    2.5f,  2.0f), LightType.Point,       new Color(0.10f,0.38f,0.95f), 1.0f, 3.0f);
+        AddLight("AmbBlue1",   root, new Vector3(0,    0.5f,  2.6f), LightType.Point,       new Color(0.14f,0.38f,1.00f), 0.40f,3.5f);
+        AddLight("AmbBlue2",   root, new Vector3(-2.6f,0.5f,  0.0f), LightType.Point,       new Color(0.14f,0.38f,1.00f), 0.32f,3.0f);
+        AddLight("AmbAmber",   root, new Vector3(0,    0.5f, -2.6f), LightType.Point,       new Color(1.00f,0.60f,0.06f), 0.32f,3.0f);
+        AddLight("FillDir",    root, new Vector3(0,    4.0f,  0.0f), LightType.Directional, new Color(0.55f,0.65f,0.90f), 0.22f,0f);
+    }
 
-        // Accent – warmes Fülllicht
-        Light("FillAmber", root, new Vector3(-1.2f, 3.8f, -1.0f),
-            LightType.Point, new Color(1.00f, 0.72f, 0.32f), 1.0f, 5f);
+    // ═══════════════════════════════════════════════════════════════════════
+    // Spieler
+    // ═══════════════════════════════════════════════════════════════════════
 
-        // Workstation-Bereich
-        Light("WorkLight", root, new Vector3(1.2f, 3.2f, 1.6f),
-            LightType.Spot, new Color(0.60f, 0.80f, 1.00f), 1.8f, 4f, 55f, LightShadows.Soft);
+    private GameObject AddPlayer(Scene scene)
+    {
+        GameObject idleModel    = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Big Yahu/Big Yahu standing.fbx");
+        GameObject runningModel = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Big Yahu/Big Yahu jogging.fbx");
+        Material   playerMat    = AssetDatabase.LoadAssetAtPath<Material>("Assets/Big Yahu/Big Yahu material.mat");
 
-        // Server-Rack Bereich
-        Light("RackLight", root, new Vector3(-1.8f, 2.5f, 1.1f),
-            LightType.Point, new Color(0.10f, 1.00f, 0.22f), 0.55f, 2.5f);
+        var character = new GameObject("BigYahu") { tag = "Player" };
+        character.transform.position = new Vector3(0f, 0f, -2.0f);
 
-        // Notfall-Panel Bereich
-        Light("PanelLight", root, new Vector3(2.0f, 2.5f, -0.7f),
-            LightType.Point, new Color(1.00f, 0.18f, 0.10f), 0.40f, 2.0f);
+        if (idleModel != null && runningModel != null)
+        {
+            var idle = (GameObject)PrefabUtility.InstantiatePrefab(idleModel);
+            idle.name = "IdleModel"; idle.transform.SetParent(character.transform, false); idle.SetActive(true);
+            try { SetupLoopController(idle, "Assets/Big Yahu/Big Yahu standing.fbx",
+                "Assets/Big Yahu/BigYahu_Stand_Loop.anim", "Assets/Big Yahu/BigYahu_Stand.controller", "Stand"); }
+            catch (System.Exception e) { Debug.LogWarning("Stand-Anim: " + e.Message); }
 
-        // Blaues Raumambiente (Wand-LEDs simulieren)
-        Light("AmbBlue1", root, new Vector3( 0.0f, 0.5f,  2.2f),
-            LightType.Point, new Color(0.15f, 0.40f, 1.00f), 0.45f, 3.5f);
-        Light("AmbBlue2", root, new Vector3(-2.2f, 0.5f,  0.0f),
-            LightType.Point, new Color(0.15f, 0.40f, 1.00f), 0.35f, 3.0f);
-        Light("AmbAmber", root, new Vector3( 0.0f, 0.5f, -2.2f),
-            LightType.Point, new Color(1.00f, 0.62f, 0.08f), 0.35f, 3.0f);
+            var run = (GameObject)PrefabUtility.InstantiatePrefab(runningModel);
+            run.name = "RunningModel"; run.transform.SetParent(character.transform, false); run.SetActive(false);
+            try { SetupLoopController(run, "Assets/Big Yahu/Big Yahu jogging.fbx",
+                "Assets/Big Yahu/BigYahu_Run_Loop.anim", "Assets/Big Yahu/BigYahu_Run.controller", "Run"); }
+            catch (System.Exception e) { Debug.LogWarning("Run-Anim: " + e.Message); }
+
+            if (playerMat != null)
+                foreach (var r in character.GetComponentsInChildren<Renderer>(true))
+                    r.material = playerMat;
+        }
+        else
+        {
+            var cap = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            cap.transform.SetParent(character.transform, false);
+            cap.transform.localPosition = new Vector3(0, 1f, 0);
+        }
+
+        var col = character.AddComponent<CapsuleCollider>();
+        col.height = 1.8f; col.radius = 0.3f; col.center = new Vector3(0, 0.9f, 0);
+
+        var rb = character.AddComponent<Rigidbody>();
+        rb.useGravity = false;
+        rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+        rb.constraints = RigidbodyConstraints.FreezePositionY
+                       | RigidbodyConstraints.FreezeRotationX
+                       | RigidbodyConstraints.FreezeRotationZ;
+
+        character.AddComponent<CharacterAnimator>();
+        character.AddComponent<PlayerController>();
+        SceneManager.MoveGameObjectToScene(character, scene);
+        return character;
+    }
+
+    private void SetupLoopController(GameObject instance, string fbxPath, string clipPath,
+                                     string ctrlPath, string stateName)
+    {
+        var assets = AssetDatabase.LoadAllAssetsAtPath(fbxPath);
+        AnimationClip src = null;
+        foreach (var a in assets)
+            if (a is AnimationClip c && !c.name.StartsWith("__preview__")) { src = c; break; }
+        if (src == null) return;
+
+        if (AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath) != null)
+            AssetDatabase.DeleteAsset(clipPath);
+        var loop = Object.Instantiate(src); loop.name = stateName + "_Loop";
+        var s = AnimationUtility.GetAnimationClipSettings(loop);
+        s.loopTime = true; AnimationUtility.SetAnimationClipSettings(loop, s);
+        AssetDatabase.CreateAsset(loop, clipPath);
+
+        if (AssetDatabase.LoadAssetAtPath<AnimatorController>(ctrlPath) != null)
+            AssetDatabase.DeleteAsset(ctrlPath);
+        var ctrl = AnimatorController.CreateAnimatorControllerAtPath(ctrlPath);
+        var sm   = ctrl.layers[0].stateMachine;
+        var st   = sm.AddState(stateName); st.motion = loop; sm.defaultState = st;
+        AssetDatabase.SaveAssets();
+
+        var anim = instance.GetComponent<Animator>() ?? instance.AddComponent<Animator>();
+        anim.runtimeAnimatorController = ctrl;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -590,139 +786,155 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
 
     private void AddJoshi(Scene scene)
     {
-        // Modell laden
-        GameObject joshiPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Big Yahu/Sitting Talking.fbx");
-        if (joshiPrefab == null)
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Big Yahu/Sitting Talking.fbx");
+        if (prefab == null)
         {
-            Debug.LogWarning("[Level2] 'Sitting Talking.fbx' nicht gefunden – Joshi wird übersprungen.");
+            Debug.LogWarning("[Level2] 'Sitting Talking.fbx' nicht gefunden.");
             return;
         }
 
-        GameObject joshi = (GameObject)PrefabUtility.InstantiatePrefab(joshiPrefab);
+        // Normal-Map korrekt als NormalMap importieren (damit Unity sie als Bump-Map erkennt)
+        EnsureNormalMapImport("Assets/Big Yahu/3dcartooncharactermodel_Clone1_normal.JPEG");
+
+        GameObject joshi = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
         joshi.name = "Joshi";
 
-        // Position: auf dem Sessel (-0.55, 0, -0.25), Stuhl ist 0.46 m hoch
-        // FBX-Modelle kommen oft in cm-Skalierung (100:1) – wir prüfen und skalieren ggf.
-        Bounds bounds = GetModelBounds(joshi);
-        float modelHeight = bounds.size.y;
-        float targetHeight = 1.75f; // Joshi soll ca. 1.75 m hoch sein (sitzend ca. 1.1 m)
-        float scaleFactor  = (modelHeight > 0.5f) ? 1f : targetHeight / Mathf.Max(modelHeight, 0.01f);
+        // Skalierung prüfen (manche FBX kommen in cm → 100x zu groß)
+        var bounds = GetBounds(joshi);
+        float h = bounds.size.y;
+        // Sitzende Pose: Ziel ~1.15 m Höhe
+        float scale = (h > 10f) ? 0.01f : (h < 0.3f) ? (1.15f / Mathf.Max(h, 0.01f)) : 1f;
 
-        joshi.transform.position = new Vector3(-0.55f, 0.50f, -0.25f);
-        joshi.transform.rotation = Quaternion.Euler(0f, 200f, 0f); // schaut Richtung Workstation
-        joshi.transform.localScale = Vector3.one * scaleFactor;
+        joshi.transform.localScale = Vector3.one * scale;
+        // Auf dem Sessel platzieren – Sessel-Sitz ist bei Y=0.50
+        joshi.transform.position = new Vector3(-0.6f, 0.50f, 0.1f);
+        // Schaut Richtung Workstation / leicht zur Mitte
+        joshi.transform.rotation = Quaternion.Euler(0f, 215f, 0f);
 
-        // Material mit PBR-Texturen erstellen und zuweisen
-        Material joshiMat = CreateJoshiMaterial();
-        if (joshiMat != null)
+        // PBR-Material zuweisen
+        var mat = CreateJoshiMaterial();
+        if (mat != null)
             foreach (var r in joshi.GetComponentsInChildren<Renderer>(true))
-                r.material = joshiMat;
+                r.material = mat;
 
-        // Sitz-Animation einrichten
-        try { SetupSittingAnimation(joshi); }
-        catch (System.Exception e) { Debug.LogWarning("[Level2] Animation-Setup fehlgeschlagen: " + e.Message); }
+        // Sitz-Animation
+        SetupSittingAnimation(joshi);
 
         SceneManager.MoveGameObjectToScene(joshi, scene);
-        Debug.Log("[Level2] Joshi platziert.");
+        Debug.Log("[Level2] Joshi platziert und Material zugewiesen.");
     }
 
-    private Bounds GetModelBounds(GameObject go)
+    private void EnsureNormalMapImport(string path)
     {
-        var renderers = go.GetComponentsInChildren<Renderer>();
-        if (renderers.Length == 0) return new Bounds(Vector3.zero, Vector3.one);
-        var b = renderers[0].bounds;
-        foreach (var r in renderers) b.Encapsulate(r.bounds);
+        var importer = AssetImporter.GetAtPath(path) as TextureImporter;
+        if (importer == null) return;
+        if (importer.textureType != TextureImporterType.NormalMap)
+        {
+            importer.textureType = TextureImporterType.NormalMap;
+            importer.SaveAndReimport();
+        }
+    }
+
+    private Bounds GetBounds(GameObject go)
+    {
+        var rens = go.GetComponentsInChildren<Renderer>();
+        if (rens.Length == 0) return new Bounds(Vector3.zero, Vector3.one);
+        var b = rens[0].bounds;
+        foreach (var r in rens) b.Encapsulate(r.bounds);
         return b;
     }
 
     private Material CreateJoshiMaterial()
     {
-        const string basePath = "Assets/Big Yahu/3dcartooncharactermodel_Clone1_";
-        var baseColor = AssetDatabase.LoadAssetAtPath<Texture2D>(basePath + "basecolor.JPEG");
-        var normalMap = AssetDatabase.LoadAssetAtPath<Texture2D>(basePath + "normal.JPEG");
-        var metallic  = AssetDatabase.LoadAssetAtPath<Texture2D>(basePath + "metallic.JPEG");
-        var roughness = AssetDatabase.LoadAssetAtPath<Texture2D>(basePath + "roughness.JPEG");
+        const string p = "Assets/Big Yahu/3dcartooncharactermodel_Clone1_";
+        var baseColor = AssetDatabase.LoadAssetAtPath<Texture2D>(p + "basecolor.JPEG");
+        var normalMap = AssetDatabase.LoadAssetAtPath<Texture2D>(p + "normal.JPEG");
+        var metalTex  = AssetDatabase.LoadAssetAtPath<Texture2D>(p + "metallic.JPEG");
+        var roughTex  = AssetDatabase.LoadAssetAtPath<Texture2D>(p + "roughness.JPEG");
 
         if (baseColor == null)
         {
-            Debug.LogWarning("[Level2] Joshi-Textur 'basecolor.JPEG' nicht gefunden.");
+            Debug.LogWarning("[Level2] basecolor.JPEG nicht gefunden – kein Material erstellt.");
             return null;
         }
 
         var mat = new Material(Shader.Find("Standard"));
         mat.name = "Joshi_PBR";
 
+        // Albedo
         mat.SetTexture("_MainTex", baseColor);
         mat.SetColor("_Color", Color.white);
 
+        // Normal Map (nach EnsureNormalMapImport bereits als NormalMap importiert)
         if (normalMap != null)
         {
-            // Normal-Map muss als NormalMap-Textur importiert sein
+            mat.EnableKeyword("_NORMALMAP");
             mat.SetTexture("_BumpMap", normalMap);
             mat.SetFloat("_BumpScale", 1f);
-            mat.EnableKeyword("_NORMALMAP");
         }
 
-        if (metallic != null)
+        // Metallic (R-Kanal) + Smoothness (A-Kanal im MetallicGlossMap-Workflow)
+        if (metalTex != null)
         {
-            mat.SetTexture("_MetallicGlossMap", metallic);
             mat.EnableKeyword("_METALLICGLOSSMAP");
+            mat.SetTexture("_MetallicGlossMap", metalTex);
+        }
+        else
+        {
+            mat.SetFloat("_Metallic", 0.0f);
         }
 
-        // Roughness → Smoothness (invertiert). Wir setzen einen mittleren Wert
-        // da wir keine Textur-Inversion zur Laufzeit durchführen.
-        float smoothnessFromRoughness = (roughness != null) ? 0.35f : 0.40f;
-        mat.SetFloat("_Metallic",   0.0f);
-        mat.SetFloat("_Glossiness", smoothnessFromRoughness);
+        // Roughness → Smoothness: 0.5 ist ein guter Mittelwert für Cartoon-Skin
+        float smooth = (roughTex != null) ? 0.40f : 0.45f;
+        mat.SetFloat("_Glossiness", smooth);
 
-        // Material speichern damit Unity es serialisiert
+        // Material auf Disk speichern (sonst verliert Unity die Referenz nach dem Speichern)
         const string matPath = "Assets/Big Yahu/Joshi_PBR.mat";
         if (AssetDatabase.LoadAssetAtPath<Material>(matPath) != null)
             AssetDatabase.DeleteAsset(matPath);
         AssetDatabase.CreateAsset(mat, matPath);
         AssetDatabase.SaveAssets();
-
         return AssetDatabase.LoadAssetAtPath<Material>(matPath);
     }
 
-    private void SetupSittingAnimation(GameObject joshiInstance)
+    private void SetupSittingAnimation(GameObject joshi)
     {
-        Object[] assets = AssetDatabase.LoadAllAssetsAtPath("Assets/Big Yahu/Sitting Talking.fbx");
-        AnimationClip sourceClip = null;
-        foreach (Object a in assets)
-            if (a is AnimationClip clip && !clip.name.StartsWith("__preview__"))
-            { sourceClip = clip; break; }
+        var assets = AssetDatabase.LoadAllAssetsAtPath("Assets/Big Yahu/Sitting Talking.fbx");
+        AnimationClip src = null;
+        foreach (var a in assets)
+            if (a is AnimationClip c && !c.name.StartsWith("__preview__")) { src = c; break; }
 
-        if (sourceClip == null)
+        if (src == null)
         {
-            Debug.LogWarning("[Level2] Kein AnimationClip in 'Sitting Talking.fbx' gefunden.");
+            Debug.LogWarning("[Level2] Kein AnimationClip in 'Sitting Talking.fbx'.");
             return;
         }
 
         const string clipPath = "Assets/Big Yahu/Joshi_Sitting_Loop.anim";
+        const string ctrlPath = "Assets/Big Yahu/Joshi_Sitting.controller";
+
         if (AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath) != null)
             AssetDatabase.DeleteAsset(clipPath);
 
-        AnimationClip loopClip = Object.Instantiate(sourceClip);
-        loopClip.name = "Joshi_Sitting_Loop";
-        var settings = AnimationUtility.GetAnimationClipSettings(loopClip);
-        settings.loopTime = true;
-        AnimationUtility.SetAnimationClipSettings(loopClip, settings);
-        AssetDatabase.CreateAsset(loopClip, clipPath);
+        var loop = Object.Instantiate(src);
+        loop.name = "Joshi_Sitting_Loop";
+        var cfg = AnimationUtility.GetAnimationClipSettings(loop);
+        cfg.loopTime = true;
+        AnimationUtility.SetAnimationClipSettings(loop, cfg);
+        AssetDatabase.CreateAsset(loop, clipPath);
 
-        const string ctrlPath = "Assets/Big Yahu/Joshi_Sitting.controller";
         if (AssetDatabase.LoadAssetAtPath<AnimatorController>(ctrlPath) != null)
             AssetDatabase.DeleteAsset(ctrlPath);
 
-        AnimatorController ctrl = AnimatorController.CreateAnimatorControllerAtPath(ctrlPath);
-        AnimatorStateMachine sm = ctrl.layers[0].stateMachine;
-        AnimatorState sit = sm.AddState("Sitting");
-        sit.motion      = loopClip;
-        sm.defaultState = sit;
+        var ctrl = AnimatorController.CreateAnimatorControllerAtPath(ctrlPath);
+        var sm   = ctrl.layers[0].stateMachine;
+        var sit  = sm.AddState("Sitting");
+        sit.motion = loop; sm.defaultState = sit;
         AssetDatabase.SaveAssets();
 
-        Animator anim = joshiInstance.GetComponent<Animator>() ?? joshiInstance.AddComponent<Animator>();
-        anim.runtimeAnimatorController = ctrl;
-        Debug.Log("[Level2] Joshi-Animation eingerichtet: " + sourceClip.name);
+        // Animator setzen NACH SaveAssets damit der Controller auf Disk existiert
+        var anim = joshi.GetComponent<Animator>() ?? joshi.AddComponent<Animator>();
+        anim.runtimeAnimatorController = AssetDatabase.LoadAssetAtPath<AnimatorController>(ctrlPath);
+        Debug.Log("[Level2] Joshi-Animation: " + src.name + " → loopend.");
     }
 }

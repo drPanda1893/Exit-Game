@@ -161,6 +161,17 @@ public class BuildLevel1PrisonCell : EditorWindow
         doorCtrl.openDistance = 1.4f;
         doorCtrl.openDuration = 1.2f;
 
+        // Level-Transition-Trigger – hinter der Türöffnung in der rechten Wand
+        GameObject triggerGO = new GameObject("LevelTransitionTrigger");
+        triggerGO.transform.position = new Vector3(2.8f, 1.2f, 0f);
+        triggerGO.transform.SetParent(root);
+        BoxCollider triggerCol = triggerGO.AddComponent<BoxCollider>();
+        triggerCol.isTrigger = true;
+        triggerCol.center    = Vector3.zero;
+        triggerCol.size      = new Vector3(0.5f, 2.4f, 1.3f);
+        LevelTransitionTrigger ltt = triggerGO.AddComponent<LevelTransitionTrigger>();
+        ltt.targetScene = "Level2";
+
         // Stone block mortar lines
         AddMortarLines(root, darkConcreteMat);
 
