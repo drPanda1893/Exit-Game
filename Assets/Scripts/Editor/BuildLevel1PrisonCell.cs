@@ -60,6 +60,9 @@ public class BuildLevel1PrisonCell : EditorWindow
         GameObject bigYahu = AddBigYahuToScene(scene);
         if (bigYahu != null) follow.SetTarget(bigYahu.transform);
 
+        // Wartungsraum direkt in derselben Szene hinter der Türöffnung (x > 2.65)
+        AddMaintenanceRoom(scene, environmentRoot.transform);
+
         // Weak directional fill — ensures the cell is never pitch-black
         GameObject fillGO = new GameObject("FillLight");
         fillGO.transform.rotation = Quaternion.Euler(45f, -55f, 0f);
@@ -160,17 +163,6 @@ public class BuildLevel1PrisonCell : EditorWindow
         DoorController doorCtrl = exitDoorGO.AddComponent<DoorController>();
         doorCtrl.openDistance = 1.4f;
         doorCtrl.openDuration = 1.2f;
-
-        // Level-Transition-Trigger – hinter der Türöffnung in der rechten Wand
-        GameObject triggerGO = new GameObject("LevelTransitionTrigger");
-        triggerGO.transform.position = new Vector3(2.8f, 1.2f, 0f);
-        triggerGO.transform.SetParent(root);
-        BoxCollider triggerCol = triggerGO.AddComponent<BoxCollider>();
-        triggerCol.isTrigger = true;
-        triggerCol.center    = Vector3.zero;
-        triggerCol.size      = new Vector3(0.5f, 2.4f, 1.3f);
-        LevelTransitionTrigger ltt = triggerGO.AddComponent<LevelTransitionTrigger>();
-        ltt.targetScene = "Level2";
 
         // Stone block mortar lines
         AddMortarLines(root, darkConcreteMat);
@@ -1280,5 +1272,388 @@ public class BuildLevel1PrisonCell : EditorWindow
         tr.anchorMin = Vector2.zero;
         tr.anchorMax = Vector2.one;
         tr.sizeDelta = Vector2.zero;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // WARTUNGSRAUM – wird direkt in der Zellen-Szene hinter der Türöffnung gebaut
+    // Raum-Zentrum: (5.65, 0, 0) · Eingang bei x=2.65, z ∈ [-0.7, 0.7]
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private void AddMaintenanceRoom(Scene scene, Transform root)
+    {
+        Vector3 O = new Vector3(5.65f, 0f, 0f); // Raumzentrum
+
+        // ── Materialien ──────────────────────────────────────────────────────
+        var sD  = CreateMaterial(new Color(0.08f, 0.09f, 0.11f), 0.82f, 0.60f);
+        var sM  = CreateMaterial(new Color(0.14f, 0.15f, 0.18f), 0.72f, 0.52f);
+        var sB  = CreateMaterial(new Color(0.28f, 0.30f, 0.36f), 0.90f, 0.75f);
+        var sG  = CreateMaterial(new Color(0.28f, 0.22f, 0.09f), 0.88f, 0.70f); // gold
+        var fl  = CreateMaterial(new Color(0.09f, 0.10f, 0.12f), 0.60f, 0.72f);
+        var gr  = CreateMaterial(new Color(0.07f, 0.07f, 0.08f), 0.92f, 0.48f);
+        var lb  = CreateEmissiveMaterial(new Color(0.04f, 0.08f, 0.22f), new Color(0.12f, 0.40f, 1.00f), 2.2f);
+        var la  = CreateEmissiveMaterial(new Color(0.28f, 0.16f, 0.02f), new Color(1.00f, 0.58f, 0.06f), 1.8f);
+        var lg  = CreateEmissiveMaterial(new Color(0.03f, 0.20f, 0.05f), new Color(0.06f, 1.00f, 0.16f), 1.6f);
+        var lr  = CreateEmissiveMaterial(new Color(0.26f, 0.03f, 0.03f), new Color(1.00f, 0.06f, 0.06f), 1.8f);
+        var lc  = CreateEmissiveMaterial(new Color(0.03f, 0.18f, 0.20f), new Color(0.08f, 0.80f, 1.00f), 1.4f);
+        var scrB = CreateEmissiveMaterial(new Color(0.03f, 0.08f, 0.20f), new Color(0.08f, 0.38f, 0.95f), 3.0f);
+        var scrG = CreateEmissiveMaterial(new Color(0.03f, 0.14f, 0.05f), new Color(0.04f, 0.92f, 0.14f), 2.4f);
+
+        // ── Boden & Decke ────────────────────────────────────────────────────
+        CreateSolid("MR_Floor",   O + new Vector3(0, -0.08f, 0), new Vector3(6f, 0.16f, 6f), fl, root);
+        CreateDecor("MR_Ceiling", O + new Vector3(0, 4.98f, 0),  new Vector3(6f, 0.06f, 6f), sD, root);
+
+        // Boden-LEDs (blau seitlich, amber vorne/hinten)
+        CreateDecor("MR_FLB1", O + new Vector3(-2.35f, 0.012f, 0), new Vector3(0.018f, 0.006f, 5.6f), lb, root);
+        CreateDecor("MR_FLB2", O + new Vector3( 2.35f, 0.012f, 0), new Vector3(0.018f, 0.006f, 5.6f), lb, root);
+        CreateDecor("MR_FLA1", O + new Vector3(0, 0.012f, -2.35f), new Vector3(5.6f, 0.006f, 0.018f), la, root);
+        CreateDecor("MR_FLA2", O + new Vector3(0, 0.012f,  2.35f), new Vector3(5.6f, 0.006f, 0.018f), la, root);
+
+        // Bodenplatten-Gitter
+        for (int xi = -2; xi <= 2; xi++)
+        for (int zi = -2; zi <= 2; zi++)
+            CreateDecor($"MR_Tile_{xi}_{zi}", O + new Vector3(xi * 1.0f, 0.003f, zi * 1.0f),
+                new Vector3(0.96f, 0.003f, 0.96f), sM, root);
+
+        // ── Eingang (-X Seite, verbindet mit Zelle) ──────────────────────────
+        // Öffnung: z ∈ [-0.7, 0.7], y ∈ [0, 2.4] — genau wie Zellenöffnung
+        CreateSolid("MR_EntL",      new Vector3(2.65f, 2.5f, -1.85f), new Vector3(0.22f, 5f, 2.3f), sD, root);
+        CreateSolid("MR_EntR",      new Vector3(2.65f, 2.5f,  1.85f), new Vector3(0.22f, 5f, 2.3f), sD, root);
+        CreateSolid("MR_EntLintel", new Vector3(2.65f, 3.70f,  0f),   new Vector3(0.22f, 2.6f, 1.4f), sD, root);
+
+        // Eingangsrahmen (gold, beleuchtet mit cyan LEDs)
+        CreateDecor("MR_FrL",   new Vector3(2.60f, 1.3f, -0.73f), new Vector3(0.06f, 2.6f, 0.06f), sG, root);
+        CreateDecor("MR_FrR",   new Vector3(2.60f, 1.3f,  0.73f), new Vector3(0.06f, 2.6f, 0.06f), sG, root);
+        CreateDecor("MR_FrTop", new Vector3(2.60f, 2.63f, 0f),    new Vector3(0.06f, 0.06f, 1.52f), sG, root);
+        CreateDecor("MR_FrCL",  new Vector3(2.60f, 1.3f, -0.76f), new Vector3(0.010f, 2.5f, 0.010f), lc, root);
+        CreateDecor("MR_FrCR",  new Vector3(2.60f, 1.3f,  0.76f), new Vector3(0.010f, 2.5f, 0.010f), lc, root);
+        CreateDecor("MR_FrCT",  new Vector3(2.60f, 2.66f, 0f),    new Vector3(0.010f, 0.010f, 1.56f), lc, root);
+
+        // ── Rückwand (+X) ─────────────────────────────────────────────────────
+        CreateSolid("MR_BackWall", O + new Vector3(3.0f, 2.5f, 0), new Vector3(0.22f, 5f, 6.44f), sD, root);
+
+        // ── Seitenwände (±Z) ─────────────────────────────────────────────────
+        CreateSolid("MR_SideN", O + new Vector3(0, 2.5f,  3.0f), new Vector3(6.44f, 5f, 0.22f), sD, root);
+        CreateSolid("MR_SideS", O + new Vector3(0, 2.5f, -3.0f), new Vector3(6.44f, 5f, 0.22f), sD, root);
+
+        // Wand-Paneel-Streifen (horizontal)
+        float[] hs = { 0.55f, 1.10f, 1.80f, 2.60f, 3.40f, 4.20f };
+        foreach (float h in hs)
+        {
+            CreateDecor("MR_SB", O + new Vector3(3.0f, h, 0),     new Vector3(0.015f, 0.030f, 5.85f), sB, root);
+            CreateDecor("MR_SN", O + new Vector3(0, h,  2.88f),   new Vector3(5.85f, 0.030f, 0.015f), sB, root);
+            CreateDecor("MR_SS", O + new Vector3(0, h, -2.88f),   new Vector3(5.85f, 0.030f, 0.015f), sB, root);
+        }
+
+        // Wand-LED oben (blau) + unten (amber)
+        CreateDecor("MR_WLT_B", O + new Vector3(3.0f,  4.70f, 0),   new Vector3(0.018f, 0.040f, 5.70f), lb, root);
+        CreateDecor("MR_WLT_N", O + new Vector3(0, 4.70f,  2.87f),  new Vector3(5.70f, 0.040f, 0.018f), lb, root);
+        CreateDecor("MR_WLT_S", O + new Vector3(0, 4.70f, -2.87f),  new Vector3(5.70f, 0.040f, 0.018f), lb, root);
+        CreateDecor("MR_WLB_B", O + new Vector3(3.0f,  0.20f, 0),   new Vector3(0.018f, 0.030f, 5.70f), la, root);
+        CreateDecor("MR_WLB_N", O + new Vector3(0, 0.20f,  2.87f),  new Vector3(5.70f, 0.030f, 0.018f), la, root);
+
+        // ── Kabelkanal (Decke) ────────────────────────────────────────────────
+        CreateDecor("MR_CT1", O + new Vector3(-0.8f, 4.82f, 0.5f), new Vector3(0.22f, 0.055f, 5.6f), gr, root);
+        CreateDecor("MR_CT2", O + new Vector3(0.4f,  4.82f, 1.5f), new Vector3(5.6f, 0.055f, 0.22f), gr, root);
+        Color[] cc = { Color.blue * 0.6f, Color.red * 0.6f, Color.green * 0.5f,
+                       new Color(0.45f,0.38f,0.04f), Color.gray * 0.6f, Color.magenta * 0.5f };
+        for (int i = 0; i < 6; i++)
+            CreateDecor($"MR_Cab_{i}", O + new Vector3(-0.76f + i * 0.035f, 4.796f, 0.5f),
+                new Vector3(0.018f, 0.018f, 5.5f), CreateMaterial(cc[i], 0f, 0.08f), root);
+
+        // ── Wandbildschirm (Rückwand, Mitte) ──────────────────────────────────
+        CreateDecor("MR_ScrBezel",  O + new Vector3(2.87f, 2.40f, 0), new Vector3(0.030f, 1.10f, 2.20f), sB,   root);
+        CreateDecor("MR_ScrScreen", O + new Vector3(2.86f, 2.40f, 0), new Vector3(0.016f, 1.00f, 2.10f), scrB, root);
+        CreateDecor("MR_ScrLED_T",  O + new Vector3(2.86f, 2.96f, 0), new Vector3(0.012f, 0.012f, 2.22f), lc, root);
+        CreateDecor("MR_ScrLED_B",  O + new Vector3(2.86f, 1.84f, 0), new Vector3(0.012f, 0.012f, 2.22f), lc, root);
+
+        // ── Workstation (rechts hinten) ───────────────────────────────────────
+        BuildMRWorkstation(O + new Vector3(1.6f, 0f, 1.8f), root, sD, sB, scrB, scrG, lg, la);
+
+        // ── Serverrack (linke Seite, 2 Stück) ────────────────────────────────
+        BuildMRServerRack(O + new Vector3(-1.8f, 0f, -1.4f), root, sD, gr, lg, la, lb, lr);
+        BuildMRServerRack(O + new Vector3(-1.8f, 0f,  0.2f), root, sD, gr, lg, lg, lb, la);
+
+        // ── Kontrollpanel (rechte Wand, Mitte-vorne) ─────────────────────────
+        BuildMRControlPanel(O + new Vector3(2.88f, 1.85f, -1.2f), root, sM, lr, lg, la, sB);
+
+        // ── Joshi-Sessel & Beistelltisch ─────────────────────────────────────
+        BuildMRChair(O + new Vector3(-0.55f, 0f, 0.2f), root, sD, sM, sB);
+        BuildMRSideTable(O + new Vector3(0.52f, 0f, 0.2f), root, sD, sB, lb, scrG);
+
+        // ── Rohre + Warnschilder ──────────────────────────────────────────────
+        CreateDecor("MR_PipeH1", O + new Vector3(-1.5f, 4.60f, 2.7f), new Vector3(3.0f, 0.07f, 0.07f), sG, root);
+        CreateDecor("MR_PipeV1", O + new Vector3(-2.7f, 2.2f,  2.7f), new Vector3(0.07f, 3.2f, 0.07f), sG, root);
+        CreateDecor("MR_PipeK1", O + new Vector3(-2.7f, 4.60f, 2.7f), new Vector3(0.11f, 0.11f, 0.11f), sG, root);
+
+        // Warnschild
+        CreateDecor("MR_SignBg", O + new Vector3(3.0f, 3.2f, -1.5f), new Vector3(0.025f, 0.20f, 0.55f),
+            CreateMaterial(new Color(0.08f, 0.08f, 0.08f)), root);
+
+        // ── Lichter ───────────────────────────────────────────────────────────
+        MRLight("MR_CeilMain",  O + new Vector3(0,    4.9f,  0.5f), LightType.Point,       new Color(0.72f,0.82f,1.00f), 2.4f, 10f,  scene);
+        MRLight("MR_FillAmber", O + new Vector3(-1.5f,3.8f, -1.2f), LightType.Point,       new Color(1.00f,0.72f,0.30f), 0.9f, 5f,   scene);
+        MRLight("MR_WorkSpot",  O + new Vector3(1.6f, 3.2f,  1.8f), LightType.Spot,        new Color(0.58f,0.80f,1.00f), 2.0f, 5f,   scene, 52f, LightShadows.Soft);
+        MRLight("MR_JoshiSpot", O + new Vector3(-0.55f,3.0f, 0.2f), LightType.Spot,        new Color(0.85f,0.78f,0.65f), 1.6f, 4f,   scene, 45f, LightShadows.Soft);
+        MRLight("MR_RackGlow",  O + new Vector3(-1.9f,2.5f,  0.0f), LightType.Point,       new Color(0.08f,1.00f,0.20f), 0.5f, 2.5f, scene);
+        MRLight("MR_PanelGlow", O + new Vector3(2.4f, 2.5f, -1.2f), LightType.Point,       new Color(1.00f,0.16f,0.08f), 0.4f, 2.0f, scene);
+        MRLight("MR_ScrGlow",   O + new Vector3(2.0f, 2.4f,  0f),   LightType.Point,       new Color(0.10f,0.38f,0.95f), 1.0f, 3.0f, scene);
+        MRLight("MR_AmbBlue",   O + new Vector3(0,    0.5f,  2.6f), LightType.Point,       new Color(0.14f,0.38f,1.00f), 0.40f,3.5f, scene);
+        MRLight("MR_AmbAmber",  O + new Vector3(0,    0.5f, -2.6f), LightType.Point,       new Color(1.00f,0.60f,0.06f), 0.32f,3.0f, scene);
+
+        // ── Joshi NPC ─────────────────────────────────────────────────────────
+        try { AddMRJoshi(O + new Vector3(-0.55f, 0.50f, 0.2f), scene); }
+        catch (System.Exception e) { Debug.LogWarning("[Wartungsraum] Joshi fehlgeschlagen: " + e.Message); }
+    }
+
+    private void MRLight(string name, Vector3 pos, LightType type, Color color,
+                         float intensity, float range, Scene scene,
+                         float spotAngle = 60f, LightShadows shadows = LightShadows.None)
+    {
+        var go = new GameObject(name);
+        go.transform.position = pos;
+        var l = go.AddComponent<Light>();
+        l.type = type; l.color = color; l.intensity = intensity;
+        l.range = range; l.spotAngle = spotAngle; l.shadows = shadows;
+        SceneManager.MoveGameObjectToScene(go, scene);
+    }
+
+    // ─── Workstation ─────────────────────────────────────────────────────────
+
+    private void BuildMRWorkstation(Vector3 pos, Transform root,
+        Material steel, Material bright, Material scr1, Material scr2, Material ledG, Material ledA)
+    {
+        var g = new GameObject("MR_Workstation");
+        g.transform.position = pos; g.transform.SetParent(root);
+
+        CreateSolid("Main", pos + new Vector3(0,      0.74f, 0),     new Vector3(1.20f, 0.055f, 0.80f), steel,  g.transform);
+        CreateDecor("Wing", pos + new Vector3(-0.60f, 0.74f, 0.44f), new Vector3(0.58f, 0.055f, 0.58f), steel,  g.transform);
+
+        // Monitor 1 (blau)
+        CreateDecor("M1St", pos + new Vector3(0.08f, 0.82f, 0.14f),  new Vector3(0.04f, 0.28f, 0.04f), bright, g.transform);
+        CreateDecor("M1Bz", pos + new Vector3(0.08f, 1.16f, 0.17f),  new Vector3(0.80f, 0.50f, 0.025f), bright, g.transform, Quaternion.Euler(7f, 0f, 0f));
+        CreateDecor("M1Sc", pos + new Vector3(0.08f, 1.16f, 0.168f), new Vector3(0.74f, 0.44f, 0.018f), scr1,   g.transform, Quaternion.Euler(7f, 0f, 0f));
+
+        // Monitor 2 (grün)
+        CreateDecor("M2St", pos + new Vector3(-0.58f, 0.82f, 0.58f),  new Vector3(0.04f, 0.22f, 0.04f),  bright, g.transform);
+        CreateDecor("M2Bz", pos + new Vector3(-0.58f, 1.09f, 0.60f),  new Vector3(0.58f, 0.38f, 0.022f), bright, g.transform, Quaternion.Euler(7f, 22f, 0f));
+        CreateDecor("M2Sc", pos + new Vector3(-0.58f, 1.09f, 0.598f), new Vector3(0.52f, 0.32f, 0.016f), scr2,   g.transform, Quaternion.Euler(7f, 22f, 0f));
+
+        CreateDecor("KB",     pos + new Vector3(0.08f, 0.763f, -0.06f), new Vector3(0.44f, 0.012f, 0.16f),
+            CreateMaterial(new Color(0.09f, 0.09f, 0.10f), 0.3f, 0.25f), g.transform);
+        CreateDecor("DeskLED",pos + new Vector3(0, 0.62f, -0.36f),      new Vector3(1.10f, 0.018f, 0.010f), ledA, g.transform);
+
+        // Status-LEDs
+        for (int i = 0; i < 3; i++)
+            CreateDecor($"SL_{i}", pos + new Vector3(-0.28f + i * 0.28f, 0.948f, 0.128f),
+                new Vector3(0.016f, 0.016f, 0.010f), ledG, g.transform);
+
+        var bc = g.AddComponent<BoxCollider>();
+        bc.center = new Vector3(0, 0.38f, 0.12f); bc.size = new Vector3(1.25f, 0.80f, 0.90f);
+    }
+
+    // ─── Serverrack ──────────────────────────────────────────────────────────
+
+    private void BuildMRServerRack(Vector3 pos, Transform root,
+        Material chassis, Material grate, Material ledG, Material ledA, Material ledB, Material ledR)
+    {
+        var g = new GameObject("MR_ServerRack");
+        g.transform.position = pos; g.transform.SetParent(root);
+
+        CreateSolid("Chassis",    pos + new Vector3(0, 1.05f, 0),      new Vector3(0.52f, 2.10f, 0.52f), chassis, g.transform);
+        CreateDecor("FrontGrate", pos + new Vector3(0, 1.05f,-0.248f), new Vector3(0.46f, 2.00f, 0.022f), grate,   g.transform);
+        CreateDecor("TopVent",    pos + new Vector3(0, 2.07f, 0),      new Vector3(0.48f, 0.055f, 0.48f), grate,   g.transform);
+
+        Material[] rowLeds = { ledG, ledG, ledA, ledG, ledR, ledG, ledG, ledA, ledG, ledG };
+        for (int i = 0; i < 10; i++)
+        {
+            float y = 0.08f + i * 0.18f;
+            CreateDecor($"Slot_{i}", pos + new Vector3(0, y, -0.246f), new Vector3(0.44f, 0.15f, 0.018f),
+                CreateMaterial(new Color(0.09f + (i%2)*0.03f, 0.09f, 0.10f), 0.6f, 0.4f), g.transform);
+            CreateDecor($"LED_{i}", pos + new Vector3(0.18f, y, -0.252f),
+                new Vector3(0.016f, 0.016f, 0.008f), rowLeds[i], g.transform);
+        }
+        var bc = g.AddComponent<BoxCollider>();
+        bc.center = new Vector3(0, 1.05f, 0); bc.size = new Vector3(0.54f, 2.12f, 0.54f);
+    }
+
+    // ─── Kontrollpanel ───────────────────────────────────────────────────────
+
+    private void BuildMRControlPanel(Vector3 pos, Transform root,
+        Material panel, Material ledR, Material ledG, Material ledA, Material trim)
+    {
+        var g = new GameObject("MR_ControlPanel");
+        g.transform.position = pos; g.transform.SetParent(root);
+
+        CreateSolid("Body",    pos,                          new Vector3(0.80f, 1.10f, 0.12f), panel, g.transform);
+        CreateDecor("Frame",   pos + new Vector3(0, 0,-0.058f), new Vector3(0.86f, 1.16f, 0.014f), trim, g.transform);
+        CreateDecor("Display", pos + new Vector3(0, 0.28f,-0.065f), new Vector3(0.62f, 0.32f, 0.014f),
+            CreateEmissiveMaterial(new Color(0.03f,0.07f,0.18f), new Color(0.08f,0.32f,0.92f), 2.2f), g.transform);
+
+        Material[] swLeds = { ledR, ledG, ledG, ledA, ledR, ledG, ledG, ledG };
+        for (int i = 0; i < 8; i++)
+        {
+            float x = -0.31f + i * 0.089f;
+            CreateDecor($"Sw_{i}",    pos + new Vector3(x,-0.22f,-0.070f), new Vector3(0.040f, 0.052f, 0.028f),
+                CreateMaterial(new Color(0.14f,0.14f,0.15f),0.5f,0.4f), g.transform);
+            CreateDecor($"SwLED_{i}", pos + new Vector3(x,-0.235f,-0.075f),new Vector3(0.015f, 0.015f, 0.007f),
+                swLeds[i], g.transform);
+        }
+        // Notfall-Knopf (Zylinder-Annäherung via Cube)
+        CreateDecor("EmrBtn", pos + new Vector3(0.32f,-0.36f,-0.074f), new Vector3(0.065f, 0.065f, 0.025f),
+            CreateEmissiveMaterial(new Color(0.7f,0.04f,0.04f), new Color(1f,0.04f,0.04f), 2.2f), g.transform);
+    }
+
+    // ─── Joshi-Sessel ─────────────────────────────────────────────────────────
+
+    private void BuildMRChair(Vector3 pos, Transform root, Material chassis, Material pad, Material trim)
+    {
+        var g = new GameObject("MR_JoshiChair");
+        g.transform.position = pos; g.transform.SetParent(root);
+        g.transform.rotation = Quaternion.Euler(0f, 35f, 0f);
+
+        CreateSolid("Seat",    pos + new Vector3(0, 0.46f, 0), new Vector3(0.52f, 0.075f, 0.50f), pad,     g.transform);
+        CreateDecor("SeatPad", pos + new Vector3(0, 0.503f,0), new Vector3(0.46f, 0.032f, 0.44f),
+            CreateMaterial(new Color(0.10f,0.10f,0.11f),0.01f,0.06f), g.transform);
+        CreateSolid("Back",    pos + new Vector3(0, 0.92f, 0.24f), new Vector3(0.48f, 0.80f, 0.07f), pad,  g.transform);
+        CreateDecor("Head",    pos + new Vector3(0, 1.35f, 0.22f), new Vector3(0.28f, 0.24f, 0.07f), pad,  g.transform);
+        // Blauer Akzentstreifen
+        CreateDecor("Accent",  pos + new Vector3(0, 1.29f, 0.197f), new Vector3(0.40f, 0.013f, 0.011f),
+            CreateEmissiveMaterial(new Color(0.04f,0.10f,0.28f), new Color(0.12f,0.42f,1.0f), 1.2f), g.transform);
+        // Säule
+        CreateDecor("Stem",    pos + new Vector3(0, 0.23f, 0), new Vector3(0.055f, 0.46f, 0.055f), chassis, g.transform);
+        // Fußkreuz (4 Arme als Kreuze)
+        CreateDecor("CrossX",  pos + new Vector3(0, 0.02f, 0), new Vector3(0.76f, 0.028f, 0.04f), chassis, g.transform);
+        CreateDecor("CrossZ",  pos + new Vector3(0, 0.02f, 0), new Vector3(0.04f, 0.028f, 0.76f), chassis, g.transform);
+
+        var bc = g.AddComponent<BoxCollider>();
+        bc.center = new Vector3(0, 0.65f, 0.08f); bc.size = new Vector3(0.60f, 1.32f, 0.72f);
+    }
+
+    // ─── Beistelltisch ───────────────────────────────────────────────────────
+
+    private void BuildMRSideTable(Vector3 pos, Transform root, Material wood, Material bright, Material ledB, Material ledG)
+    {
+        var g = new GameObject("MR_SideTable");
+        g.transform.position = pos; g.transform.SetParent(root);
+
+        CreateSolid("Top", pos + new Vector3(0, 0.65f, 0), new Vector3(0.44f, 0.038f, 0.44f), wood, g.transform);
+        // Beine
+        foreach (var (dx,dz) in new[]{(0.18f,0.18f),(-0.18f,0.18f),(0.18f,-0.18f),(-0.18f,-0.18f)})
+            CreateDecor($"Leg_{dx}", pos + new Vector3(dx, 0.325f, dz), new Vector3(0.028f, 0.65f, 0.028f),
+                CreateMaterial(new Color(0.20f,0.20f,0.22f),0.88f,0.58f), g.transform);
+        // Kaffee
+        CreateDecor("Cup",     pos + new Vector3(-0.10f, 0.706f, 0.06f), new Vector3(0.052f, 0.058f, 0.052f),
+            CreateMaterial(new Color(0.82f,0.84f,0.88f),0.05f,0.22f), g.transform);
+        // Tablet
+        CreateDecor("Tablet",  pos + new Vector3(0.09f, 0.664f,-0.04f), new Vector3(0.19f, 0.008f, 0.13f),
+            CreateMaterial(new Color(0.09f,0.09f,0.10f),0.7f,0.62f), g.transform);
+        CreateDecor("TabScr",  pos + new Vector3(0.09f, 0.670f,-0.04f), new Vector3(0.16f, 0.006f, 0.10f), ledG, g.transform);
+        // LED Unterkante
+        CreateDecor("TableLED",pos + new Vector3(0, 0.620f, 0), new Vector3(0.42f, 0.010f, 0.42f), ledB, g.transform);
+    }
+
+    // ─── Joshi NPC ───────────────────────────────────────────────────────────
+
+    private void AddMRJoshi(Vector3 pos, Scene scene)
+    {
+        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Big Yahu/Sitting Talking.fbx");
+        if (prefab == null) { Debug.LogWarning("[Wartungsraum] 'Sitting Talking.fbx' nicht gefunden."); return; }
+
+        // Normal-Map korrekt importieren
+        var normalImporter = AssetImporter.GetAtPath(
+            "Assets/Big Yahu/3dcartooncharactermodel_Clone1_normal.JPEG") as TextureImporter;
+        if (normalImporter != null && normalImporter.textureType != TextureImporterType.NormalMap)
+        { normalImporter.textureType = TextureImporterType.NormalMap; normalImporter.SaveAndReimport(); }
+
+        var joshi = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+        joshi.name = "Joshi";
+
+        // Skalierung: FBX manchmal in cm (>10 Units hoch) → korrigieren
+        var rens = joshi.GetComponentsInChildren<Renderer>();
+        float h = 1f;
+        if (rens.Length > 0)
+        {
+            var b = rens[0].bounds;
+            foreach (var r in rens) b.Encapsulate(r.bounds);
+            h = b.size.y;
+        }
+        float scale = (h > 10f) ? 0.01f : (h < 0.3f) ? (1.1f / Mathf.Max(h, 0.01f)) : 1f;
+        joshi.transform.localScale = Vector3.one * scale;
+        joshi.transform.position   = pos;
+        joshi.transform.rotation   = Quaternion.Euler(0f, 215f, 0f);
+
+        // PBR-Material zuweisen
+        var mat = BuildMRJoshiMaterial();
+        if (mat != null)
+            foreach (var r in joshi.GetComponentsInChildren<Renderer>(true))
+                r.material = mat;
+
+        // Sitz-Animation
+        SetupMRSittingAnimation(joshi);
+
+        SceneManager.MoveGameObjectToScene(joshi, scene);
+        Debug.Log("[Wartungsraum] Joshi platziert.");
+    }
+
+    private Material BuildMRJoshiMaterial()
+    {
+        const string p = "Assets/Big Yahu/3dcartooncharactermodel_Clone1_";
+        var baseColor = AssetDatabase.LoadAssetAtPath<Texture2D>(p + "basecolor.JPEG");
+        var normalMap = AssetDatabase.LoadAssetAtPath<Texture2D>(p + "normal.JPEG");
+        var metalTex  = AssetDatabase.LoadAssetAtPath<Texture2D>(p + "metallic.JPEG");
+
+        if (baseColor == null) { Debug.LogWarning("[Wartungsraum] basecolor.JPEG fehlt."); return null; }
+
+        var mat = new Material(Shader.Find("Standard")) { name = "Joshi_PBR" };
+        mat.SetTexture("_MainTex", baseColor);
+        mat.SetColor("_Color", Color.white);
+
+        if (normalMap != null)
+        {
+            mat.EnableKeyword("_NORMALMAP");
+            mat.SetTexture("_BumpMap", normalMap);
+            mat.SetFloat("_BumpScale", 1f);
+        }
+        if (metalTex != null)
+        {
+            mat.EnableKeyword("_METALLICGLOSSMAP");
+            mat.SetTexture("_MetallicGlossMap", metalTex);
+        }
+        mat.SetFloat("_Metallic",   0.0f);
+        mat.SetFloat("_Glossiness", 0.42f);
+
+        const string matPath = "Assets/Big Yahu/Joshi_PBR.mat";
+        if (AssetDatabase.LoadAssetAtPath<Material>(matPath) != null) AssetDatabase.DeleteAsset(matPath);
+        AssetDatabase.CreateAsset(mat, matPath);
+        AssetDatabase.SaveAssets();
+        return AssetDatabase.LoadAssetAtPath<Material>(matPath);
+    }
+
+    private void SetupMRSittingAnimation(GameObject joshi)
+    {
+        var assets = AssetDatabase.LoadAllAssetsAtPath("Assets/Big Yahu/Sitting Talking.fbx");
+        AnimationClip src = null;
+        foreach (var a in assets)
+            if (a is AnimationClip c && !c.name.StartsWith("__preview__")) { src = c; break; }
+        if (src == null) { Debug.LogWarning("[Wartungsraum] Kein AnimationClip in 'Sitting Talking.fbx'."); return; }
+
+        const string clipPath = "Assets/Big Yahu/Joshi_Sitting_Loop.anim";
+        const string ctrlPath = "Assets/Big Yahu/Joshi_Sitting.controller";
+
+        if (AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath) != null) AssetDatabase.DeleteAsset(clipPath);
+        var loop = Object.Instantiate(src); loop.name = "Joshi_Sitting_Loop";
+        var cfg = AnimationUtility.GetAnimationClipSettings(loop);
+        cfg.loopTime = true; AnimationUtility.SetAnimationClipSettings(loop, cfg);
+        AssetDatabase.CreateAsset(loop, clipPath);
+
+        if (AssetDatabase.LoadAssetAtPath<AnimatorController>(ctrlPath) != null) AssetDatabase.DeleteAsset(ctrlPath);
+        var ctrl = AnimatorController.CreateAnimatorControllerAtPath(ctrlPath);
+        var sm   = ctrl.layers[0].stateMachine;
+        var sit  = sm.AddState("Sitting"); sit.motion = loop; sm.defaultState = sit;
+        AssetDatabase.SaveAssets();
+
+        var anim = joshi.GetComponent<Animator>() ?? joshi.AddComponent<Animator>();
+        anim.runtimeAnimatorController = AssetDatabase.LoadAssetAtPath<AnimatorController>(ctrlPath);
+        Debug.Log("[Wartungsraum] Joshi-Animation: " + src.name);
     }
 }
