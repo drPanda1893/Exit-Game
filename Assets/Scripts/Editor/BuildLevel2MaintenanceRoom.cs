@@ -246,13 +246,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         Box("LedLeft_B",  new Vector3(-2.86f, 0.20f, 0),    new Vector3(0.014f, 0.030f, 5.70f), ledAmber, root, col: false);
         Box("LedRight_B", new Vector3( 2.86f, 0.20f, 0),    new Vector3(0.014f, 0.030f, 5.70f), ledAmber, root, col: false);
 
-        // ── Decke ─────────────────────────────────────────────────────────────
-        Box("Ceiling", new Vector3(0, 4.98f, 0), new Vector3(6.0f, 0.08f, 6.0f), steelDark, root, col: false);
-        // Deckenplatten-Raster
-        for (int x = -2; x <= 2; x++)
-        for (int z = -2; z <= 2; z++)
-            Box($"CeilTile_{x}_{z}", new Vector3(x, 4.94f, z), new Vector3(0.96f, 0.012f, 0.96f),
-                M(new Color(0.10f, 0.11f, 0.13f), 0.6f, 0.5f), root, col: false);
+        // Decke absichtlich weggelassen – Top-Down-Perspektive
 
         // Kabelkanal (Decke)
         Box("CableTray_Z1", new Vector3(-0.8f, 4.82f, 0.5f), new Vector3(0.22f, 0.055f, 5.6f), grateMat, root, col: false);
