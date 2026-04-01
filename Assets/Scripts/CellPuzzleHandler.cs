@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using System.Collections;
 
 /// <summary>
@@ -39,6 +40,8 @@ public class CellPuzzleHandler : MonoBehaviour
             yield return new WaitForSeconds(0.8f);
             numpad.Hide();
             exitDoor?.OpenDoor();
+            yield return new WaitForSeconds(1.4f);
+            SceneManager.LoadScene("Level2");
         }
         else
         {
