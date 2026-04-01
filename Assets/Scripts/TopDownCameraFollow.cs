@@ -3,7 +3,7 @@ using UnityEngine;
 public class TopDownCameraFollow : MonoBehaviour
 {
     [SerializeField] private Transform target;
-    [SerializeField] private float height = 11f;
+    [SerializeField] public float height = 11f;
     [SerializeField] private float smoothSpeed = 6f;
 
     public void SetTarget(Transform t) => target = t;

@@ -42,9 +42,10 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         cam.nearClipPlane   = 0.1f;
         cam.tag             = "MainCamera";
         camGO.AddComponent<AudioListener>();
-        camGO.transform.position = new Vector3(0f, 11f, 0f);
+        camGO.transform.position = new Vector3(0f, 6f, 0f);
         camGO.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
         TopDownCameraFollow follow = camGO.AddComponent<TopDownCameraFollow>();
+        follow.height = 6f;
         SceneManager.MoveGameObjectToScene(camGO, scene);
 
         // ── Umgebung ──────────────────────────────────────────────────────────
