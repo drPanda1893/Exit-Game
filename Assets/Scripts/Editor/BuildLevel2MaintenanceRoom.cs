@@ -62,7 +62,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
 
         // ── Globales Licht ────────────────────────────────────────────────────
         RenderSettings.ambientMode  = UnityEngine.Rendering.AmbientMode.Flat;
-        RenderSettings.ambientLight = new Color(0.06f, 0.08f, 0.14f);
+        RenderSettings.ambientLight = new Color(0.22f, 0.25f, 0.38f);
 
         EditorSceneManager.SaveScene(scene);
         Debug.Log("[Level2] Wartungsraum fertig.");
@@ -130,10 +130,12 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
 
     private void AddLight(string name, Transform parent, Vector3 localPos,
                           LightType type, Color color, float intensity, float range,
-                          float spotAngle = 60f, LightShadows shadows = LightShadows.None)
+                          float spotAngle = 60f, LightShadows shadows = LightShadows.None,
+                          Quaternion? rotation = null)
     {
         var go = new GameObject(name);
         go.transform.SetParent(parent); go.transform.localPosition = localPos;
+        if (rotation.HasValue) go.transform.localRotation = rotation.Value;
         var l = go.AddComponent<Light>();
         l.type = type; l.color = color; l.intensity = intensity;
         l.range = range; l.spotAngle = spotAngle; l.shadows = shadows;
@@ -146,11 +148,11 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
     private void BuildRoom(Transform root)
     {
         // ── Materialien ──────────────────────────────────────────────────────
-        var steelDark   = M(new Color(0.08f, 0.09f, 0.11f), 0.82f, 0.60f);
-        var steelMid    = M(new Color(0.14f, 0.15f, 0.18f), 0.72f, 0.52f);
-        var steelBright = M(new Color(0.28f, 0.30f, 0.36f), 0.90f, 0.75f);
+        var steelDark   = M(new Color(0.12f, 0.13f, 0.16f), 0.35f, 0.55f);
+        var steelMid    = M(new Color(0.18f, 0.20f, 0.24f), 0.40f, 0.50f);
+        var steelBright = M(new Color(0.32f, 0.34f, 0.40f), 0.55f, 0.70f);
         var steelGold   = M(new Color(0.28f, 0.22f, 0.09f), 0.88f, 0.70f);
-        var floorMat    = M(new Color(0.09f, 0.10f, 0.12f), 0.60f, 0.72f);
+        var floorMat    = M(new Color(0.12f, 0.13f, 0.16f), 0.15f, 0.60f);
         var grateMat    = M(new Color(0.07f, 0.07f, 0.08f), 0.92f, 0.48f);
         var woodDark    = M(new Color(0.13f, 0.08f, 0.04f), 0.04f, 0.18f);
         var rubberMat   = M(new Color(0.07f, 0.07f, 0.08f), 0.01f, 0.04f);
@@ -686,7 +688,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
 
     private void AddLights(Transform root)
     {
-        AddLight("CeilMain",   root, new Vector3(0,    4.9f,  0.5f), LightType.Point,       new Color(0.72f,0.82f,1.00f), 2.4f, 10f, shadows: LightShadows.Soft);
+        AddLight("CeilMain",   root, new Vector3(0,    4.9f,  0.5f), LightType.Point,       new Color(0.72f,0.82f,1.00f), 4.0f, 12f, shadows: LightShadows.Soft);
         AddLight("FillAmber",  root, new Vector3(-1.5f,3.8f, -1.2f), LightType.Point,       new Color(1.00f,0.72f,0.30f), 0.9f, 5f);
         AddLight("WorkSpot",   root, new Vector3(1.6f, 3.2f,  1.8f), LightType.Spot,        new Color(0.58f,0.80f,1.00f), 2.0f, 5f, 52f, LightShadows.Soft);
         AddLight("JoshiSpot",  root, new Vector3(-0.6f,3.0f,  0.1f), LightType.Spot,        new Color(0.80f,0.76f,0.65f), 1.5f, 4f, 45f, LightShadows.Soft);
@@ -696,7 +698,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         AddLight("AmbBlue1",   root, new Vector3(0,    0.5f,  2.6f), LightType.Point,       new Color(0.14f,0.38f,1.00f), 0.40f,3.5f);
         AddLight("AmbBlue2",   root, new Vector3(-2.6f,0.5f,  0.0f), LightType.Point,       new Color(0.14f,0.38f,1.00f), 0.32f,3.0f);
         AddLight("AmbAmber",   root, new Vector3(0,    0.5f, -2.6f), LightType.Point,       new Color(1.00f,0.60f,0.06f), 0.32f,3.0f);
-        AddLight("FillDir",    root, new Vector3(0,    4.0f,  0.0f), LightType.Directional, new Color(0.55f,0.65f,0.90f), 0.22f,0f);
+        AddLight("FillDir",    root, new Vector3(0,    4.0f,  0.0f), LightType.Directional, new Color(0.55f,0.65f,0.90f), 1.2f, 0f, rotation: Quaternion.Euler(90f, 0f, 0f));
     }
 
     // ═══════════════════════════════════════════════════════════════════════

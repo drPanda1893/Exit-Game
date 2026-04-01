@@ -8,6 +8,15 @@ public class TopDownCameraFollow : MonoBehaviour
 
     public void SetTarget(Transform t) => target = t;
 
+    private void Start()
+    {
+        if (target == null)
+        {
+            var p = GameObject.FindGameObjectWithTag("Player");
+            if (p != null) target = p.transform;
+        }
+    }
+
     private void LateUpdate()
     {
         if (target == null) return;
