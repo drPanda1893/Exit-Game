@@ -412,7 +412,7 @@ public class BuildLevel3Library : EditorWindow
 
         // ── Thresen (Bibliothekstheke) ──────────────────────────────────────
         var theke = new GameObject("Librarian_Theke");
-        theke.transform.position = new Vector3(0f, 0f, 2.6f);
+        theke.transform.position = new Vector3(2.0f, 0f, 2.6f);
         theke.transform.SetParent(root);
 
         // Thekenoberplatte
@@ -459,8 +459,8 @@ public class BuildLevel3Library : EditorWindow
         BuildBackWallShelf(new Vector3( 2.8f, 0f, 5.4f), root, dark, mid, bookMats, 1.8f);
 
         // Kleines Regal direkt hinter Helios-Theke (an der Thekenwand)
-        BuildCounterShelf(new Vector3(-1.0f, 0f, 3.1f), root, dark, mid, bookMats);
-        BuildCounterShelf(new Vector3( 1.0f, 0f, 3.1f), root, dark, mid, bookMats);
+        BuildCounterShelf(new Vector3(1.5f, 0f, 3.2f), root, dark, mid, bookMats);
+        BuildCounterShelf(new Vector3(2.8f, 0f, 3.2f), root, dark, mid, bookMats);
     }
 
     private void BuildBackWallShelf(Vector3 pos, Transform root, Material wood, Material trim,
@@ -769,8 +769,8 @@ public class BuildLevel3Library : EditorWindow
         float scale = (h > 0.1f) ? (1.7f / h) : 1f;
         helios.transform.localScale = Vector3.one * scale;
 
-        // Hinter der Theke, schaut zum Eingang
-        helios.transform.position = new Vector3(0f, 0f, 3.4f);
+        // Vor dem großen Rückwandregal, schaut zum Eingang
+        helios.transform.position = new Vector3(0f, 0f, 4.8f);
         helios.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
 
         // Material zuweisen
@@ -783,7 +783,7 @@ public class BuildLevel3Library : EditorWindow
 
         // Spot auf Helios
         var spotGO = new GameObject("HeliosSpot");
-        spotGO.transform.position = new Vector3(0f, 4.5f, 3.0f);
+        spotGO.transform.position = new Vector3(0f, 4.5f, 4.5f);
         var spot = spotGO.AddComponent<Light>();
         spot.type      = LightType.Spot;
         spot.color     = new Color(0.95f, 0.88f, 0.65f);
@@ -813,10 +813,10 @@ public class BuildLevel3Library : EditorWindow
 
         // ── HeliosInteraction Trigger ─────────────────────────────────────────
         var interGO = new GameObject("HeliosInteraction");
-        interGO.transform.position = new Vector3(0f, 1.0f, 2.0f);
+        interGO.transform.position = new Vector3(0f, 1.0f, 3.8f);
         var interCol = interGO.AddComponent<BoxCollider>();
         interCol.isTrigger = true;
-        interCol.size = new Vector3(3.0f, 2.2f, 2.0f);
+        interCol.size = new Vector3(3.5f, 2.2f, 2.5f);
         var interaction = interGO.AddComponent<HeliosInteraction>();
         interaction.bookUI        = bookUI;
         interaction.exitTriggerGO = exitGO;
