@@ -199,6 +199,14 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         Box("FrontWall_R",   new Vector3( 2.0f,  2.5f, -3.0f), new Vector3(2.0f, 5f, 0.24f), wallMat, root);
         Box("FrontWall_Top", new Vector3( 0f,    3.8f, -3.0f), new Vector3(6.0f, 2.4f, 0.24f), wallMat, root);
 
+        // Unsichtbare Border – verhindert Rauslaufen durch die Tür
+        var border = new GameObject("EntranceBorder");
+        border.transform.position = new Vector3(0f, 1.5f, -2.95f);
+        border.transform.SetParent(root);
+        var bc = border.AddComponent<BoxCollider>();
+        bc.size = new Vector3(2.0f, 3.0f, 0.1f);
+        bc.isTrigger = false;
+
         // Eingangsrahmen (verrostetes Metall)
         Box("DoorFrame_L",  new Vector3(-1.0f, 1.3f, -2.92f), new Vector3(0.06f, 2.6f, 0.06f), rustMetal, root, col: false);
         Box("DoorFrame_R",  new Vector3( 1.0f, 1.3f, -2.92f), new Vector3(0.06f, 2.6f, 0.06f), rustMetal, root, col: false);
