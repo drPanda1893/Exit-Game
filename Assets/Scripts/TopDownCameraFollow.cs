@@ -7,11 +7,18 @@ public class TopDownCameraFollow : MonoBehaviour
     /// <summary>90 = von oben, 60 = isometrisch, 45 = stark geneigt</summary>
     [SerializeField] public float pitchAngle = 90f;
     /// <summary>
-    /// > 0: Third-Person-Modus – Kamera hängt hinter dem Charakter in dieser Distanz.
-    /// = 0: klassischer Top-Down-Modus (nur height + pitchAngle).
+    /// > 0: Third-Person-Modus – Kamera hängt hinter dem Charakter.
+    /// = 0: klassischer Top-Down-Modus.
     /// </summary>
     [SerializeField] public float behindDistance = 0f;
+    /// <summary>
+    /// Wenn gesetzt: Kamera bleibt fix an dieser Weltposition und schaut zum Spieler hin.
+    /// Vector3.zero = deaktiviert (normaler Follow-Modus).
+    /// </summary>
+    [SerializeField] public Vector3 fixedWorldPosition = Vector3.zero;
     [SerializeField] private float smoothSpeed = 6f;
+
+    private bool IsFixed => fixedWorldPosition != Vector3.zero;
 
     public void SetTarget(Transform t) => target = t;
 
@@ -22,10 +29,23 @@ public class TopDownCameraFollow : MonoBehaviour
             var p = GameObject.FindGameObjectWithTag("Player");
             if (p != null) target = p.transform;
         }
+
+        if (IsFixed)
+            transform.position = fixedWorldPosition;
     }
 
     private void LateUpdate()
     {
+        if (IsFixed)
+        {
+            // Fest stehen, zum Spieler hinschauen
+            transform.position = fixedWorldPosition;
+            if (target != null)
+                transform.rotation = Quaternion.LookRotation(
+                    (target.position + Vector3.up * 0.8f) - fixedWorldPosition);
+            return;
+        }
+
         if (target == null) return;
 
         Vector3 desired;
@@ -33,7 +53,6 @@ public class TopDownCameraFollow : MonoBehaviour
 
         if (behindDistance > 0f)
         {
-            // Third-Person: hinter + über dem Charakter, schaut auf ihn
             float rad = pitchAngle * Mathf.Deg2Rad;
             Vector3 back = target.forward * -behindDistance;
             Vector3 up   = Vector3.up * height;
@@ -42,7 +61,6 @@ public class TopDownCameraFollow : MonoBehaviour
         }
         else
         {
-            // Top-Down
             float rad = pitchAngle * Mathf.Deg2Rad;
             Vector3 offset = new Vector3(0f,
                 height * Mathf.Sin(rad),
