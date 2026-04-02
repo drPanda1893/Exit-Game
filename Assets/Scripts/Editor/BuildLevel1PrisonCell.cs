@@ -1,13 +1,18 @@
 using UnityEngine;
 using UnityEditor;
-using UnityEditor.Animations;
 using UnityEditor.Events;
 using UnityEditor.SceneManagement;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using TMPro;
 
-public class BuildLevel1PrisonCell : EditorWindow
+/// <summary>
+/// Editor window that procedurally builds Level 1 – Gefängniszelle.
+/// Constructs the full prison-cell scene including environment geometry,
+/// iron bars, furniture, lighting, the numpad-code puzzle, and the player character.
+/// Menu: Tools → Build Level 1 Prison Cell (Detailed)
+/// </summary>
+public class BuildLevel1PrisonCell : LevelBuilderBase
 {
     private int barCount = 24;
 
@@ -24,7 +29,9 @@ public class BuildLevel1PrisonCell : EditorWindow
             BuildLevel1();
     }
 
-    // ─── Scene Setup ─────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Scene Setup
+    // ═══════════════════════════════════════════════════════════════════════
 
     private void BuildLevel1()
     {
@@ -46,10 +53,10 @@ public class BuildLevel1PrisonCell : EditorWindow
         // Kamera zuerst erstellen — garantiert vorhanden auch wenn BigYahu-Setup fehlschlägt
         GameObject camGO = new GameObject("Main Camera");
         Camera cam = camGO.AddComponent<Camera>();
-        cam.clearFlags       = CameraClearFlags.SolidColor;
-        cam.backgroundColor  = new Color(0.04f, 0.04f, 0.06f);
-        cam.farClipPlane     = 30f;
-        cam.nearClipPlane    = 0.1f;
+        cam.clearFlags      = CameraClearFlags.SolidColor;
+        cam.backgroundColor = new Color(0.04f, 0.04f, 0.06f);
+        cam.farClipPlane    = 30f;
+        cam.nearClipPlane   = 0.1f;
         camGO.AddComponent<AudioListener>();
         camGO.tag = "MainCamera";
         camGO.transform.position = new Vector3(0, 11f, 0);
@@ -57,7 +64,7 @@ public class BuildLevel1PrisonCell : EditorWindow
         TopDownCameraFollow follow = camGO.AddComponent<TopDownCameraFollow>();
         SceneManager.MoveGameObjectToScene(camGO, scene);
 
-        GameObject bigYahu = AddBigYahuToScene(scene);
+        GameObject bigYahu = AddPlayer(scene, Vector3.zero);
         if (bigYahu != null) follow.SetTarget(bigYahu.transform);
 
         // Weak directional fill — ensures the cell is never pitch-black
@@ -79,7 +86,9 @@ public class BuildLevel1PrisonCell : EditorWindow
         Debug.Log("Level 1 fertig gebaut.");
     }
 
-    // ─── Materials ───────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Materials
+    // ═══════════════════════════════════════════════════════════════════════
 
     private Material CreateMaterial(Color color, float metallic = 0f, float smoothness = 0.25f)
     {
@@ -113,7 +122,9 @@ public class BuildLevel1PrisonCell : EditorWindow
         return mat;
     }
 
-    // ─── Environment ─────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Environment
+    // ═══════════════════════════════════════════════════════════════════════
 
     private GameObject BuildCellEnvironment(Transform root, GameObject numpadPanel, TextMeshProUGUI hintText)
     {
@@ -240,6 +251,10 @@ public class BuildLevel1PrisonCell : EditorWindow
         return exitDoorGO;
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // Primitive helpers
+    // ═══════════════════════════════════════════════════════════════════════
+
     // Creates a primitive with collider (structural / solid)
     private GameObject CreateSolid(string name, Vector3 pos, Vector3 scale, Material mat, Transform parent)
     {
@@ -267,9 +282,9 @@ public class BuildLevel1PrisonCell : EditorWindow
         return go;
     }
 
-    // ─── Ceiling ─────────────────────────────────────────────────────────────
-
-    // ─── Mortar lines ────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Mortar lines
+    // ═══════════════════════════════════════════════════════════════════════
 
     private void AddMortarLines(Transform root, Material mortarMat)
     {
@@ -286,7 +301,9 @@ public class BuildLevel1PrisonCell : EditorWindow
         }
     }
 
-    // ─── Tally marks ─────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Tally marks
+    // ═══════════════════════════════════════════════════════════════════════
 
     private void CreateTallyMarks(Vector3 pos, Transform root)
     {
@@ -316,7 +333,9 @@ public class BuildLevel1PrisonCell : EditorWindow
         DestroyImmediate(diag.GetComponent<Collider>());
     }
 
-    // ─── Floor drain ─────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Floor drain
+    // ═══════════════════════════════════════════════════════════════════════
 
     private void CreateDrain(Vector3 pos, Transform root)
     {
@@ -329,7 +348,9 @@ public class BuildLevel1PrisonCell : EditorWindow
                 new Vector3(0.018f, 0.004f, 0.18f), grateMat, root);
     }
 
-    // ─── Bar door frame ──────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Bar door frame
+    // ═══════════════════════════════════════════════════════════════════════
 
     private void AddBarFrame(Material mat, Transform root)
     {
@@ -342,7 +363,9 @@ public class BuildLevel1PrisonCell : EditorWindow
         CreateDecor("BarFrameBot", new Vector3(0, 0.04f, -2.35f), new Vector3(4.85f, 0.08f, 0.12f), mat, root);
     }
 
-    // ─── Wall cracks ─────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Wall cracks
+    // ═══════════════════════════════════════════════════════════════════════
 
     private void AddWallCracks(Transform root)
     {
@@ -360,7 +383,9 @@ public class BuildLevel1PrisonCell : EditorWindow
             Quaternion.Euler(0f, 0f, 20f));
     }
 
-    // ─── Folded jumpsuit (near bed) ──────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Folded jumpsuit
+    // ═══════════════════════════════════════════════════════════════════════
 
     private void CreateFoldedJumpsuit(Vector3 pos, Transform root)
     {
@@ -400,12 +425,14 @@ public class BuildLevel1PrisonCell : EditorWindow
         DestroyImmediate(stripe.GetComponent<Collider>());
     }
 
-    // ─── Newspaper on table ──────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Newspaper on table
+    // ═══════════════════════════════════════════════════════════════════════
 
     private void CreateNewspaper(Vector3 pos, Transform root)
     {
-        Material paperMat  = CreateMaterial(new Color(0.80f, 0.78f, 0.70f), 0f, 0.05f);
-        Material printMat  = CreateMaterial(new Color(0.40f, 0.38f, 0.35f), 0f, 0.04f);
+        Material paperMat = CreateMaterial(new Color(0.80f, 0.78f, 0.70f), 0f, 0.05f);
+        Material printMat = CreateMaterial(new Color(0.40f, 0.38f, 0.35f), 0f, 0.04f);
 
         GameObject g = new GameObject("Newspaper");
         g.transform.position = pos;
@@ -433,7 +460,9 @@ public class BuildLevel1PrisonCell : EditorWindow
         }
     }
 
-    // ─── Toothbrush on toilet tank ───────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Toothbrush on toilet tank
+    // ═══════════════════════════════════════════════════════════════════════
 
     private void CreateToothbrush(Vector3 pos, Transform root)
     {
@@ -461,7 +490,9 @@ public class BuildLevel1PrisonCell : EditorWindow
         DestroyImmediate(bristle.GetComponent<Collider>());
     }
 
-    // ─── Iron bars ───────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Iron bars
+    // ═══════════════════════════════════════════════════════════════════════
 
     private void CreateIronBars(string name, Vector3 startPos, float width, float height,
                                 int count, Material metalMat, Transform parent)
@@ -491,7 +522,7 @@ public class BuildLevel1PrisonCell : EditorWindow
         mf.transform.localScale = new Vector3(width, 0.10f, 0.14f);
         mf.GetComponent<Renderer>().material = metalMat;
 
-        float startX = -width / 2f + 0.2f;
+        float startX  = -width / 2f + 0.2f;
         float spacing = (width - 0.4f) / (count - 1);
         for (int i = 0; i < count; i++)
         {
@@ -503,7 +534,9 @@ public class BuildLevel1PrisonCell : EditorWindow
         }
     }
 
-    // ─── Window ──────────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Window
+    // ═══════════════════════════════════════════════════════════════════════
 
     private void CreateWindow(Vector3 pos, Transform parent)
     {
@@ -547,25 +580,27 @@ public class BuildLevel1PrisonCell : EditorWindow
         moonGO.transform.localPosition = new Vector3(0, 0, 2f);
         moonGO.transform.localRotation = Quaternion.Euler(25, 180, 0);
         Light ml = moonGO.AddComponent<Light>();
-        ml.type = LightType.Directional;
-        ml.color = new Color(0.50f, 0.62f, 1f);
+        ml.type      = LightType.Directional;
+        ml.color     = new Color(0.50f, 0.62f, 1f);
         ml.intensity = 0.55f;
-        ml.shadows = LightShadows.Soft;
+        ml.shadows   = LightShadows.Soft;
 
         // Light shaft (semi-transparent emissive volume)
         GameObject shaft = GameObject.CreatePrimitive(PrimitiveType.Cube);
         shaft.name = "LightShaft";
         shaft.transform.SetParent(group.transform);
-        shaft.transform.localPosition  = new Vector3(0, -1.3f, -1.6f);
-        shaft.transform.localRotation  = Quaternion.Euler(22f, 0f, 0f);
-        shaft.transform.localScale     = new Vector3(0.85f, 2.8f, 0.85f);
+        shaft.transform.localPosition = new Vector3(0, -1.3f, -1.6f);
+        shaft.transform.localRotation = Quaternion.Euler(22f, 0f, 0f);
+        shaft.transform.localScale    = new Vector3(0.85f, 2.8f, 0.85f);
         shaft.GetComponent<Renderer>().material = CreateTransparentMaterial(
             new Color(0.72f, 0.86f, 1f, 0.07f),
             new Color(0.45f, 0.65f, 1f), 0.12f);
         DestroyImmediate(shaft.GetComponent<Collider>());
     }
 
-    // ─── Bed ─────────────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Bed
+    // ═══════════════════════════════════════════════════════════════════════
 
     private void CreateDetailedBed(Vector3 pos, Transform parent)
     {
@@ -638,13 +673,13 @@ public class BuildLevel1PrisonCell : EditorWindow
         codeGO.transform.localPosition = new Vector3(0f, 0.572f, -0.08f); // knapp über Decke
         codeGO.transform.localRotation = Quaternion.Euler(-90f, 180f, 0f);  // nach oben zeigend, korrekt ausgerichtet
         TextMeshPro tmp = codeGO.AddComponent<TextMeshPro>();
-        tmp.text            = "66A";
-        tmp.fontStyle       = FontStyles.Bold;
-        tmp.alignment       = TextAlignmentOptions.Center;
-        tmp.color           = new Color(0.68f, 0.60f, 0.45f); // verblasstes Aufdruckbeige
+        tmp.text             = "66A";
+        tmp.fontStyle        = FontStyles.Bold;
+        tmp.alignment        = TextAlignmentOptions.Center;
+        tmp.color            = new Color(0.68f, 0.60f, 0.45f); // verblasstes Aufdruckbeige
         tmp.enableAutoSizing = true;
-        tmp.fontSizeMin     = 0.5f;
-        tmp.fontSizeMax     = 2.8f;
+        tmp.fontSizeMin      = 0.5f;
+        tmp.fontSizeMax      = 2.8f;
         RectTransform codeRect = codeGO.GetComponent<RectTransform>();
         codeRect.sizeDelta = new Vector2(0.92f, 0.40f);
 
@@ -670,7 +705,9 @@ public class BuildLevel1PrisonCell : EditorWindow
         bc.size   = new Vector3(1.2f, 0.80f, 2.2f);
     }
 
-    // ─── Toilet ──────────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Toilet
+    // ═══════════════════════════════════════════════════════════════════════
 
     private void CreateDetailedToilet(Vector3 pos, Transform parent,
                                       GameObject numpadPanel, TextMeshProUGUI hintText)
@@ -734,7 +771,9 @@ public class BuildLevel1PrisonCell : EditorWindow
         interaction.hintText = hintText;
     }
 
-    // ─── Bucket ──────────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Bucket
+    // ═══════════════════════════════════════════════════════════════════════
 
     private void CreateBucket(Vector3 pos, Transform parent)
     {
@@ -770,7 +809,9 @@ public class BuildLevel1PrisonCell : EditorWindow
         DestroyImmediate(handle.GetComponent<Collider>());
     }
 
-    // ─── Table ───────────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Table
+    // ═══════════════════════════════════════════════════════════════════════
 
     private void CreateDetailedTable(Vector3 pos, Transform parent)
     {
@@ -830,7 +871,9 @@ public class BuildLevel1PrisonCell : EditorWindow
         bc.size   = new Vector3(1.2f, 0.75f, 0.8f);
     }
 
-    // ─── Stool ───────────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Stool
+    // ═══════════════════════════════════════════════════════════════════════
 
     private void CreateStool(Vector3 pos, Transform parent)
     {
@@ -857,7 +900,9 @@ public class BuildLevel1PrisonCell : EditorWindow
         bc.size   = new Vector3(0.35f, 0.45f, 0.35f);
     }
 
-    // ─── Chain lamp ──────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Chain lamp
+    // ═══════════════════════════════════════════════════════════════════════
 
     private void CreateChainLamp(Vector3 pos, Transform parent)
     {
@@ -942,7 +987,9 @@ public class BuildLevel1PrisonCell : EditorWindow
         spot.shadows   = LightShadows.Soft;
     }
 
-    // ─── Wall shelf ──────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Wall shelf
+    // ═══════════════════════════════════════════════════════════════════════
 
     private void CreateWallShelf(Vector3 pos, Transform root)
     {
@@ -988,7 +1035,9 @@ public class BuildLevel1PrisonCell : EditorWindow
         DestroyImmediate(cup.GetComponent<Collider>());
     }
 
-    // ─── Pipes ───────────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // Pipes
+    // ═══════════════════════════════════════════════════════════════════════
 
     private void CreatePipeV(Vector3 center, float height, float radius, Material mat, Transform parent)
     {
@@ -1013,149 +1062,9 @@ public class BuildLevel1PrisonCell : EditorWindow
         p.transform.SetParent(parent);
     }
 
-    // ─── Character ───────────────────────────────────────────────────────────
-
-    private GameObject AddBigYahuToScene(Scene scene)
-    {
-        GameObject idleModel    = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Big Yahu/Big Yahu standing.fbx");
-        GameObject runningModel = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Big Yahu/Big Yahu jogging.fbx");
-        Material mat            = AssetDatabase.LoadAssetAtPath<Material>("Assets/Big Yahu/Big Yahu material.mat");
-
-        GameObject character = new("BigYahu") { tag = "Player" };
-        character.transform.position = Vector3.zero;
-
-        if (idleModel != null && runningModel != null)
-        {
-            GameObject idle = (GameObject)PrefabUtility.InstantiatePrefab(idleModel);
-            PrefabUtility.UnpackPrefabInstance(idle, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
-            idle.name = "IdleModel";
-            idle.transform.SetParent(character.transform, false);
-            idle.SetActive(true);
-            try { SetupStandingAnimation(idle); }
-            catch (System.Exception e) { Debug.LogWarning("SetupStandingAnimation fehlgeschlagen: " + e.Message); }
-
-            GameObject running = (GameObject)PrefabUtility.InstantiatePrefab(runningModel);
-            PrefabUtility.UnpackPrefabInstance(running, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
-            running.name = "RunningModel";
-            running.transform.SetParent(character.transform, false);
-            running.SetActive(false);
-            try { SetupRunAnimation(running); }
-            catch (System.Exception e) { Debug.LogWarning("SetupRunAnimation fehlgeschlagen: " + e.Message); }
-
-            if (mat != null)
-                foreach (Renderer r in character.GetComponentsInChildren<Renderer>(true))
-                    r.material = mat;
-        }
-        else
-        {
-            Debug.LogWarning("Big Yahu Modelle nicht gefunden. Platzhalter-Kapsel wird verwendet.");
-            GameObject capsule = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            capsule.transform.SetParent(character.transform, false);
-            capsule.transform.localPosition = new Vector3(0, 1f, 0);
-            capsule.GetComponent<Renderer>().material.color = Color.red;
-        }
-
-        CapsuleCollider col = character.AddComponent<CapsuleCollider>();
-        col.height = 1.8f;
-        col.radius = 0.3f;
-        col.center = new Vector3(0, 0.9f, 0);
-
-        Rigidbody rb = character.AddComponent<Rigidbody>();
-        rb.useGravity = false;
-        rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
-        rb.constraints = RigidbodyConstraints.FreezePositionY
-                       | RigidbodyConstraints.FreezeRotationX
-                       | RigidbodyConstraints.FreezeRotationZ;
-
-        character.AddComponent<CharacterAnimator>();
-        character.AddComponent<PlayerController>();
-
-        SceneManager.MoveGameObjectToScene(character, scene);
-        Debug.Log("BigYahu hinzugefuegt (Tag: Player).");
-        return character;
-    }
-
-    private void SetupRunAnimation(GameObject runningInstance)
-    {
-        Object[] fbxAssets = AssetDatabase.LoadAllAssetsAtPath("Assets/Big Yahu/Big Yahu jogging.fbx");
-        AnimationClip sourceClip = null;
-        foreach (Object asset in fbxAssets)
-            if (asset is AnimationClip clip && !clip.name.StartsWith("__preview__"))
-            { sourceClip = clip; break; }
-
-        if (sourceClip == null)
-        {
-            Debug.LogWarning("Keine AnimationClip in 'Big Yahu jogging.fbx' gefunden.");
-            return;
-        }
-
-        const string clipPath = "Assets/Big Yahu/BigYahu_Run_Loop.anim";
-        if (AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath) != null)
-            AssetDatabase.DeleteAsset(clipPath);
-
-        AnimationClip loopClip = Object.Instantiate(sourceClip);
-        loopClip.name = "BigYahu_Run_Loop";
-        AnimationClipSettings s = AnimationUtility.GetAnimationClipSettings(loopClip);
-        s.loopTime = true;
-        AnimationUtility.SetAnimationClipSettings(loopClip, s);
-        AssetDatabase.CreateAsset(loopClip, clipPath);
-
-        const string controllerPath = "Assets/Big Yahu/BigYahu_Run.controller";
-        if (AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath) != null)
-            AssetDatabase.DeleteAsset(controllerPath);
-
-        AnimatorController controller = AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
-        AnimatorStateMachine sm = controller.layers[0].stateMachine;
-        AnimatorState runState = sm.AddState("Run");
-        runState.motion = loopClip;
-        sm.defaultState = runState;
-        AssetDatabase.SaveAssets();
-
-        Animator animator = runningInstance.GetComponent<Animator>() ?? runningInstance.AddComponent<Animator>();
-        animator.runtimeAnimatorController = controller;
-    }
-
-    private void SetupStandingAnimation(GameObject standingInstance)
-    {
-        Object[] fbxAssets = AssetDatabase.LoadAllAssetsAtPath("Assets/Big Yahu/Big Yahu standing.fbx");
-        AnimationClip sourceClip = null;
-        foreach (Object asset in fbxAssets)
-            if (asset is AnimationClip clip && !clip.name.StartsWith("__preview__"))
-            { sourceClip = clip; break; }
-
-        if (sourceClip == null)
-        {
-            Debug.LogWarning("Keine AnimationClip in 'Big Yahu standing.fbx' gefunden.");
-            return;
-        }
-
-        const string clipPath = "Assets/Big Yahu/BigYahu_Stand_Loop.anim";
-        if (AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath) != null)
-            AssetDatabase.DeleteAsset(clipPath);
-
-        AnimationClip loopClip = Object.Instantiate(sourceClip);
-        loopClip.name = "BigYahu_Stand_Loop";
-        AnimationClipSettings s = AnimationUtility.GetAnimationClipSettings(loopClip);
-        s.loopTime = true;
-        AnimationUtility.SetAnimationClipSettings(loopClip, s);
-        AssetDatabase.CreateAsset(loopClip, clipPath);
-
-        const string controllerPath = "Assets/Big Yahu/BigYahu_Stand.controller";
-        if (AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath) != null)
-            AssetDatabase.DeleteAsset(controllerPath);
-
-        AnimatorController controller = AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
-        AnimatorStateMachine sm = controller.layers[0].stateMachine;
-        AnimatorState standState = sm.AddState("Stand");
-        standState.motion = loopClip;
-        sm.defaultState = standState;
-        AssetDatabase.SaveAssets();
-
-        Animator animator = standingInstance.GetComponent<Animator>() ?? standingInstance.AddComponent<Animator>();
-        animator.runtimeAnimatorController = controller;
-    }
-
-    // ─── UI ──────────────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // UI
+    // ═══════════════════════════════════════════════════════════════════════
 
     private (GameObject numpadPanel, TextMeshProUGUI hintText) BuildUI(Scene scene)
     {
@@ -1168,7 +1077,7 @@ public class BuildLevel1PrisonCell : EditorWindow
         Canvas canvas = canvasGO.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         CanvasScaler scaler = canvasGO.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode        = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.uiScaleMode         = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920, 1080);
         canvasGO.AddComponent<GraphicRaycaster>();
         SceneManager.MoveGameObjectToScene(canvasGO, scene);
@@ -1180,7 +1089,7 @@ public class BuildLevel1PrisonCell : EditorWindow
         numpadPanel.transform.SetParent(canvasGO.transform, false);
         numpadPanel.AddComponent<Image>().color = new Color(0.1f, 0.1f, 0.1f, 0.95f);
         RectTransform numpadRect = numpadPanel.GetComponent<RectTransform>();
-        numpadRect.sizeDelta       = new Vector2(350, 500);
+        numpadRect.sizeDelta        = new Vector2(350, 500);
         numpadRect.anchoredPosition = Vector2.zero;
         NumpadController numpadCtrl = numpadPanel.AddComponent<NumpadController>();
         numpadPanel.SetActive(false);
@@ -1190,11 +1099,11 @@ public class BuildLevel1PrisonCell : EditorWindow
         displayBg.transform.SetParent(numpadPanel.transform, false);
         displayBg.AddComponent<Image>().color = new Color(0.05f, 0.05f, 0.05f, 1f);
         RectTransform displayRect = displayBg.GetComponent<RectTransform>();
-        displayRect.anchorMin       = new Vector2(0.5f, 1f);
-        displayRect.anchorMax       = new Vector2(0.5f, 1f);
-        displayRect.pivot           = new Vector2(0.5f, 1f);
+        displayRect.anchorMin        = new Vector2(0.5f, 1f);
+        displayRect.anchorMax        = new Vector2(0.5f, 1f);
+        displayRect.pivot            = new Vector2(0.5f, 1f);
         displayRect.anchoredPosition = new Vector2(0, -20);
-        displayRect.sizeDelta       = new Vector2(300, 80);
+        displayRect.sizeDelta        = new Vector2(300, 80);
 
         GameObject displayTextGO = new GameObject("Text");
         displayTextGO.transform.SetParent(displayBg.transform, false);
@@ -1282,21 +1191,5 @@ public class BuildLevel1PrisonCell : EditorWindow
         tr.anchorMin = Vector2.zero;
         tr.anchorMax = Vector2.one;
         tr.sizeDelta = Vector2.zero;
-    }
-
-    private void AddBackgroundMusic(Scene scene)
-    {
-        var clip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Big Yahu/Untitled.mp3");
-        if (clip == null) { Debug.LogWarning("[Music] Untitled.mp3 nicht gefunden."); return; }
-
-        var go = new GameObject("BackgroundMusic");
-        var src = go.AddComponent<AudioSource>();
-        src.clip        = clip;
-        src.loop        = true;
-        src.playOnAwake = true;
-        src.volume      = 0.6f;
-        src.spatialBlend = 0f; // 2D
-        go.AddComponent<BackgroundMusic>();
-        SceneManager.MoveGameObjectToScene(go, scene);
     }
 }
