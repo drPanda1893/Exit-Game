@@ -42,10 +42,11 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         cam.nearClipPlane   = 0.1f;
         cam.tag             = "MainCamera";
         camGO.AddComponent<AudioListener>();
-        camGO.transform.position = new Vector3(0f, 6f, 0f);
-        camGO.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+        camGO.transform.position = new Vector3(0f, 6f, -3f);
+        camGO.transform.rotation = Quaternion.Euler(60f, 0f, 0f);
         TopDownCameraFollow follow = camGO.AddComponent<TopDownCameraFollow>();
-        follow.height = 6f;
+        follow.height     = 6f;
+        follow.pitchAngle = 60f;
         SceneManager.MoveGameObjectToScene(camGO, scene);
 
         // ── Umgebung ──────────────────────────────────────────────────────────
@@ -63,7 +64,10 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
 
         // ── Globales Licht ────────────────────────────────────────────────────
         RenderSettings.ambientMode  = UnityEngine.Rendering.AmbientMode.Flat;
-        RenderSettings.ambientLight = new Color(0.22f, 0.25f, 0.38f);
+        RenderSettings.ambientLight = new Color(0.18f, 0.15f, 0.10f);
+
+        // ── Abschluss-UI + Trigger ────────────────────────────────────────────
+        AddGameCompleteSetup(scene);
 
         EditorSceneManager.SaveScene(scene);
         Debug.Log("[Level2] Wartungsraum fertig.");
@@ -148,50 +152,37 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
 
     private void BuildRoom(Transform root)
     {
-        // ── Materialien ──────────────────────────────────────────────────────
-        var steelDark   = M(new Color(0.12f, 0.13f, 0.16f), 0.35f, 0.55f);
-        var steelMid    = M(new Color(0.18f, 0.20f, 0.24f), 0.40f, 0.50f);
-        var steelBright = M(new Color(0.32f, 0.34f, 0.40f), 0.55f, 0.70f);
-        var steelGold   = M(new Color(0.28f, 0.22f, 0.09f), 0.88f, 0.70f);
-        var floorMat    = M(new Color(0.12f, 0.13f, 0.16f), 0.15f, 0.60f);
-        var grateMat    = M(new Color(0.07f, 0.07f, 0.08f), 0.92f, 0.48f);
-        var woodDark    = M(new Color(0.13f, 0.08f, 0.04f), 0.04f, 0.18f);
-        var rubberMat   = M(new Color(0.07f, 0.07f, 0.08f), 0.01f, 0.04f);
-        var whiteMat    = M(new Color(0.88f, 0.91f, 0.96f), 0.05f, 0.22f);
-        var concreteMat = M(new Color(0.20f, 0.20f, 0.22f), 0.05f, 0.08f);
+        // ── Materialien – verlassene Abstellkammer ───────────────────────────
+        var wallMat     = M(new Color(0.30f, 0.27f, 0.23f), 0.03f, 0.07f);  // schmutziger Putz
+        var oldMetal    = M(new Color(0.22f, 0.20f, 0.17f), 0.18f, 0.14f);  // altes Metall
+        var brightMetal = M(new Color(0.32f, 0.28f, 0.22f), 0.25f, 0.18f);  // etwas heller
+        var rustMetal   = M(new Color(0.38f, 0.20f, 0.08f), 0.06f, 0.06f);  // Rost
+        var floorMat    = M(new Color(0.24f, 0.22f, 0.19f), 0.02f, 0.08f);  // fleckiger Betonboden
+        var grateMat    = M(new Color(0.20f, 0.17f, 0.13f), 0.10f, 0.10f);  // altes Gitter
+        var dirtyWood   = M(new Color(0.22f, 0.15f, 0.08f), 0.01f, 0.08f);  // morsches Holz
+        var rubberMat   = M(new Color(0.12f, 0.10f, 0.09f), 0.01f, 0.04f);  // abgenutztes Gummi
+        var dirtyWhite  = M(new Color(0.72f, 0.68f, 0.58f), 0.02f, 0.08f);  // vergilbtes Weiß
+        var concreteMat = M(new Color(0.28f, 0.26f, 0.22f), 0.02f, 0.06f);  // Betongrau
 
-        // Emissive
-        var ledBlue  = Emit(new Color(0.04f, 0.08f, 0.22f), new Color(0.12f, 0.40f, 1.00f), 2.2f);
-        var ledAmber = Emit(new Color(0.28f, 0.16f, 0.02f), new Color(1.00f, 0.58f, 0.06f), 1.8f);
-        var ledGreen = Emit(new Color(0.03f, 0.20f, 0.05f), new Color(0.06f, 1.00f, 0.16f), 1.6f);
-        var ledRed   = Emit(new Color(0.26f, 0.03f, 0.03f), new Color(1.00f, 0.06f, 0.06f), 1.8f);
-        var ledCyan  = Emit(new Color(0.03f, 0.18f, 0.20f), new Color(0.08f, 0.80f, 1.00f), 1.4f);
-        var scrBlue  = Emit(new Color(0.03f, 0.08f, 0.20f), new Color(0.08f, 0.38f, 0.95f), 3.0f);
-        var scrGrn   = Emit(new Color(0.03f, 0.14f, 0.05f), new Color(0.04f, 0.92f, 0.14f), 2.4f);
-        var hazardYel= M(new Color(0.70f, 0.60f, 0.04f), 0f, 0.20f);
-        var hazardBlk= M(new Color(0.06f, 0.06f, 0.06f), 0f, 0.06f);
+        // Emissive (nur minimale Signallampen)
+        var ledRed   = Emit(new Color(0.26f, 0.03f, 0.03f), new Color(1.00f, 0.06f, 0.06f), 1.2f);
+        var ledAmber = Emit(new Color(0.28f, 0.16f, 0.02f), new Color(1.00f, 0.58f, 0.06f), 1.0f);
+        var ledGreen = Emit(new Color(0.03f, 0.20f, 0.05f), new Color(0.06f, 1.00f, 0.16f), 0.9f);
+        var hazardYel= M(new Color(0.55f, 0.45f, 0.04f), 0f, 0.10f);  // verblasste Warnung
+        var hazardBlk= M(new Color(0.08f, 0.08f, 0.08f), 0f, 0.05f);
 
-        // ── Boden ────────────────────────────────────────────────────────────
+        // ── Boden – schmutziger Betonboden ───────────────────────────────────
         Box("Floor", new Vector3(0, -0.08f, 0), new Vector3(6f, 0.16f, 6f), floorMat, root);
-
-        // Metallgitter-Platten (große Quadrate)
+        // Betonplatten-Fugen
         for (int x = -2; x <= 2; x++)
         for (int z = -2; z <= 2; z++)
         {
-            Box($"FloorTile_{x}_{z}", new Vector3(x * 1.0f, 0.002f, z * 1.0f),
-                new Vector3(0.96f, 0.003f, 0.96f), steelMid, root, col: false);
-            // Zwischenlinien
-            Box($"TileGrateX_{x}_{z}", new Vector3(x + 0.48f, 0.006f, z),
-                new Vector3(0.04f, 0.003f, 0.96f), grateMat, root, col: false);
-            Box($"TileGrateZ_{x}_{z}", new Vector3(x, 0.006f, z + 0.48f),
-                new Vector3(0.96f, 0.003f, 0.04f), grateMat, root, col: false);
+            Box($"FloorSlab_{x}_{z}", new Vector3(x * 1.0f, 0.001f, z * 1.0f),
+                new Vector3(0.97f, 0.002f, 0.97f), concreteMat, root, col: false);
         }
-
-        // Boden-LED-Linien (blau + gold, rahmen den Raum ein)
-        Box("FLedBlue1", new Vector3(-2.35f, 0.010f, 0), new Vector3(0.018f, 0.006f, 5.60f), ledBlue,  root, col: false);
-        Box("FLedBlue2", new Vector3( 2.35f, 0.010f, 0), new Vector3(0.018f, 0.006f, 5.60f), ledBlue,  root, col: false);
-        Box("FLedAmber1",new Vector3(0, 0.010f, -2.35f), new Vector3(5.60f, 0.006f, 0.018f), ledAmber, root, col: false);
-        Box("FLedAmber2",new Vector3(0, 0.010f,  2.35f), new Vector3(5.60f, 0.006f, 0.018f), ledAmber, root, col: false);
+        // Flecken / alte Ölflecken auf dem Boden
+        Box("Stain1", new Vector3(-0.8f, 0.003f,  0.4f), new Vector3(0.55f, 0.002f, 0.35f), M(new Color(0.10f,0.08f,0.06f),0f,0.02f), root, col: false);
+        Box("Stain2", new Vector3( 1.2f, 0.003f, -0.8f), new Vector3(0.40f, 0.002f, 0.28f), M(new Color(0.09f,0.07f,0.05f),0f,0.02f), root, col: false);
 
         // Gefahrenstreifen am Eingang (Vorderwand)
         for (int i = -3; i <= 3; i++)
@@ -201,104 +192,114 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
                 hazMat, root, Quaternion.Euler(0, 45f, 0), false);
         }
 
-        // ── Wände ────────────────────────────────────────────────────────────
-        // Rückwand (+Z)
-        Box("BackWall",       new Vector3(0,     2.5f,  3.0f), new Vector3(6.0f, 5f, 0.24f), steelDark, root);
-        // Linke Wand (-X)
-        Box("LeftWall",       new Vector3(-3.0f, 2.5f,  0f  ), new Vector3(0.24f, 5f, 6.0f), steelDark, root);
-        // Rechte Wand (+X)
-        Box("RightWall",      new Vector3( 3.0f, 2.5f,  0f  ), new Vector3(0.24f, 5f, 6.0f), steelDark, root);
-        // Vorderwand (-Z) mit Eingang
-        Box("FrontWall_L",    new Vector3(-2.0f, 2.5f, -3.0f), new Vector3(2.0f, 5f, 0.24f), steelDark, root);
-        Box("FrontWall_R",    new Vector3( 2.0f, 2.5f, -3.0f), new Vector3(2.0f, 5f, 0.24f), steelDark, root);
-        Box("FrontWall_Top",  new Vector3( 0f,   3.8f, -3.0f), new Vector3(6.0f, 2.4f, 0.24f), steelDark, root);
+        // ── Wände – schmutziger Putz/Beton ───────────────────────────────────
+        Box("BackWall",      new Vector3( 0f,    2.5f,  3.0f), new Vector3(6.0f, 5f, 0.24f), wallMat, root);
+        Box("LeftWall",      new Vector3(-3.0f,  2.5f,  0f  ), new Vector3(0.24f, 5f, 6.0f), wallMat, root);
+        Box("RightWall",     new Vector3( 3.0f,  2.5f,  0f  ), new Vector3(0.24f, 5f, 6.0f), wallMat, root);
+        Box("FrontWall_L",   new Vector3(-2.0f,  2.5f, -3.0f), new Vector3(2.0f, 5f, 0.24f), wallMat, root);
+        Box("FrontWall_R",   new Vector3( 2.0f,  2.5f, -3.0f), new Vector3(2.0f, 5f, 0.24f), wallMat, root);
+        Box("FrontWall_Top", new Vector3( 0f,    3.8f, -3.0f), new Vector3(6.0f, 2.4f, 0.24f), wallMat, root);
 
-        // Eingangsrahmen (gold-metall, dramatisch)
-        Box("DoorFrame_L",  new Vector3(-1.0f, 1.3f, -2.92f), new Vector3(0.06f, 2.6f, 0.06f), steelGold, root, col: false);
-        Box("DoorFrame_R",  new Vector3( 1.0f, 1.3f, -2.92f), new Vector3(0.06f, 2.6f, 0.06f), steelGold, root, col: false);
-        Box("DoorFrame_Top",new Vector3( 0f,   2.62f,-2.92f), new Vector3(2.06f, 0.06f, 0.06f), steelGold, root, col: false);
+        // Eingangsrahmen (verrostetes Metall)
+        Box("DoorFrame_L",  new Vector3(-1.0f, 1.3f, -2.92f), new Vector3(0.06f, 2.6f, 0.06f), rustMetal, root, col: false);
+        Box("DoorFrame_R",  new Vector3( 1.0f, 1.3f, -2.92f), new Vector3(0.06f, 2.6f, 0.06f), rustMetal, root, col: false);
+        Box("DoorFrame_Top",new Vector3( 0f,   2.62f,-2.92f), new Vector3(2.06f, 0.06f, 0.06f), rustMetal, root, col: false);
 
-        // LED-Eingangsrahmen (cyan)
-        Box("EntryLED_L",  new Vector3(-1.04f, 1.3f, -2.91f), new Vector3(0.012f, 2.5f, 0.012f), ledCyan, root, col: false);
-        Box("EntryLED_R",  new Vector3( 1.04f, 1.3f, -2.91f), new Vector3(0.012f, 2.5f, 0.012f), ledCyan, root, col: false);
-        Box("EntryLED_Top",new Vector3( 0f, 2.65f,   -2.91f), new Vector3(2.1f, 0.012f, 0.012f), ledCyan, root, col: false);
-
-        // Wandpaneel-Horizontalstreifen
-        float[] hStrips = { 0.55f, 1.10f, 1.80f, 2.60f, 3.40f, 4.20f };
-        foreach (float h in hStrips)
+        // Wandabnutzung – alte horizontale Schadensstreifen
+        float[] scratchY = { 0.9f, 1.6f, 2.3f };
+        foreach (float sy in scratchY)
         {
-            Box("BS", new Vector3(0,      h, 2.88f), new Vector3(5.85f, 0.030f, 0.015f), steelBright, root, col: false);
-            Box("LS", new Vector3(-2.88f, h, 0),    new Vector3(0.015f, 0.030f, 5.85f), steelBright, root, col: false);
-            Box("RS", new Vector3( 2.88f, h, 0),    new Vector3(0.015f, 0.030f, 5.85f), steelBright, root, col: false);
+            Box("ScB", new Vector3(0,      sy, 2.88f), new Vector3(5.85f, 0.018f, 0.010f), rustMetal, root, col: false);
+            Box("ScL", new Vector3(-2.88f, sy, 0),    new Vector3(0.010f, 0.018f, 5.85f), rustMetal, root, col: false);
+            Box("ScR", new Vector3( 2.88f, sy, 0),    new Vector3(0.010f, 0.018f, 5.85f), rustMetal, root, col: false);
         }
-
-        // Wandpaneel-Vertikalstreifen (Rückwand, dekorativ)
-        for (int i = -2; i <= 2; i++)
-            Box($"BVS_{i}", new Vector3(i * 1.1f, 2.5f, 2.87f), new Vector3(0.018f, 4.85f, 0.012f), steelBright, root, col: false);
-
-        // Wand-LED oben (blau)
-        Box("LedBack_T",  new Vector3(0,      4.70f,  2.86f), new Vector3(5.70f, 0.040f, 0.018f), ledBlue,  root, col: false);
-        Box("LedLeft_T",  new Vector3(-2.86f, 4.70f,  0),     new Vector3(0.018f, 0.040f, 5.70f), ledBlue,  root, col: false);
-        Box("LedRight_T", new Vector3( 2.86f, 4.70f,  0),     new Vector3(0.018f, 0.040f, 5.70f), ledBlue,  root, col: false);
-
-        // Sockel-LED (amber)
-        Box("LedBack_B",  new Vector3(0,     0.20f, 2.86f), new Vector3(5.70f, 0.030f, 0.014f), ledAmber, root, col: false);
-        Box("LedLeft_B",  new Vector3(-2.86f, 0.20f, 0),    new Vector3(0.014f, 0.030f, 5.70f), ledAmber, root, col: false);
-        Box("LedRight_B", new Vector3( 2.86f, 0.20f, 0),    new Vector3(0.014f, 0.030f, 5.70f), ledAmber, root, col: false);
 
         // Decke absichtlich weggelassen – Top-Down-Perspektive
 
-        // Kabelkanal (Decke)
-        Box("CableTray_Z1", new Vector3(-0.8f, 4.82f, 0.5f), new Vector3(0.22f, 0.055f, 5.6f), grateMat, root, col: false);
-        Box("CableTray_X1", new Vector3(0.4f,  4.82f, 1.5f), new Vector3(5.6f, 0.055f, 0.22f), grateMat, root, col: false);
-        Color[] cc = {
-            new Color(0.10f, 0.10f, 0.55f), new Color(0.55f, 0.10f, 0.10f),
-            new Color(0.10f, 0.45f, 0.10f), new Color(0.45f, 0.38f, 0.04f),
-            new Color(0.40f, 0.40f, 0.42f), new Color(0.42f, 0.08f, 0.42f)
-        };
-        for (int i = 0; i < 6; i++)
-            Box($"CabZ_{i}", new Vector3(-0.76f + i * 0.035f, 4.796f, 0.5f),
-                new Vector3(0.018f, 0.018f, 5.5f), M(cc[i], 0f, 0.08f), root, col: false);
+        // ── Rohre an der Wand (hoch, realistisch) ────────────────────────────
+        BuildPipes(root, rustMetal);
 
-        // ── Workstation (rechts hinten) ───────────────────────────────────────
-        BuildWorkstation(new Vector3(1.6f, 0f, 1.8f), root, woodDark, steelMid, steelBright, scrBlue, scrGrn, ledGreen, ledAmber);
+        // ── Holzkisten gestapelt (hinten links) ───────────────────────────────
+        var crateMatA = dirtyWood;
+        var crateMatB = M(new Color(0.19f, 0.13f, 0.07f), 0.01f, 0.06f);
+        // Stapel 1
+        Box("CrateA1", new Vector3(-1.9f, 0.22f, 2.1f), new Vector3(0.55f, 0.44f, 0.55f), crateMatA, root);
+        Box("CrateA2", new Vector3(-1.9f, 0.66f, 2.1f), new Vector3(0.55f, 0.44f, 0.55f), crateMatB, root);
+        Box("CrateA3", new Vector3(-1.3f, 0.22f, 2.1f), new Vector3(0.55f, 0.44f, 0.55f), crateMatA, root);
+        // Lattenstruktur auf den Kisten
+        foreach (var cx in new[]{-1.9f, -1.3f})
+            for (int i = 0; i < 3; i++)
+                Box($"Lat_{cx}_{i}", new Vector3(cx, 0.44f, 2.1f - 0.18f + i * 0.18f),
+                    new Vector3(0.55f, 0.006f, 0.028f), rustMetal, root, col: false);
 
-        // ── Serverrack (linke Wand, 2 Racks) ─────────────────────────────────
-        BuildServerRack(new Vector3(-2.45f, 0f, 0.5f),  root, steelDark, grateMat, ledGreen, ledAmber, ledBlue, ledRed);
-        BuildServerRack(new Vector3(-2.45f, 0f, -0.8f), root, steelDark, grateMat, ledGreen, ledGreen, ledBlue, ledAmber);
+        // Stapel 2 (rechts hinten, etwas anders)
+        Box("CrateB1", new Vector3(1.6f, 0.22f, 2.2f), new Vector3(0.60f, 0.44f, 0.50f), crateMatB, root);
+        Box("CrateB2", new Vector3(1.6f, 0.66f, 2.2f), new Vector3(0.60f, 0.44f, 0.50f), crateMatA, root);
+        Box("CrateB3", new Vector3(2.1f, 0.22f, 1.7f), new Vector3(0.50f, 0.44f, 0.60f), crateMatB, root);
 
-        // ── Kontrollpanel (rechte Wand) ────────────────────────────────────────
-        BuildControlPanel(new Vector3(2.88f, 1.85f, -0.8f), root, steelMid, ledRed, ledGreen, ledAmber, steelBright);
+        // ── Metall-Fässer (hinten rechts) ─────────────────────────────────────
+        Cyl("Barrel1", new Vector3(2.0f, 0.42f, 2.3f), new Vector3(0.38f, 0.84f, 0.38f), rustMetal, root);
+        Cyl("Barrel2", new Vector3(2.4f, 0.42f, 1.8f), new Vector3(0.38f, 0.84f, 0.38f), oldMetal, root);
+        Box("BarrelLid1", new Vector3(2.0f, 0.85f, 2.3f), new Vector3(0.40f, 0.025f, 0.40f), brightMetal, root, col: false);
+        Box("BarrelLid2", new Vector3(2.4f, 0.85f, 1.8f), new Vector3(0.40f, 0.025f, 0.40f), rustMetal, root, col: false);
 
-        // ── Wandbildschirm (Rückwand, groß) ──────────────────────────────────
-        BuildWallScreen(new Vector3(0f, 2.4f, 2.86f), root, scrBlue, steelBright, ledCyan);
+        // ── Altes Metallregal (linke Wand) ────────────────────────────────────
+        var shelfG = new GameObject("OldShelf"); shelfG.transform.position = new Vector3(-2.7f, 0f, 0.8f); shelfG.transform.SetParent(root);
+        Box("SFrame_L",  new Vector3(-0.02f, 1.0f, -0.28f), new Vector3(0.04f, 2.0f, 0.04f), oldMetal, shelfG.transform);
+        Box("SFrame_R",  new Vector3(-0.02f, 1.0f,  0.28f), new Vector3(0.04f, 2.0f, 0.04f), oldMetal, shelfG.transform);
+        Box("SBoard1",   new Vector3(-0.02f, 0.40f,  0f),   new Vector3(0.12f, 0.025f, 0.60f), dirtyWood, shelfG.transform, col: false);
+        Box("SBoard2",   new Vector3(-0.02f, 0.90f,  0f),   new Vector3(0.12f, 0.025f, 0.60f), dirtyWood, shelfG.transform, col: false);
+        Box("SBoard3",   new Vector3(-0.02f, 1.45f,  0f),   new Vector3(0.12f, 0.025f, 0.60f), dirtyWood, shelfG.transform, col: false);
+        // Kleinkram auf Regal
+        Box("Rag",       new Vector3(-0.02f, 0.43f, -0.10f), new Vector3(0.08f, 0.025f, 0.14f), M(new Color(0.28f,0.18f,0.10f),0f,0.04f), shelfG.transform, col: false);
+        Cyl("Canister",  new Vector3(-0.02f, 0.56f,  0.12f), new Vector3(0.07f, 0.14f, 0.07f), rustMetal, shelfG.transform);
+        Box("Manual",    new Vector3(-0.02f, 0.95f, -0.08f), new Vector3(0.06f, 0.10f, 0.10f), dirtyWhite, shelfG.transform, col: false);
+        var shelfBC = shelfG.AddComponent<BoxCollider>();
+        shelfBC.center = new Vector3(0, 1.0f, 0); shelfBC.size = new Vector3(0.18f, 2.0f, 0.65f);
 
-        // ── Locker / Spindwand (rechts vorne) ─────────────────────────────────
-        BuildLockers(new Vector3(2.55f, 0f, -1.8f), root, steelMid, steelBright, ledBlue);
+        // ── Einfacher Werkstattisch (rechte Wand) ─────────────────────────────
+        var benchG = new GameObject("Workbench"); benchG.transform.position = new Vector3(2.55f, 0f, 0.5f); benchG.transform.SetParent(root);
+        Box("BTop",   new Vector3(0f, 0.82f, 0f),     new Vector3(0.55f, 0.045f, 0.80f), dirtyWood, benchG.transform);
+        Box("BLeg_FL",new Vector3(-0.22f, 0.41f,-0.36f), new Vector3(0.05f, 0.82f, 0.05f), oldMetal, benchG.transform);
+        Box("BLeg_FR",new Vector3(-0.22f, 0.41f, 0.36f), new Vector3(0.05f, 0.82f, 0.05f), oldMetal, benchG.transform);
+        Box("BLeg_BL",new Vector3( 0.22f, 0.41f,-0.36f), new Vector3(0.05f, 0.82f, 0.05f), oldMetal, benchG.transform);
+        Box("BLeg_BR",new Vector3( 0.22f, 0.41f, 0.36f), new Vector3(0.05f, 0.82f, 0.05f), oldMetal, benchG.transform);
+        // Werkzeug auf dem Tisch
+        Box("Wrench",  new Vector3( 0.06f, 0.845f,-0.15f), new Vector3(0.04f, 0.010f, 0.28f), rustMetal, benchG.transform, col: false);
+        Box("Hammer",  new Vector3(-0.08f, 0.845f, 0.10f), new Vector3(0.035f, 0.010f, 0.22f), oldMetal, benchG.transform, col: false);
+        Box("HammerH", new Vector3(-0.08f, 0.855f, 0.21f), new Vector3(0.085f, 0.020f, 0.070f), rustMetal, benchG.transform, col: false);
+        var benchBC = benchG.AddComponent<BoxCollider>();
+        benchBC.center = new Vector3(0, 0.42f, 0); benchBC.size = new Vector3(0.60f, 0.84f, 0.85f);
 
-        // ── Joshis Sessel ─────────────────────────────────────────────────────
-        BuildErgonomicChair(new Vector3(-0.6f, 0f, 0.1f), root, steelDark, rubberMat, steelBright);
+        // ── Joshis alter Stuhl (vorne links) ──────────────────────────────────
+        BuildErgonomicChair(new Vector3(-0.6f, 0f, 0.1f), root, oldMetal, rubberMat, brightMetal);
 
-        // ── Beistelltisch (neben Joshi) ───────────────────────────────────────
-        BuildSideTable(new Vector3(0.55f, 0f, 0.1f), root, woodDark, whiteMat, ledBlue, scrGrn);
+        // ── Kleiner Tisch neben Joshi ──────────────────────────────────────────
+        BuildSideTable(new Vector3(0.55f, 0f, 0.1f), root, dirtyWood, dirtyWhite, ledAmber, ledAmber);
+
+        // ── Sicherungskasten (rostig, linke Wand) ─────────────────────────────
+        BuildDistributionBox(new Vector3(-2.88f, 1.85f, -1.6f), root, oldMetal, ledGreen, ledAmber);
+
+        // ── Kontrollpanel (rechte Wand, alt) ─────────────────────────────────
+        BuildControlPanel(new Vector3(2.88f, 1.85f, -0.8f), root, oldMetal, ledRed, ledGreen, ledAmber, brightMetal);
 
         // ── Lüftungsgitter Eingang ─────────────────────────────────────────────
-        BuildVentGrille(new Vector3(0f, 1.4f, -2.88f), root, grateMat, steelBright);
+        BuildVentGrille(new Vector3(0f, 1.4f, -2.88f), root, grateMat, brightMetal);
 
-        // ── Sicherungskasten (links, Ecke) ────────────────────────────────────
-        BuildDistributionBox(new Vector3(-2.88f, 1.85f, -1.6f), root, steelMid, ledGreen, ledAmber);
+        // ── Warnschilder (verblasst) ──────────────────────────────────────────
+        BuildWarningSigns(root, oldMetal, ledRed, ledAmber);
 
-        // ── Rohrystem (Decke links) ────────────────────────────────────────────
-        BuildPipes(root, steelGold);
-
-        // ── Warnschilder ──────────────────────────────────────────────────────
-        BuildWarningSigns(root, steelDark, ledRed, ledAmber);
-
-        // ── Deckenprojektions-Licht (atmosphärisch) ───────────────────────────
-        BuildCeilingLight(new Vector3(-0.5f, 5.0f, -0.5f), root, steelDark, ledBlue);
-
-        // ── Lichter ───────────────────────────────────────────────────────────
-        AddLights(root);
+        // ── Beleuchtung – einzelne trübe Glühbirne ────────────────────────────
+        // Lampenfassung
+        Cyl("BulbSocket", new Vector3(0f, 4.6f, 0f), new Vector3(0.06f, 0.08f, 0.06f), oldMetal, root);
+        Cyl("BulbGlass",  new Vector3(0f, 4.44f, 0f), new Vector3(0.055f, 0.10f, 0.055f),
+            Emit(new Color(0.9f,0.8f,0.5f), new Color(1.0f,0.85f,0.45f), 2.5f), root);
+        // Licht der Glühbirne (warmes Gelb, schwache Intensität)
+        AddLight("Bulb", root, new Vector3(0f, 4.3f, 0f), LightType.Point,
+            new Color(1.0f, 0.78f, 0.42f), 2.8f, 9f, shadows: LightShadows.Soft);
+        // Schwaches Füll-Licht für dunkle Ecken
+        AddLight("FillDim", root, new Vector3(0f, 3.0f, 0f), LightType.Directional,
+            new Color(0.55f, 0.45f, 0.30f), 0.35f, 0f, rotation: Quaternion.Euler(90f, 0f, 0f));
     }
 
     // ─── Workstation ─────────────────────────────────────────────────────────
@@ -712,12 +713,14 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         if (idleModel != null && runningModel != null)
         {
             var idle = (GameObject)PrefabUtility.InstantiatePrefab(idleModel);
+            PrefabUtility.UnpackPrefabInstance(idle, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
             idle.name = "IdleModel"; idle.transform.SetParent(character.transform, false); idle.SetActive(true);
             try { SetupLoopController(idle, "Assets/Big Yahu/Big Yahu standing.fbx",
                 "Assets/Big Yahu/BigYahu_Stand_Loop.anim", "Assets/Big Yahu/BigYahu_Stand.controller", "Stand"); }
             catch (System.Exception e) { Debug.LogWarning("Stand-Anim: " + e.Message); }
 
             var run = (GameObject)PrefabUtility.InstantiatePrefab(runningModel);
+            PrefabUtility.UnpackPrefabInstance(run, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
             run.name = "RunningModel"; run.transform.SetParent(character.transform, false); run.SetActive(false);
             try { SetupLoopController(run, "Assets/Big Yahu/Big Yahu jogging.fbx",
                 "Assets/Big Yahu/BigYahu_Run_Loop.anim", "Assets/Big Yahu/BigYahu_Run.controller", "Run"); }
@@ -783,10 +786,10 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
 
     private void AddJoshi(Scene scene)
     {
-        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Big Yahu/Sitting Talking.fbx");
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Big Yahu/Joshi NPC.fbx");
         if (prefab == null)
         {
-            Debug.LogWarning("[Level2] 'Sitting Talking.fbx' nicht gefunden.");
+            Debug.LogWarning("[Level2] 'Joshi NPC.fbx' nicht gefunden.");
             return;
         }
 
@@ -794,6 +797,8 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         EnsureNormalMapImport("Assets/Big Yahu/3dcartooncharactermodel_Clone1_normal.JPEG");
 
         GameObject joshi = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+        // Prefab-Verbindung kappen, sonst verwirft Unity Material-Overrides beim Speichern
+        PrefabUtility.UnpackPrefabInstance(joshi, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
         joshi.name = "Joshi";
 
         // Skalierung prüfen (manche FBX kommen in cm → 100x zu groß)
@@ -812,7 +817,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         var mat = CreateJoshiMaterial();
         if (mat != null)
             foreach (var r in joshi.GetComponentsInChildren<Renderer>(true))
-                r.material = mat;
+                r.sharedMaterial = mat;
 
         // Sitz-Animation
         SetupSittingAnimation(joshi);
@@ -896,14 +901,14 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
 
     private void SetupSittingAnimation(GameObject joshi)
     {
-        var assets = AssetDatabase.LoadAllAssetsAtPath("Assets/Big Yahu/Sitting Talking.fbx");
+        var assets = AssetDatabase.LoadAllAssetsAtPath("Assets/Big Yahu/Joshi NPC.fbx");
         AnimationClip src = null;
         foreach (var a in assets)
             if (a is AnimationClip c && !c.name.StartsWith("__preview__")) { src = c; break; }
 
         if (src == null)
         {
-            Debug.LogWarning("[Level2] Kein AnimationClip in 'Sitting Talking.fbx'.");
+            Debug.LogWarning("[Level2] Kein AnimationClip in 'Joshi NPC.fbx'.");
             return;
         }
 
@@ -916,9 +921,13 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         var loop = Object.Instantiate(src);
         loop.name = "Joshi_Sitting_Loop";
         var cfg = AnimationUtility.GetAnimationClipSettings(loop);
-        cfg.loopTime = true;
+        cfg.loopTime  = true;
+        cfg.loopBlend = true;
         AnimationUtility.SetAnimationClipSettings(loop, cfg);
         AssetDatabase.CreateAsset(loop, clipPath);
+        AssetDatabase.SaveAssets();
+        // Neu von Disk laden damit loopTime-Flag wirklich persistiert ist
+        loop = AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath);
 
         if (AssetDatabase.LoadAssetAtPath<AnimatorController>(ctrlPath) != null)
             AssetDatabase.DeleteAsset(ctrlPath);
@@ -932,6 +941,112 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         // Animator setzen NACH SaveAssets damit der Controller auf Disk existiert
         var anim = joshi.GetComponent<Animator>() ?? joshi.AddComponent<Animator>();
         anim.runtimeAnimatorController = AssetDatabase.LoadAssetAtPath<AnimatorController>(ctrlPath);
+        anim.applyRootMotion = false;
+
+        // Avatar aus FBX laden (nötig für Humanoid-Rigs)
+        foreach (var a in AssetDatabase.LoadAllAssetsAtPath("Assets/Big Yahu/Joshi NPC.fbx"))
+            if (a is Avatar av) { anim.avatar = av; break; }
+
         Debug.Log("[Level2] Joshi-Animation: " + src.name + " → loopend.");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Abschluss-Setup
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private void AddGameCompleteSetup(Scene scene)
+    {
+        // ── Trigger-Zone an der Rückwand ──────────────────────────────────────
+        GameObject triggerGO = new GameObject("GameCompleteTrigger");
+        triggerGO.transform.position = new Vector3(0f, 1.2f, 2.4f);
+        var col = triggerGO.AddComponent<BoxCollider>();
+        col.isTrigger = true;
+        col.size = new Vector3(5.0f, 2.4f, 0.6f);
+
+        // ── UI Canvas (Screen Space Overlay) ─────────────────────────────────
+        GameObject canvasGO = new GameObject("GameCompleteCanvas");
+        var canvas = canvasGO.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 10;
+        canvasGO.AddComponent<UnityEngine.UI.CanvasScaler>().uiScaleMode =
+            UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        canvasGO.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+
+        // Halbtransparenter schwarzer Hintergrund
+        GameObject bgGO = new GameObject("Background");
+        bgGO.transform.SetParent(canvasGO.transform, false);
+        var bgImg = bgGO.AddComponent<UnityEngine.UI.Image>();
+        bgImg.color = new Color(0f, 0f, 0f, 0.82f);
+        var bgRect = bgGO.GetComponent<RectTransform>();
+        bgRect.anchorMin = Vector2.zero; bgRect.anchorMax = Vector2.one;
+        bgRect.offsetMin = bgRect.offsetMax = Vector2.zero;
+
+        // Titel
+        GameObject titleGO = new GameObject("Title");
+        titleGO.transform.SetParent(canvasGO.transform, false);
+        var title = titleGO.AddComponent<TMPro.TextMeshProUGUI>();
+        title.text = "GEHEIMNIS GELÜFTET";
+        title.fontSize = 64;
+        title.fontStyle = TMPro.FontStyles.Bold;
+        title.alignment = TMPro.TextAlignmentOptions.Center;
+        title.color = new Color(1.0f, 0.82f, 0.35f);
+        var titleRect = titleGO.GetComponent<RectTransform>();
+        titleRect.anchorMin = new Vector2(0.1f, 0.55f);
+        titleRect.anchorMax = new Vector2(0.9f, 0.75f);
+        titleRect.offsetMin = titleRect.offsetMax = Vector2.zero;
+
+        // Untertitel
+        GameObject subGO = new GameObject("Subtitle");
+        subGO.transform.SetParent(canvasGO.transform, false);
+        var sub = subGO.AddComponent<TMPro.TextMeshProUGUI>();
+        sub.text = "Du hast den geheimen Wartungsraum entdeckt.\nNiemand sollte das wissen.";
+        sub.fontSize = 28;
+        sub.alignment = TMPro.TextAlignmentOptions.Center;
+        sub.color = new Color(0.85f, 0.80f, 0.70f);
+        var subRect = subGO.GetComponent<RectTransform>();
+        subRect.anchorMin = new Vector2(0.1f, 0.38f);
+        subRect.anchorMax = new Vector2(0.9f, 0.55f);
+        subRect.offsetMin = subRect.offsetMax = Vector2.zero;
+
+        // Neustart-Button
+        GameObject btnGO = new GameObject("RestartButton");
+        btnGO.transform.SetParent(canvasGO.transform, false);
+        var btn = btnGO.AddComponent<UnityEngine.UI.Button>();
+        var btnImg = btnGO.AddComponent<UnityEngine.UI.Image>();
+        btnImg.color = new Color(0.55f, 0.15f, 0.10f);
+        var btnRect = btnGO.GetComponent<RectTransform>();
+        btnRect.anchorMin = new Vector2(0.35f, 0.24f);
+        btnRect.anchorMax = new Vector2(0.65f, 0.34f);
+        btnRect.offsetMin = btnRect.offsetMax = Vector2.zero;
+
+        GameObject btnTextGO = new GameObject("Text");
+        btnTextGO.transform.SetParent(btnGO.transform, false);
+        var btnTxt = btnTextGO.AddComponent<TMPro.TextMeshProUGUI>();
+        btnTxt.text = "Nochmal spielen";
+        btnTxt.fontSize = 24;
+        btnTxt.alignment = TMPro.TextAlignmentOptions.Center;
+        btnTxt.color = Color.white;
+        var btnTxtRect = btnTextGO.GetComponent<RectTransform>();
+        btnTxtRect.anchorMin = Vector2.zero; btnTxtRect.anchorMax = Vector2.one;
+        btnTxtRect.offsetMin = btnTxtRect.offsetMax = Vector2.zero;
+
+        // GameCompleteUI verbinden
+        GameObject uiRoot = new GameObject("GameCompleteUI");
+        var ui = uiRoot.AddComponent<GameCompleteUI>();
+        ui.overlayCanvas = canvas;
+        ui.titleText = title;
+        ui.subtitleText = sub;
+        ui.restartButton = btn;
+
+        var trigger = triggerGO.AddComponent<GameCompleteTrigger>();
+        trigger.ui = ui;
+
+        // Button → Restart
+        UnityEditor.Events.UnityEventTools.AddPersistentListener(
+            btn.onClick, ui.Restart);
+
+        SceneManager.MoveGameObjectToScene(triggerGO, scene);
+        SceneManager.MoveGameObjectToScene(canvasGO, scene);
+        SceneManager.MoveGameObjectToScene(uiRoot, scene);
     }
 }

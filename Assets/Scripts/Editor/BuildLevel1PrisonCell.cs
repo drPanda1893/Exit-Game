@@ -1025,6 +1025,7 @@ public class BuildLevel1PrisonCell : EditorWindow
         if (idleModel != null && runningModel != null)
         {
             GameObject idle = (GameObject)PrefabUtility.InstantiatePrefab(idleModel);
+            PrefabUtility.UnpackPrefabInstance(idle, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
             idle.name = "IdleModel";
             idle.transform.SetParent(character.transform, false);
             idle.SetActive(true);
@@ -1032,6 +1033,7 @@ public class BuildLevel1PrisonCell : EditorWindow
             catch (System.Exception e) { Debug.LogWarning("SetupStandingAnimation fehlgeschlagen: " + e.Message); }
 
             GameObject running = (GameObject)PrefabUtility.InstantiatePrefab(runningModel);
+            PrefabUtility.UnpackPrefabInstance(running, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
             running.name = "RunningModel";
             running.transform.SetParent(character.transform, false);
             running.SetActive(false);
