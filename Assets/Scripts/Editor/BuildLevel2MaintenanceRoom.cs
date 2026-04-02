@@ -786,10 +786,10 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
 
     private void AddJoshi(Scene scene)
     {
-        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Big Yahu/Joshi NPC.fbx");
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Big Yahu/Sitting Talking(1).fbx");
         if (prefab == null)
         {
-            Debug.LogWarning("[Level2] 'Joshi NPC.fbx' nicht gefunden.");
+            Debug.LogWarning("[Level2] 'Sitting Talking(1).fbx' nicht gefunden.");
             return;
         }
 
@@ -901,14 +901,14 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
 
     private void SetupSittingAnimation(GameObject joshi)
     {
-        var assets = AssetDatabase.LoadAllAssetsAtPath("Assets/Big Yahu/Joshi NPC.fbx");
+        var assets = AssetDatabase.LoadAllAssetsAtPath("Assets/Big Yahu/Sitting Talking(1).fbx");
         AnimationClip src = null;
         foreach (var a in assets)
             if (a is AnimationClip c && !c.name.StartsWith("__preview__")) { src = c; break; }
 
         if (src == null)
         {
-            Debug.LogWarning("[Level2] Kein AnimationClip in 'Joshi NPC.fbx'.");
+            Debug.LogWarning("[Level2] Kein AnimationClip in 'Sitting Talking(1).fbx'.");
             return;
         }
 
@@ -944,7 +944,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         anim.applyRootMotion = false;
 
         // Avatar aus FBX laden (nötig für Humanoid-Rigs)
-        foreach (var a in AssetDatabase.LoadAllAssetsAtPath("Assets/Big Yahu/Joshi NPC.fbx"))
+        foreach (var a in AssetDatabase.LoadAllAssetsAtPath("Assets/Big Yahu/Sitting Talking(1).fbx"))
             if (a is Avatar av) { anim.avatar = av; break; }
 
         Debug.Log("[Level2] Joshi-Animation: " + src.name + " → loopend.");
