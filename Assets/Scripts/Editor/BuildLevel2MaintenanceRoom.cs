@@ -199,12 +199,12 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         Box("FrontWall_R",   new Vector3( 2.0f,  2.5f, -3.0f), new Vector3(2.0f, 5f, 0.24f), wallMat, root);
         Box("FrontWall_Top", new Vector3( 0f,    3.8f, -3.0f), new Vector3(6.0f, 2.4f, 0.24f), wallMat, root);
 
-        // Unsichtbare Border – verhindert Rauslaufen durch die Tür
+        // Unsichtbare Border – verhindert Rauslaufen, sitzt innerhalb des Raums
         var border = new GameObject("EntranceBorder");
-        border.transform.position = new Vector3(0f, 1.5f, -2.95f);
+        border.transform.position = new Vector3(0f, 1.5f, -2.6f);
         border.transform.SetParent(root);
         var bc = border.AddComponent<BoxCollider>();
-        bc.size = new Vector3(2.0f, 3.0f, 0.1f);
+        bc.size = new Vector3(6.0f, 3.0f, 0.2f);  // volle Raumbreite – keine Lücke möglich
         bc.isTrigger = false;
 
         // Eingangsrahmen (verrostetes Metall)
@@ -778,7 +778,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         Material   playerMat    = AssetDatabase.LoadAssetAtPath<Material>("Assets/Big Yahu/Big Yahu material.mat");
 
         var character = new GameObject("BigYahu") { tag = "Player" };
-        character.transform.position = new Vector3(0f, 0f, -2.0f);
+        character.transform.position = new Vector3(0f, 0f, -1.5f);
 
         if (idleModel != null && runningModel != null)
         {
