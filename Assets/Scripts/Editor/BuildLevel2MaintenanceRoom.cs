@@ -66,9 +66,6 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         RenderSettings.ambientMode  = UnityEngine.Rendering.AmbientMode.Flat;
         RenderSettings.ambientLight = new Color(0.18f, 0.15f, 0.10f);
 
-        // ── Abschluss-UI + Trigger ────────────────────────────────────────────
-        AddGameCompleteSetup(scene);
-
         EditorSceneManager.SaveScene(scene);
         Debug.Log("[Level2] Wartungsraum fertig.");
     }
@@ -966,103 +963,4 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         Debug.Log($"[Level2] Joshi Legacy-Animation: '{loop.name}' → Loop auf {joshi.name}");
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // Abschluss-Setup
-    // ═══════════════════════════════════════════════════════════════════════
-
-    private void AddGameCompleteSetup(Scene scene)
-    {
-        // ── Trigger-Zone an der Rückwand ──────────────────────────────────────
-        GameObject triggerGO = new GameObject("GameCompleteTrigger");
-        triggerGO.transform.position = new Vector3(0f, 1.2f, 2.4f);
-        var col = triggerGO.AddComponent<BoxCollider>();
-        col.isTrigger = true;
-        col.size = new Vector3(5.0f, 2.4f, 0.6f);
-
-        // ── UI Canvas (Screen Space Overlay) ─────────────────────────────────
-        GameObject canvasGO = new GameObject("GameCompleteCanvas");
-        var canvas = canvasGO.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 10;
-        canvasGO.AddComponent<UnityEngine.UI.CanvasScaler>().uiScaleMode =
-            UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        canvasGO.AddComponent<UnityEngine.UI.GraphicRaycaster>();
-
-        // Halbtransparenter schwarzer Hintergrund
-        GameObject bgGO = new GameObject("Background");
-        bgGO.transform.SetParent(canvasGO.transform, false);
-        var bgImg = bgGO.AddComponent<UnityEngine.UI.Image>();
-        bgImg.color = new Color(0f, 0f, 0f, 0.82f);
-        var bgRect = bgGO.GetComponent<RectTransform>();
-        bgRect.anchorMin = Vector2.zero; bgRect.anchorMax = Vector2.one;
-        bgRect.offsetMin = bgRect.offsetMax = Vector2.zero;
-
-        // Titel
-        GameObject titleGO = new GameObject("Title");
-        titleGO.transform.SetParent(canvasGO.transform, false);
-        var title = titleGO.AddComponent<TMPro.TextMeshProUGUI>();
-        title.text = "GEHEIMNIS GELÜFTET";
-        title.fontSize = 64;
-        title.fontStyle = TMPro.FontStyles.Bold;
-        title.alignment = TMPro.TextAlignmentOptions.Center;
-        title.color = new Color(1.0f, 0.82f, 0.35f);
-        var titleRect = titleGO.GetComponent<RectTransform>();
-        titleRect.anchorMin = new Vector2(0.1f, 0.55f);
-        titleRect.anchorMax = new Vector2(0.9f, 0.75f);
-        titleRect.offsetMin = titleRect.offsetMax = Vector2.zero;
-
-        // Untertitel
-        GameObject subGO = new GameObject("Subtitle");
-        subGO.transform.SetParent(canvasGO.transform, false);
-        var sub = subGO.AddComponent<TMPro.TextMeshProUGUI>();
-        sub.text = "Du hast den geheimen Wartungsraum entdeckt.\nNiemand sollte das wissen.";
-        sub.fontSize = 28;
-        sub.alignment = TMPro.TextAlignmentOptions.Center;
-        sub.color = new Color(0.85f, 0.80f, 0.70f);
-        var subRect = subGO.GetComponent<RectTransform>();
-        subRect.anchorMin = new Vector2(0.1f, 0.38f);
-        subRect.anchorMax = new Vector2(0.9f, 0.55f);
-        subRect.offsetMin = subRect.offsetMax = Vector2.zero;
-
-        // Neustart-Button
-        GameObject btnGO = new GameObject("RestartButton");
-        btnGO.transform.SetParent(canvasGO.transform, false);
-        var btn = btnGO.AddComponent<UnityEngine.UI.Button>();
-        var btnImg = btnGO.AddComponent<UnityEngine.UI.Image>();
-        btnImg.color = new Color(0.55f, 0.15f, 0.10f);
-        var btnRect = btnGO.GetComponent<RectTransform>();
-        btnRect.anchorMin = new Vector2(0.35f, 0.24f);
-        btnRect.anchorMax = new Vector2(0.65f, 0.34f);
-        btnRect.offsetMin = btnRect.offsetMax = Vector2.zero;
-
-        GameObject btnTextGO = new GameObject("Text");
-        btnTextGO.transform.SetParent(btnGO.transform, false);
-        var btnTxt = btnTextGO.AddComponent<TMPro.TextMeshProUGUI>();
-        btnTxt.text = "Nochmal spielen";
-        btnTxt.fontSize = 24;
-        btnTxt.alignment = TMPro.TextAlignmentOptions.Center;
-        btnTxt.color = Color.white;
-        var btnTxtRect = btnTextGO.GetComponent<RectTransform>();
-        btnTxtRect.anchorMin = Vector2.zero; btnTxtRect.anchorMax = Vector2.one;
-        btnTxtRect.offsetMin = btnTxtRect.offsetMax = Vector2.zero;
-
-        // GameCompleteUI verbinden
-        GameObject uiRoot = new GameObject("GameCompleteUI");
-        var ui = uiRoot.AddComponent<GameCompleteUI>();
-        ui.overlayCanvas = canvas;
-        ui.titleText = title;
-        ui.subtitleText = sub;
-        ui.restartButton = btn;
-
-        var trigger = triggerGO.AddComponent<GameCompleteTrigger>();
-        trigger.ui = ui;
-
-        // Button → Restart
-        UnityEditor.Events.UnityEventTools.AddPersistentListener(
-            btn.onClick, ui.Restart);
-
-        SceneManager.MoveGameObjectToScene(triggerGO, scene);
-        SceneManager.MoveGameObjectToScene(canvasGO, scene);
-        SceneManager.MoveGameObjectToScene(uiRoot, scene);
-    }
 }
