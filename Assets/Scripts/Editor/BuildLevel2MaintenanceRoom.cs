@@ -45,8 +45,9 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         camGO.transform.position = new Vector3(0f, 6f, -3f);
         camGO.transform.rotation = Quaternion.Euler(60f, 0f, 0f);
         TopDownCameraFollow follow = camGO.AddComponent<TopDownCameraFollow>();
-        follow.height     = 6f;
-        follow.pitchAngle = 60f;
+        follow.height         = 2.2f;   // Höhe über dem Charakter
+        follow.pitchAngle     = 20f;    // leicht von oben, fast horizontal
+        follow.behindDistance = 3.5f;   // Abstand hinter dem Charakter
         SceneManager.MoveGameObjectToScene(camGO, scene);
 
         // ── Umgebung ──────────────────────────────────────────────────────────
