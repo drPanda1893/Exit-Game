@@ -848,34 +848,38 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
 
     private Material CreateJoshiMaterial()
     {
-        const string p = "Assets/Big Yahu/3dcartooncharactermodel_Clone1_";
-        var baseColor = AssetDatabase.LoadAssetAtPath<Texture2D>(p + "basecolor.JPEG");
-        var normalMap = AssetDatabase.LoadAssetAtPath<Texture2D>(p + "normal.JPEG");
-        var metalTex  = AssetDatabase.LoadAssetAtPath<Texture2D>(p + "metallic.JPEG");
-        var roughTex  = AssetDatabase.LoadAssetAtPath<Texture2D>(p + "roughness.JPEG");
+        // Texturen – zuerst die neuen freien PNGs probieren, dann alte JPEG-Namen als Fallback
+        var baseColor = LoadTex("Assets/Big Yahu/tripo_material_95577146-ea71-4ddc-8bb5-51ef3aca067e.png")
+                     ?? LoadTex("Assets/Big Yahu/3dcartooncharactermodel_Clone1_basecolor.JPEG");
+        var normalTex = LoadTex("Assets/Big Yahu/normalMap1.png")
+                     ?? LoadTex("Assets/Big Yahu/3dcartooncharactermodel_Clone1_normal.JPEG");
+        var metalTex  = LoadTex("Assets/Big Yahu/metalnessMap1.png")
+                     ?? LoadTex("Assets/Big Yahu/3dcartooncharactermodel_Clone1_metallic.JPEG");
 
         if (baseColor == null)
         {
-            Debug.LogWarning("[Level2] basecolor.JPEG nicht gefunden – kein Material erstellt.");
+            Debug.LogWarning("[Level2] Keine Basis-Textur für Joshi gefunden – kein Material erstellt.");
             return null;
         }
 
+        // Normal Map korrekt importieren
+        if (normalTex != null)
+            EnsureNormalMapImport(AssetDatabase.GetAssetPath(normalTex));
+
         var mat = new Material(Shader.Find("Standard"));
         mat.name = "Joshi_PBR";
-
-        // Albedo
         mat.SetTexture("_MainTex", baseColor);
         mat.SetColor("_Color", Color.white);
 
-        // Normal Map (nach EnsureNormalMapImport bereits als NormalMap importiert)
-        if (normalMap != null)
+        if (normalTex != null)
         {
             mat.EnableKeyword("_NORMALMAP");
-            mat.SetTexture("_BumpMap", normalMap);
+            // Textur nach Reimport neu laden damit Unity den korrekten Typ kennt
+            normalTex = LoadTex(AssetDatabase.GetAssetPath(normalTex));
+            mat.SetTexture("_BumpMap", normalTex);
             mat.SetFloat("_BumpScale", 1f);
         }
 
-        // Metallic (R-Kanal) + Smoothness (A-Kanal im MetallicGlossMap-Workflow)
         if (metalTex != null)
         {
             mat.EnableKeyword("_METALLICGLOSSMAP");
@@ -883,14 +887,12 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         }
         else
         {
-            mat.SetFloat("_Metallic", 0.0f);
+            mat.SetFloat("_Metallic", 0.05f);
         }
 
-        // Roughness → Smoothness: 0.5 ist ein guter Mittelwert für Cartoon-Skin
-        float smooth = (roughTex != null) ? 0.40f : 0.45f;
-        mat.SetFloat("_Glossiness", smooth);
+        mat.SetFloat("_Glossiness", 0.40f);
 
-        // Material auf Disk speichern (sonst verliert Unity die Referenz nach dem Speichern)
+        // Material auf Disk speichern
         const string matPath = "Assets/Big Yahu/Joshi_PBR.mat";
         if (AssetDatabase.LoadAssetAtPath<Material>(matPath) != null)
             AssetDatabase.DeleteAsset(matPath);
@@ -899,21 +901,24 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         return AssetDatabase.LoadAssetAtPath<Material>(matPath);
     }
 
+    private Texture2D LoadTex(string path) =>
+        AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+
     private void SetupSittingAnimation(GameObject joshi)
     {
         const string fbxPath  = "Assets/Big Yahu/Sitting Talking(1).fbx";
         const string clipPath = "Assets/Big Yahu/Joshi_Sitting_Loop.anim";
         const string ctrlPath = "Assets/Big Yahu/Joshi_Sitting.controller";
 
-        // ── Sicherstellen dass das FBX als Generic importiert ist (kein Legacy) ──
+        // ── FBX auf Legacy umstellen – zuverlässigste Methode ohne Avatar-Setup ─
         var modelImporter = AssetImporter.GetAtPath(fbxPath) as ModelImporter;
-        if (modelImporter != null && modelImporter.animationType == ModelImporterAnimationType.Legacy)
+        if (modelImporter != null && modelImporter.animationType != ModelImporterAnimationType.Legacy)
         {
-            modelImporter.animationType = ModelImporterAnimationType.Generic;
+            modelImporter.animationType = ModelImporterAnimationType.Legacy;
             modelImporter.SaveAndReimport();
         }
 
-        // ── AnimationClip aus FBX holen ────────────────────────────────────────
+        // ── Clip aus FBX holen ─────────────────────────────────────────────────
         AnimationClip src = null;
         foreach (var a in AssetDatabase.LoadAllAssetsAtPath(fbxPath))
             if (a is AnimationClip c && !c.name.StartsWith("__preview__")) { src = c; break; }
@@ -924,12 +929,13 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
             return;
         }
 
-        // ── Loop-Clip erstellen ────────────────────────────────────────────────
+        // ── Loop-Clip auf Disk speichern ───────────────────────────────────────
         if (AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath) != null)
             AssetDatabase.DeleteAsset(clipPath);
 
         var loop = Object.Instantiate(src);
         loop.name = "Joshi_Sitting_Loop";
+        loop.legacy = true;
         var cfg = AnimationUtility.GetAnimationClipSettings(loop);
         cfg.loopTime  = true;
         cfg.loopBlend = true;
@@ -938,32 +944,25 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         AssetDatabase.SaveAssets();
         loop = AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath);
 
-        // ── AnimatorController erstellen ───────────────────────────────────────
+        // ── Animation-Komponente (Legacy) zuweisen ─────────────────────────────
+        // Legacy Animation braucht keinen Avatar und läuft garantiert auf jedem Rig
+        var legacyAnim = joshi.GetComponent<Animation>() ?? joshi.AddComponent<Animation>();
+        legacyAnim.AddClip(loop, "Sitting");
+        legacyAnim.clip = loop;
+        legacyAnim.playAutomatically = true;
+        legacyAnim.wrapMode = WrapMode.Loop;
+        legacyAnim.Play("Sitting");
+
+        // Vorhandenen Animator-Controller entfernen um Konflikte zu vermeiden
+        var existingAnimator = joshi.GetComponentInChildren<Animator>(true);
+        if (existingAnimator != null)
+            existingAnimator.runtimeAnimatorController = null;
+
+        // Controller-Asset aufräumen falls vorhanden
         if (AssetDatabase.LoadAssetAtPath<AnimatorController>(ctrlPath) != null)
             AssetDatabase.DeleteAsset(ctrlPath);
 
-        var ctrl = AnimatorController.CreateAnimatorControllerAtPath(ctrlPath);
-        var sm   = ctrl.layers[0].stateMachine;
-        var sit  = sm.AddState("Sitting");
-        sit.motion = loop;
-        sm.defaultState = sit;
-        AssetDatabase.SaveAssets();
-        ctrl = AssetDatabase.LoadAssetAtPath<AnimatorController>(ctrlPath);
-
-        // ── Animator auf dem Root oder erstem Child zuweisen ───────────────────
-        // GetComponentInChildren findet auch Animator-Komponenten die in der FBX-Hierarchie sitzen
-        var anim = joshi.GetComponentInChildren<Animator>(true);
-        if (anim == null) anim = joshi.AddComponent<Animator>();
-
-        anim.runtimeAnimatorController = ctrl;
-        anim.applyRootMotion = false;
-        anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-
-        // Avatar zuweisen wenn vorhanden
-        foreach (var a in AssetDatabase.LoadAllAssetsAtPath(fbxPath))
-            if (a is Avatar av) { anim.avatar = av; break; }
-
-        Debug.Log($"[Level2] Joshi-Animation gesetzt: {src.name} → loop auf {anim.gameObject.name}");
+        Debug.Log($"[Level2] Joshi Legacy-Animation: '{loop.name}' → Loop auf {joshi.name}");
     }
 
     // ═══════════════════════════════════════════════════════════════════════
