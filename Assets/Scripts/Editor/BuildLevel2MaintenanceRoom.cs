@@ -66,6 +66,8 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         RenderSettings.ambientMode  = UnityEngine.Rendering.AmbientMode.Flat;
         RenderSettings.ambientLight = new Color(0.18f, 0.15f, 0.10f);
 
+        AddBackgroundMusic(scene);
+
         EditorSceneManager.SaveScene(scene);
         Debug.Log("[Level2] Wartungsraum fertig.");
     }
@@ -1024,4 +1026,19 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         Debug.Log($"[Level2] Joshi Legacy-Animation: '{loop.name}' → Loop auf {joshi.name}");
     }
 
+    private void AddBackgroundMusic(Scene scene)
+    {
+        var clip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Big Yahu/Untitled.mp3");
+        if (clip == null) { Debug.LogWarning("[Music] Untitled.mp3 nicht gefunden."); return; }
+
+        var go = new GameObject("BackgroundMusic");
+        var src = go.AddComponent<AudioSource>();
+        src.clip         = clip;
+        src.loop         = true;
+        src.playOnAwake  = true;
+        src.volume       = 0.6f;
+        src.spatialBlend = 0f;
+        go.AddComponent<BackgroundMusic>();
+        SceneManager.MoveGameObjectToScene(go, scene);
+    }
 }

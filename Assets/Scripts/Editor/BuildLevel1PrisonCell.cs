@@ -73,6 +73,8 @@ public class BuildLevel1PrisonCell : EditorWindow
         RenderSettings.ambientMode  = UnityEngine.Rendering.AmbientMode.Flat;
         RenderSettings.ambientLight = new Color(0.15f, 0.15f, 0.20f);
 
+        AddBackgroundMusic(scene);
+
         EditorSceneManager.SaveScene(scene);
         Debug.Log("Level 1 fertig gebaut.");
     }
@@ -1282,4 +1284,19 @@ public class BuildLevel1PrisonCell : EditorWindow
         tr.sizeDelta = Vector2.zero;
     }
 
+    private void AddBackgroundMusic(Scene scene)
+    {
+        var clip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Big Yahu/Untitled.mp3");
+        if (clip == null) { Debug.LogWarning("[Music] Untitled.mp3 nicht gefunden."); return; }
+
+        var go = new GameObject("BackgroundMusic");
+        var src = go.AddComponent<AudioSource>();
+        src.clip        = clip;
+        src.loop        = true;
+        src.playOnAwake = true;
+        src.volume      = 0.6f;
+        src.spatialBlend = 0f; // 2D
+        go.AddComponent<BackgroundMusic>();
+        SceneManager.MoveGameObjectToScene(go, scene);
+    }
 }
