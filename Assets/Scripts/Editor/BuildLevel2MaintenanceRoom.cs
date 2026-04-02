@@ -46,7 +46,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         camGO.transform.rotation = Quaternion.Euler(60f, 0f, 0f);
         TopDownCameraFollow follow = camGO.AddComponent<TopDownCameraFollow>();
         // Feste Kamera am Eingang – schaut in den Raum, folgt nicht dem Spieler
-        follow.fixedWorldPosition = new Vector3(0f, 1.8f, -3.8f);
+        follow.fixedWorldPosition = new Vector3(0f, 1.8f, -4.4f);
         SceneManager.MoveGameObjectToScene(camGO, scene);
 
         // ── Umgebung ──────────────────────────────────────────────────────────
@@ -871,8 +871,8 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
 
         joshi.transform.localScale = Vector3.one * scale;
         // Zentral auf dem Thron, schaut direkt zur Kamera (-Z)
-        joshi.transform.position = new Vector3(0f, 0.50f, -0.5f);
-        joshi.transform.rotation = Quaternion.Euler(-10f, 0f, 0f);
+        joshi.transform.position = new Vector3(0f, 0.20f, -0.5f);
+        joshi.transform.rotation = Quaternion.Euler(-10f, 180f, 0f);
 
         // PBR-Material zuweisen
         var mat = CreateJoshiMaterial();
