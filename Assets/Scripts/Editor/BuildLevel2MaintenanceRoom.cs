@@ -901,9 +901,21 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
 
     private void SetupSittingAnimation(GameObject joshi)
     {
-        var assets = AssetDatabase.LoadAllAssetsAtPath("Assets/Big Yahu/Sitting Talking(1).fbx");
+        const string fbxPath  = "Assets/Big Yahu/Sitting Talking(1).fbx";
+        const string clipPath = "Assets/Big Yahu/Joshi_Sitting_Loop.anim";
+        const string ctrlPath = "Assets/Big Yahu/Joshi_Sitting.controller";
+
+        // ── Sicherstellen dass das FBX als Generic importiert ist (kein Legacy) ──
+        var modelImporter = AssetImporter.GetAtPath(fbxPath) as ModelImporter;
+        if (modelImporter != null && modelImporter.animationType == ModelImporterAnimationType.Legacy)
+        {
+            modelImporter.animationType = ModelImporterAnimationType.Generic;
+            modelImporter.SaveAndReimport();
+        }
+
+        // ── AnimationClip aus FBX holen ────────────────────────────────────────
         AnimationClip src = null;
-        foreach (var a in assets)
+        foreach (var a in AssetDatabase.LoadAllAssetsAtPath(fbxPath))
             if (a is AnimationClip c && !c.name.StartsWith("__preview__")) { src = c; break; }
 
         if (src == null)
@@ -912,9 +924,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
             return;
         }
 
-        const string clipPath = "Assets/Big Yahu/Joshi_Sitting_Loop.anim";
-        const string ctrlPath = "Assets/Big Yahu/Joshi_Sitting.controller";
-
+        // ── Loop-Clip erstellen ────────────────────────────────────────────────
         if (AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath) != null)
             AssetDatabase.DeleteAsset(clipPath);
 
@@ -926,28 +936,34 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         AnimationUtility.SetAnimationClipSettings(loop, cfg);
         AssetDatabase.CreateAsset(loop, clipPath);
         AssetDatabase.SaveAssets();
-        // Neu von Disk laden damit loopTime-Flag wirklich persistiert ist
         loop = AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath);
 
+        // ── AnimatorController erstellen ───────────────────────────────────────
         if (AssetDatabase.LoadAssetAtPath<AnimatorController>(ctrlPath) != null)
             AssetDatabase.DeleteAsset(ctrlPath);
 
         var ctrl = AnimatorController.CreateAnimatorControllerAtPath(ctrlPath);
         var sm   = ctrl.layers[0].stateMachine;
         var sit  = sm.AddState("Sitting");
-        sit.motion = loop; sm.defaultState = sit;
+        sit.motion = loop;
+        sm.defaultState = sit;
         AssetDatabase.SaveAssets();
+        ctrl = AssetDatabase.LoadAssetAtPath<AnimatorController>(ctrlPath);
 
-        // Animator setzen NACH SaveAssets damit der Controller auf Disk existiert
-        var anim = joshi.GetComponent<Animator>() ?? joshi.AddComponent<Animator>();
-        anim.runtimeAnimatorController = AssetDatabase.LoadAssetAtPath<AnimatorController>(ctrlPath);
+        // ── Animator auf dem Root oder erstem Child zuweisen ───────────────────
+        // GetComponentInChildren findet auch Animator-Komponenten die in der FBX-Hierarchie sitzen
+        var anim = joshi.GetComponentInChildren<Animator>(true);
+        if (anim == null) anim = joshi.AddComponent<Animator>();
+
+        anim.runtimeAnimatorController = ctrl;
         anim.applyRootMotion = false;
+        anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
-        // Avatar aus FBX laden (nötig für Humanoid-Rigs)
-        foreach (var a in AssetDatabase.LoadAllAssetsAtPath("Assets/Big Yahu/Sitting Talking(1).fbx"))
+        // Avatar zuweisen wenn vorhanden
+        foreach (var a in AssetDatabase.LoadAllAssetsAtPath(fbxPath))
             if (a is Avatar av) { anim.avatar = av; break; }
 
-        Debug.Log("[Level2] Joshi-Animation: " + src.name + " → loopend.");
+        Debug.Log($"[Level2] Joshi-Animation gesetzt: {src.name} → loop auf {anim.gameObject.name}");
     }
 
     // ═══════════════════════════════════════════════════════════════════════
