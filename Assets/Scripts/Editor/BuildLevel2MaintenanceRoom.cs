@@ -268,11 +268,15 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         var benchBC = benchG.AddComponent<BoxCollider>();
         benchBC.center = new Vector3(0, 0.42f, 0); benchBC.size = new Vector3(0.60f, 0.84f, 0.85f);
 
-        // ── Joshis alter Stuhl (vorne links) ──────────────────────────────────
-        BuildErgonomicChair(new Vector3(-0.6f, 0f, 0.1f), root, oldMetal, rubberMat, brightMetal);
+        // ── Joshis Thron (zentral, dramatisch beleuchtet) ─────────────────────
+        BuildThrone(new Vector3(0f, 0f, 1.4f), root, oldMetal, rustMetal, brightMetal);
 
         // ── Kleiner Tisch neben Joshi ──────────────────────────────────────────
-        BuildSideTable(new Vector3(0.55f, 0f, 0.1f), root, dirtyWood, dirtyWhite, ledAmber, ledAmber);
+        BuildSideTable(new Vector3(1.0f, 0f, 1.4f), root, dirtyWood, dirtyWhite, ledAmber, ledAmber);
+
+        // Spot-Licht auf den Thron
+        AddLight("ThroneSpot", root, new Vector3(0f, 3.8f, 0.8f), LightType.Spot,
+            new Color(1.0f, 0.88f, 0.60f), 3.5f, 6f, 38f, LightShadows.Soft);
 
         // ── Sicherungskasten (rostig, linke Wand) ─────────────────────────────
         BuildDistributionBox(new Vector3(-2.88f, 1.85f, -1.6f), root, oldMetal, ledGreen, ledAmber);
@@ -502,6 +506,65 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         }
         var bc = g.AddComponent<BoxCollider>();
         bc.center = new Vector3(0, 1.0f, 0.55f); bc.size = new Vector3(0.12f, 2.02f, 1.72f);
+    }
+
+    // ─── Thron ───────────────────────────────────────────────────────────────
+
+    private void BuildThrone(Vector3 pos, Transform root, Material metal, Material rust, Material bright)
+    {
+        var g = new GameObject("Throne"); g.transform.position = pos; g.transform.SetParent(root);
+
+        var glow   = Emit(new Color(0.28f,0.08f,0.02f), new Color(1.0f,0.28f,0.04f), 2.2f);
+        var dark   = M(new Color(0.08f,0.06f,0.05f), 0.05f, 0.05f);
+
+        // Sitzfläche
+        Box("Seat",     new Vector3(0, 0.46f, 0),     new Vector3(0.70f, 0.08f, 0.65f), metal, g.transform);
+        Box("SeatPad",  new Vector3(0, 0.505f,0),     new Vector3(0.62f, 0.040f, 0.58f), dark,  g.transform, col: false);
+
+        // Breite massive Rückenlehne
+        Box("Back",     new Vector3(0, 1.10f, 0.30f), new Vector3(0.72f, 1.30f, 0.10f), metal, g.transform);
+        Box("BackPad",  new Vector3(0, 1.00f, 0.24f), new Vector3(0.60f, 1.00f, 0.04f), dark,  g.transform, col: false);
+
+        // Krone oben (3 Zacken)
+        foreach (float sx in new[]{-0.24f, 0f, 0.24f})
+            Box($"Spike_{sx}", new Vector3(sx, 1.92f, 0.30f), new Vector3(0.10f, 0.40f, 0.09f), rust, g.transform, col: false);
+        // Quer-Verbindung zwischen Zacken
+        Box("CrownBar", new Vector3(0, 1.75f, 0.30f), new Vector3(0.68f, 0.07f, 0.09f), bright, g.transform, col: false);
+
+        // Glühende Rune-Streifen (orange)
+        Box("Glow_L", new Vector3(-0.34f, 1.10f, 0.245f), new Vector3(0.018f, 1.20f, 0.018f), glow, g.transform, col: false);
+        Box("Glow_R", new Vector3( 0.34f, 1.10f, 0.245f), new Vector3(0.018f, 1.20f, 0.018f), glow, g.transform, col: false);
+        Box("Glow_T", new Vector3(0, 1.75f, 0.245f),      new Vector3(0.68f, 0.018f, 0.018f), glow, g.transform, col: false);
+
+        // Massive Armstützen
+        foreach (float sx in new[]{-0.38f, 0.38f})
+        {
+            Box($"Arm_{sx}",  new Vector3(sx, 0.66f, 0.06f), new Vector3(0.10f, 0.06f, 0.55f), metal, g.transform);
+            Box($"ArmF_{sx}", new Vector3(sx, 0.52f, -0.24f),new Vector3(0.10f, 0.30f, 0.09f), metal, g.transform);
+        }
+
+        // Beine (4 massive Blöcke)
+        foreach (var (bx,bz) in new[]{(-0.28f,-0.28f),(0.28f,-0.28f),(-0.28f,0.28f),(0.28f,0.28f)})
+            Box("Leg", new Vector3(bx, 0.22f, bz), new Vector3(0.12f, 0.44f, 0.12f), rust, g.transform);
+
+        // Ketten-Optik (flache Boxen diagonal)
+        for (int i = 0; i < 5; i++)
+        {
+            float t = i / 4f;
+            Box($"ChainL_{i}", new Vector3(-0.36f + t*0.06f, 0.46f - t*0.10f, -0.15f - t*0.12f),
+                new Vector3(0.022f, 0.022f, 0.10f), bright, g.transform,
+                Quaternion.Euler(30f * t, 0f, 15f), false);
+            Box($"ChainR_{i}", new Vector3( 0.36f - t*0.06f, 0.46f - t*0.10f, -0.15f - t*0.12f),
+                new Vector3(0.022f, 0.022f, 0.10f), bright, g.transform,
+                Quaternion.Euler(30f * t, 0f, -15f), false);
+        }
+
+        // Sockel-Plattform
+        Box("Base",  new Vector3(0, 0.04f, 0.05f), new Vector3(0.90f, 0.08f, 0.85f), rust,  g.transform);
+        Box("BaseT", new Vector3(0, 0.085f,0.05f), new Vector3(0.86f, 0.008f,0.82f), bright,g.transform, col: false);
+
+        var bc = g.AddComponent<BoxCollider>();
+        bc.center = new Vector3(0, 0.75f, 0.12f); bc.size = new Vector3(0.80f, 1.50f, 0.80f);
     }
 
     // ─── Sessel ───────────────────────────────────────────────────────────────
@@ -805,11 +868,9 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         float scale = (h > 10f) ? 0.01f : (h < 0.3f) ? (1.15f / Mathf.Max(h, 0.01f)) : 1f;
 
         joshi.transform.localScale = Vector3.one * scale;
-        // Auf dem Sessel platzieren – Sessel-Sitz ist bei Y=0.50
-        joshi.transform.position = new Vector3(-0.6f, 0.50f, 0.1f);
-        // Schaut Richtung Workstation / leicht zur Mitte
-        // Zur Kamera (schräg oben, -Z) ausrichten, leicht nach hinten geneigt damit Gesicht sichtbar
-        joshi.transform.rotation = Quaternion.Euler(-15f, 180f, 0f);
+        // Zentral auf dem Thron, schaut direkt zur Kamera (-Z)
+        joshi.transform.position = new Vector3(0f, 0.50f, 1.4f);
+        joshi.transform.rotation = Quaternion.Euler(-10f, 0f, 0f);
 
         // PBR-Material zuweisen
         var mat = CreateJoshiMaterial();
