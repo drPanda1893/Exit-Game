@@ -654,7 +654,7 @@ public class BuildLevel3Library : EditorWindow
         var playerMat    = AssetDatabase.LoadAssetAtPath<Material>("Assets/Big Yahu/Big Yahu material.mat");
 
         var character = new GameObject("BigYahu") { tag = "Player" };
-        character.transform.position = new Vector3(0f, 0f, -4.5f);
+        character.transform.position = new Vector3(0f, 0f, -4.8f);
 
         if (idleModel != null && runningModel != null)
         {
@@ -769,9 +769,9 @@ public class BuildLevel3Library : EditorWindow
         float scale = (h > 0.1f) ? (1.7f / h) : 1f;
         helios.transform.localScale = Vector3.one * scale;
 
-        // Vor dem großen Rückwandregal, schaut zum Eingang
-        helios.transform.position = new Vector3(0f, 0f, 4.8f);
-        helios.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+        // Direkt vor dem Spieler-Spawn, vor dem Wandregal
+        helios.transform.position = new Vector3(0f, 0f, -3.0f);
+        helios.transform.rotation = Quaternion.Euler(0f, 0f, 0f); // schaut zur Kamera/Eingang
 
         // Material zuweisen
         var heliosMat = CreateHeliosMaterial();
@@ -783,7 +783,7 @@ public class BuildLevel3Library : EditorWindow
 
         // Spot auf Helios
         var spotGO = new GameObject("HeliosSpot");
-        spotGO.transform.position = new Vector3(0f, 4.5f, 4.5f);
+        spotGO.transform.position = new Vector3(0f, 4.5f, -3.0f);
         var spot = spotGO.AddComponent<Light>();
         spot.type      = LightType.Spot;
         spot.color     = new Color(0.95f, 0.88f, 0.65f);
@@ -813,10 +813,10 @@ public class BuildLevel3Library : EditorWindow
 
         // ── HeliosInteraction Trigger ─────────────────────────────────────────
         var interGO = new GameObject("HeliosInteraction");
-        interGO.transform.position = new Vector3(0f, 1.0f, 3.8f);
+        interGO.transform.position = new Vector3(0f, 1.0f, -3.8f);
         var interCol = interGO.AddComponent<BoxCollider>();
         interCol.isTrigger = true;
-        interCol.size = new Vector3(3.5f, 2.2f, 2.5f);
+        interCol.size = new Vector3(2.5f, 2.2f, 2.0f);
         var interaction = interGO.AddComponent<HeliosInteraction>();
         interaction.bookUI        = bookUI;
         interaction.exitTriggerGO = exitGO;
