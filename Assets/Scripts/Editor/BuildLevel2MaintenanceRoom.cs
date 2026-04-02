@@ -46,7 +46,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         camGO.transform.rotation = Quaternion.Euler(60f, 0f, 0f);
         TopDownCameraFollow follow = camGO.AddComponent<TopDownCameraFollow>();
         // Feste Kamera am Eingang – schaut in den Raum, folgt nicht dem Spieler
-        follow.fixedWorldPosition = new Vector3(0f, 2.2f, -4.8f);
+        follow.fixedWorldPosition = new Vector3(0f, 1.8f, -3.8f);
         SceneManager.MoveGameObjectToScene(camGO, scene);
 
         // ── Umgebung ──────────────────────────────────────────────────────────
@@ -271,13 +271,13 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         benchBC.center = new Vector3(0, 0.42f, 0); benchBC.size = new Vector3(0.60f, 0.84f, 0.85f);
 
         // ── Joshis Thron (zentral, dramatisch beleuchtet) ─────────────────────
-        BuildThrone(new Vector3(0f, 0f, 1.4f), root, oldMetal, rustMetal, brightMetal);
+        BuildThrone(new Vector3(0f, 0f, -0.5f), root, oldMetal, rustMetal, brightMetal);
 
         // ── Kleiner Tisch neben Joshi ──────────────────────────────────────────
-        BuildSideTable(new Vector3(1.0f, 0f, 1.4f), root, dirtyWood, dirtyWhite, ledAmber, ledAmber);
+        BuildSideTable(new Vector3(1.0f, 0f, -0.5f), root, dirtyWood, dirtyWhite, ledAmber, ledAmber);
 
         // Spot-Licht auf den Thron
-        AddLight("ThroneSpot", root, new Vector3(0f, 3.8f, 0.8f), LightType.Spot,
+        AddLight("ThroneSpot", root, new Vector3(0f, 3.8f, -0.5f), LightType.Spot,
             new Color(1.0f, 0.88f, 0.60f), 3.5f, 6f, 38f, LightShadows.Soft);
 
         // ── Sicherungskasten (rostig, linke Wand) ─────────────────────────────
@@ -871,7 +871,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
 
         joshi.transform.localScale = Vector3.one * scale;
         // Zentral auf dem Thron, schaut direkt zur Kamera (-Z)
-        joshi.transform.position = new Vector3(0f, 0.50f, 1.4f);
+        joshi.transform.position = new Vector3(0f, 0.50f, -0.5f);
         joshi.transform.rotation = Quaternion.Euler(-10f, 0f, 0f);
 
         // PBR-Material zuweisen
