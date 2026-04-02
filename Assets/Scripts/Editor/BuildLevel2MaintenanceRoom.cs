@@ -811,7 +811,8 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         // Auf dem Sessel platzieren – Sessel-Sitz ist bei Y=0.50
         joshi.transform.position = new Vector3(-0.6f, 0.50f, 0.1f);
         // Schaut Richtung Workstation / leicht zur Mitte
-        joshi.transform.rotation = Quaternion.Euler(0f, 215f, 0f);
+        // Zur Kamera (schräg oben, -Z) ausrichten, leicht nach hinten geneigt damit Gesicht sichtbar
+        joshi.transform.rotation = Quaternion.Euler(-15f, 180f, 0f);
 
         // PBR-Material zuweisen
         var mat = CreateJoshiMaterial();
