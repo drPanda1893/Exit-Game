@@ -2,7 +2,7 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// Trägt Level1 und Level2 automatisch in die Build Settings ein.
+/// Trägt Level1, Level2 und Level3 automatisch in die Build Settings ein.
 /// Läuft einmalig wenn Unity das Projekt öffnet (InitializeOnLoad).
 /// Kann auch manuell über Tools → Setup Build Scenes ausgeführt werden.
 /// </summary>
@@ -20,7 +20,8 @@ public static class SetupBuildScenes
     {
         string[] required = {
             "Assets/Scenes/Level1.unity",
-            "Assets/Scenes/Level2.unity"
+            "Assets/Scenes/Level2.unity",
+            "Assets/Scenes/Level3.unity"
         };
 
         var existing = new System.Collections.Generic.List<EditorBuildSettingsScene>(
