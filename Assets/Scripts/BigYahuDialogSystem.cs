@@ -65,6 +65,24 @@ public class BigYahuDialogSystem : MonoBehaviour
     public void ShowDialog(string line, Action onComplete = null, AudioClip clip = null)
         => ShowDialog(new[] { line }, onComplete, clip != null ? new[] { clip } : null);
 
+    /// <summary>
+    /// Setzt den aktuellen Sprecher (Name + Portrait).
+    /// Für NPCs wie Helios, Joshi etc.
+    /// Bleibt aktiv bis ResetSpeaker() oder erneuter SetSpeaker()-Aufruf.
+    /// </summary>
+    public void SetSpeaker(string name, Sprite portrait = null)
+    {
+        if (speakerLabel) speakerLabel.text = name;
+        if (portraitImage && portrait) portraitImage.sprite = portrait;
+    }
+
+    /// <summary>Setzt Sprecher zurück auf Big Yahu (Default).</summary>
+    public void ResetSpeaker()
+    {
+        if (speakerLabel) speakerLabel.text = "Big Yahu";
+        if (portraitImage && bigYahuPortrait) portraitImage.sprite = bigYahuPortrait;
+    }
+
     void ShowNext()
     {
         if (queue.Count == 0) { Close(); return; }
