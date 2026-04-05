@@ -1117,39 +1117,65 @@ public class BuildLevel3Library : EditorWindow
         // ── Helios instanziieren ──────────────────────────────────────────────
         const string fbxPath = "Assets/Big Yahu/Helios plotting.fbx";
 
-        // Animation-Setup ZUERST (ruft SaveAndReimport auf) damit die Instanz danach sauber ist
-        SetupHeliosAnimation(null, fbxPath);
+        // FBX auf Generic zurücksetzen – Legacy blockiert Skinned Mesh Renderer im Editor
+        var modelImp = AssetImporter.GetAtPath(fbxPath) as ModelImporter;
+        if (modelImp != null && modelImp.animationType != ModelImporterAnimationType.Generic)
+        {
+            modelImp.animationType = ModelImporterAnimationType.Generic;
+            modelImp.SaveAndReimport();
+            Debug.Log("[Level3] Helios FBX auf Generic umgestellt.");
+        }
 
         var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
         GameObject helios;
         if (prefab != null)
         {
-            helios = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-            PrefabUtility.UnpackPrefabInstance(helios, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
-            Debug.Log("[Level3] Helios plotting.fbx erfolgreich geladen.");
+            // Object.Instantiate statt PrefabUtility → sauberere Instanz ohne Prefab-Abhängigkeit
+            helios = Object.Instantiate(prefab);
+            helios.name = "Helios";
+            Debug.Log("[Level3] Helios plotting.fbx geladen.");
         }
         else
         {
             helios = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            helios.name = "Helios";
             Debug.LogWarning("[Level3] 'Helios plotting.fbx' nicht gefunden – Capsule als Platzhalter.");
         }
-        helios.name = "Helios";
 
-        // Skalierung: Zielgröße ~1.7m
-        var bounds = GetBounds(helios);
-        float h     = bounds.size.y;
-        float scale = (h > 0.1f) ? (1.7f / h) : 1f;
+        // Alle Children und Renderer explizit aktivieren (FBX kann inaktive Nodes haben)
+        foreach (Transform t in helios.GetComponentsInChildren<Transform>(true))
+            t.gameObject.SetActive(true);
+        foreach (var r in helios.GetComponentsInChildren<Renderer>(true))
+            r.enabled = true;
+
+        // Skalierung: Bounds nach Aktivierung messen
+        var allRens = helios.GetComponentsInChildren<Renderer>(true);
+        float modelH = 1.7f;
+        if (allRens.Length > 0)
+        {
+            var b = allRens[0].bounds;
+            foreach (var r in allRens) b.Encapsulate(r.bounds);
+            if (b.size.y > 0.01f) modelH = b.size.y;
+        }
+        float scale = 1.7f / modelH;
         helios.transform.localScale = Vector3.one * scale;
+        Debug.Log($"[Level3] Helios Bounds.Y={modelH:F3}  Scale={scale:F4}");
 
-        // Y-Offset: Füße exakt auf den Boden setzen
-        var scaledBounds = GetBounds(helios);
-        float groundY = scaledBounds.min.y < 0f ? -scaledBounds.min.y : 0f;
+        // Y-Offset: Füße auf den Boden
+        allRens = helios.GetComponentsInChildren<Renderer>(true);
+        float groundY = 0f;
+        if (allRens.Length > 0)
+        {
+            var b2 = allRens[0].bounds;
+            foreach (var r in allRens) b2.Encapsulate(r.bounds);
+            if (b2.min.y < 0f) groundY = -b2.min.y;
+        }
 
         // Hinter dem Thresen, schaut zur Eingangstür
         helios.transform.position = new Vector3(0f, groundY, 3.5f);
         helios.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
 
-        // Material zuweisen – gespeichertes Asset damit es die Szene überlebt
+        // Material aus gespeichertem Asset zuweisen
         var heliosMat = CreateHeliosMaterial();
         const string matSavePath = "Assets/Big Yahu/Material Helios/Helios_Runtime.mat";
         if (AssetDatabase.LoadAssetAtPath<Material>(matSavePath) != null)
@@ -1160,7 +1186,7 @@ public class BuildLevel3Library : EditorWindow
         foreach (var r in helios.GetComponentsInChildren<Renderer>(true))
             r.sharedMaterial = heliosMat;
 
-        // Animation auf Loop an der frischen Instanz einrichten
+        // Animation: Loop-Clip über Animator (Generic-Modus)
         SetupHeliosAnimationOnInstance(helios, fbxPath);
 
         // Spot auf Helios
@@ -1208,64 +1234,48 @@ public class BuildLevel3Library : EditorWindow
     }
 
     /// <summary>
-    /// Phase 1: FBX auf Legacy-Animation umstellen und Loop-Clip im Asset speichern.
-    /// Muss VOR dem Instantiieren aufgerufen werden (SaveAndReimport invalidiert offene Instanzen).
-    /// Wenn helios == null wird nur der Asset-Teil erledigt.
+    /// Richtet den Helios-Animations-Loop über einen AnimatorController ein (Generic-Modus).
+    /// Kein Legacy, kein SaveAndReimport nach der Instantiierung.
     /// </summary>
-    private void SetupHeliosAnimation(GameObject helios, string fbxPath)
+    private void SetupHeliosAnimationOnInstance(GameObject helios, string fbxPath)
     {
-        // ── Asset-Teil: Importer auf Legacy + Clip erzeugen ──────────────────
-        var modelImporter = AssetImporter.GetAtPath(fbxPath) as ModelImporter;
-        if (modelImporter != null && modelImporter.animationType != ModelImporterAnimationType.Legacy)
-        {
-            modelImporter.animationType = ModelImporterAnimationType.Legacy;
-            modelImporter.SaveAndReimport();          // ← daher VOR Instantiierung
-        }
-
+        // Clip aus dem FBX laden
         AnimationClip src = null;
         foreach (var a in AssetDatabase.LoadAllAssetsAtPath(fbxPath))
             if (a is AnimationClip c && !c.name.StartsWith("__preview__")) { src = c; break; }
 
         if (src == null) { Debug.LogWarning("[Level3] Kein AnimationClip in Helios-FBX."); return; }
 
+        // Loop-Clip als Asset speichern
         const string clipPath = "Assets/Big Yahu/Helios_Plot_Loop.anim";
         if (AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath) != null)
             AssetDatabase.DeleteAsset(clipPath);
-
-        var loop    = Object.Instantiate(src);
-        loop.name   = "Helios_Plot_Loop";
-        loop.legacy = true;
+        var loop = Object.Instantiate(src);
+        loop.name = "Helios_Plot_Loop";
         var cfg = AnimationUtility.GetAnimationClipSettings(loop);
         cfg.loopTime = cfg.loopBlend = true;
         AnimationUtility.SetAnimationClipSettings(loop, cfg);
         AssetDatabase.CreateAsset(loop, clipPath);
         AssetDatabase.SaveAssets();
+        loop = AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath);
 
-        // ── Instanz-Teil: nur wenn eine Instanz mitgegeben wird ──────────────
-        if (helios != null)
-            SetupHeliosAnimationOnInstance(helios, fbxPath);
-    }
+        // AnimatorController mit einem Loop-State erstellen
+        const string ctrlPath = "Assets/Big Yahu/Helios_Plot.controller";
+        if (AssetDatabase.LoadAssetAtPath<AnimatorController>(ctrlPath) != null)
+            AssetDatabase.DeleteAsset(ctrlPath);
+        var ctrl = AnimatorController.CreateAnimatorControllerAtPath(ctrlPath);
+        var sm   = ctrl.layers[0].stateMachine;
+        var st   = sm.AddState("Plot"); st.motion = loop; sm.defaultState = st;
+        AssetDatabase.SaveAssets();
 
-    /// <summary>
-    /// Phase 2: Clip auf die bereits existierende, ungeprefabte Instanz anwenden.
-    /// </summary>
-    private void SetupHeliosAnimationOnInstance(GameObject helios, string fbxPath)
-    {
-        const string clipPath = "Assets/Big Yahu/Helios_Plot_Loop.anim";
-        var loop = AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath);
-        if (loop == null) { Debug.LogWarning("[Level3] Helios_Plot_Loop.anim nicht gefunden."); return; }
+        // Animator auf der Instanz zuweisen
+        var animator = helios.GetComponentInChildren<Animator>(true) ?? helios.AddComponent<Animator>();
+        animator.runtimeAnimatorController = ctrl;
+        animator.enabled = true;
 
-        // Vorhandenen Animator deaktivieren (Legacy Animation braucht keinen)
-        var existingAnimator = helios.GetComponentInChildren<Animator>(true);
-        if (existingAnimator != null)
-            existingAnimator.runtimeAnimatorController = null;
-
-        var anim = helios.GetComponentInChildren<Animation>(true) ?? helios.AddComponent<Animation>();
-        anim.AddClip(loop, "Plot");
-        anim.clip              = loop;
-        anim.playAutomatically = true;
-        anim.wrapMode          = WrapMode.Loop;
-        anim.Play("Plot");
+        // Legacy Animation-Komponenten entfernen falls vorhanden (würden konkurrieren)
+        foreach (var anim in helios.GetComponentsInChildren<Animation>(true))
+            Object.DestroyImmediate(anim);
     }
 
     // ── E-Taste Hinweis ──────────────────────────────────────────────────────
