@@ -39,32 +39,32 @@ public class BuildLevel4Computer : EditorWindow
 
         // Kamera
         var camGO = new GameObject("Main Camera");
-        var cam   = camGO.AddComponent<Camera>();
+        var cam   = camGO.gameObject.AddComponent<Camera>();
         cam.clearFlags      = CameraClearFlags.SolidColor;
         cam.backgroundColor = new Color(0.04f, 0.05f, 0.09f);
         cam.tag             = "MainCamera";
-        camGO.AddComponent<AudioListener>();
+        camGO.gameObject.AddComponent<AudioListener>();
         SceneManager.MoveGameObjectToScene(camGO, scene);
 
         // Singletons
         var gmGO = new GameObject("GameManager");
-        gmGO.AddComponent<GameManager>();
+        gmGO.gameObject.AddComponent<GameManager>();
         SceneManager.MoveGameObjectToScene(gmGO, scene);
 
         var dlgGO = new GameObject("BigYahuDialogSystem");
-        dlgGO.AddComponent<BigYahuDialogSystem>();
+        dlgGO.gameObject.AddComponent<BigYahuDialogSystem>();
         SceneManager.MoveGameObjectToScene(dlgGO, scene);
 
         // Canvas
         var canvasGO = new GameObject("Level4Canvas");
-        var canvas   = canvasGO.AddComponent<Canvas>();
+        var canvas   = canvasGO.gameObject.AddComponent<Canvas>();
         canvas.renderMode   = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 0;
-        var scaler = canvasGO.AddComponent<CanvasScaler>();
+        var scaler = canvasGO.gameObject.AddComponent<CanvasScaler>();
         scaler.uiScaleMode        = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920, 1080);
         scaler.matchWidthOrHeight  = 0.5f;
-        canvasGO.AddComponent<GraphicRaycaster>();
+        canvasGO.gameObject.AddComponent<GraphicRaycaster>();
         SceneManager.MoveGameObjectToScene(canvasGO, scene);
 
         // Vollbild-Hintergrund
@@ -91,11 +91,11 @@ public class BuildLevel4Computer : EditorWindow
     {
         // Vollbild-Dunkelheit
         var bg = MakePanel(parent, "Background", Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-        bg.AddComponent<Image>().color = new Color(0.04f, 0.04f, 0.08f);
+        bg.gameObject.AddComponent<Image>().color = new Color(0.04f, 0.04f, 0.08f);
 
         // Gitternetz-Effekt (Gefängnisatmosphäre)
         var grid = MakePanel(bg.transform, "Grid", Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-        var gridImg = grid.AddComponent<Image>();
+        var gridImg = grid.gameObject.AddComponent<Image>();
         gridImg.color = new Color(0.08f, 0.10f, 0.14f, 0.6f);
 
         // Horizontale Gitterlinien
@@ -103,26 +103,26 @@ public class BuildLevel4Computer : EditorWindow
         {
             float y = -540f + i * 90f;
             var line = MakeAnchored(bg.transform, $"GridH_{i}", new Vector2(0f, y), new Vector2(1920f, 1f));
-            line.AddComponent<Image>().color = new Color(0.10f, 0.14f, 0.20f, 0.3f);
+            line.gameObject.AddComponent<Image>().color = new Color(0.10f, 0.14f, 0.20f, 0.3f);
         }
         // Vertikale Gitterlinien
         for (int i = 0; i < 22; i++)
         {
             float x = -960f + i * 88f;
             var line = MakeAnchored(bg.transform, $"GridV_{i}", new Vector2(x, 0f), new Vector2(1f, 1080f));
-            line.AddComponent<Image>().color = new Color(0.10f, 0.14f, 0.20f, 0.3f);
+            line.gameObject.AddComponent<Image>().color = new Color(0.10f, 0.14f, 0.20f, 0.3f);
         }
 
         // Vignette (vier dunkle Ecken-Overlays)
         Color vigCol = new Color(0f, 0f, 0f, 0.55f);
-        MakeAnchored(bg.transform, "VigTop",    new Vector2(0, 440f),  new Vector2(1920f, 200f)).AddComponent<Image>().color = vigCol;
-        MakeAnchored(bg.transform, "VigBottom", new Vector2(0, -440f), new Vector2(1920f, 200f)).AddComponent<Image>().color = vigCol;
-        MakeAnchored(bg.transform, "VigLeft",   new Vector2(-860f, 0), new Vector2(200f, 1080f)).AddComponent<Image>().color = vigCol;
-        MakeAnchored(bg.transform, "VigRight",  new Vector2( 860f, 0), new Vector2(200f, 1080f)).AddComponent<Image>().color = vigCol;
+        MakeAnchored(bg.transform, "VigTop",    new Vector2(0, 440f),  new Vector2(1920f, 200f)).gameObject.AddComponent<Image>().color = vigCol;
+        MakeAnchored(bg.transform, "VigBottom", new Vector2(0, -440f), new Vector2(1920f, 200f)).gameObject.AddComponent<Image>().color = vigCol;
+        MakeAnchored(bg.transform, "VigLeft",   new Vector2(-860f, 0), new Vector2(200f, 1080f)).gameObject.AddComponent<Image>().color = vigCol;
+        MakeAnchored(bg.transform, "VigRight",  new Vector2( 860f, 0), new Vector2(200f, 1080f)).gameObject.AddComponent<Image>().color = vigCol;
 
         // Scanlines-Overlay
         var scan = MakePanel(bg.transform, "Scanlines", Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-        scan.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.08f);
+        scan.gameObject.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.08f);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -133,11 +133,11 @@ public class BuildLevel4Computer : EditorWindow
     {
         // Äußerer Zierrahmen (Stahl-Optik)
         var outerFrame = MakeAnchored(parent, "OuterFrame", Vector2.zero, new Vector2(962f, 722f));
-        outerFrame.AddComponent<Image>().color = new Color(0.20f, 0.22f, 0.28f);
+        outerFrame.gameObject.AddComponent<Image>().color = new Color(0.20f, 0.22f, 0.28f);
 
         // Innerer Rahmen (dunkel)
         var innerFrame = MakeAnchored(outerFrame, "InnerFrame", Vector2.zero, new Vector2(954f, 714f));
-        innerFrame.AddComponent<Image>().color = new Color(0.08f, 0.09f, 0.12f);
+        innerFrame.gameObject.AddComponent<Image>().color = new Color(0.08f, 0.09f, 0.12f);
 
         // Eckbolzen (4 Ecken)
         Color boltCol = new Color(0.35f, 0.38f, 0.45f);
@@ -146,7 +146,7 @@ public class BuildLevel4Computer : EditorWindow
 
         // Spielfeld-Boden (Beton-Optik)
         var floor = MakeAnchored(innerFrame, "Floor", Vector2.zero, new Vector2(940f, 700f));
-        floor.AddComponent<Image>().color = new Color(0.11f, 0.13f, 0.17f);
+        floor.gameObject.AddComponent<Image>().color = new Color(0.11f, 0.13f, 0.17f);
 
         // Boden-Steinfliesen-Muster
         BuildFloorTiles(floor.transform);
@@ -159,7 +159,7 @@ public class BuildLevel4Computer : EditorWindow
 
         // === Spieler ===
         var playerGO = new GameObject("Player");
-        var playerRT = playerGO.AddComponent<RectTransform>();
+        var playerRT = playerGO.gameObject.AddComponent<RectTransform>();
         playerRT.SetParent(floor.transform, false);
         playerRT.sizeDelta        = new Vector2(28f, 28f);
         playerRT.anchoredPosition = new Vector2(-330f, -250f);
@@ -177,7 +177,7 @@ public class BuildLevel4Computer : EditorWindow
         for (int i = 0; i < guardData.Length; i++)
         {
             var gGO = new GameObject($"Guard_{i}");
-            var gRT = gGO.AddComponent<RectTransform>();
+            var gRT = gGO.gameObject.AddComponent<RectTransform>();
             gRT.SetParent(floor.transform, false);
             gRT.sizeDelta        = new Vector2(32f, 32f);
             gRT.anchoredPosition = guardData[i].pos;
@@ -187,7 +187,7 @@ public class BuildLevel4Computer : EditorWindow
 
         // === Ziel (Schuppen) ===
         var goalGO = new GameObject("Goal_Schuppen");
-        var goalRT = goalGO.AddComponent<RectTransform>();
+        var goalRT = goalGO.gameObject.AddComponent<RectTransform>();
         goalRT.SetParent(floor.transform, false);
         goalRT.sizeDelta        = new Vector2(48f, 48f);
         goalRT.anchoredPosition = new Vector2(350f, 260f);
@@ -195,13 +195,13 @@ public class BuildLevel4Computer : EditorWindow
 
         // === Status-Text im Spielfeld ===
         var statusGO  = new GameObject("StatusText");
-        var statusRT  = statusGO.AddComponent<RectTransform>();
+        var statusRT  = statusGO.gameObject.AddComponent<RectTransform>();
         statusRT.SetParent(floor.transform, false);
         statusRT.anchorMin        = new Vector2(0f, 0f);
         statusRT.anchorMax        = new Vector2(1f, 0f);
         statusRT.offsetMin        = new Vector2(10f, 6f);
         statusRT.offsetMax        = new Vector2(-10f, 32f);
-        var statusTxt = statusGO.AddComponent<TextMeshProUGUI>();
+        var statusTxt = statusGO.gameObject.AddComponent<TextMeshProUGUI>();
         statusTxt.text      = string.Empty;
         statusTxt.fontSize  = 18f;
         statusTxt.alignment = TextAlignmentOptions.Center;
@@ -209,12 +209,12 @@ public class BuildLevel4Computer : EditorWindow
 
         // === Level4_StealthMinigame ===
         var scriptGO = new GameObject("StealthMinigame");
-        var scriptRT = scriptGO.AddComponent<RectTransform>();
+        var scriptRT = scriptGO.gameObject.AddComponent<RectTransform>();
         scriptRT.SetParent(floor.transform, false);
         scriptRT.anchorMin = Vector2.zero; scriptRT.anchorMax = Vector2.one;
         scriptRT.offsetMin = Vector2.zero; scriptRT.offsetMax  = Vector2.zero;
 
-        var stealth = scriptGO.AddComponent<Level4_StealthMinigame>();
+        var stealth = scriptGO.gameObject.AddComponent<Level4_StealthMinigame>();
         stealth.GetType().GetField("player",     System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(stealth, playerRT);
         stealth.GetType().GetField("goal",       System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(stealth, goalRT);
         stealth.GetType().GetField("statusText", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(stealth, statusTxt);
@@ -237,7 +237,7 @@ public class BuildLevel4Computer : EditorWindow
             float px = -470f + x * tw + tw * 0.5f;
             float py = -350f + y * th + th * 0.5f;
             var t = MakeAnchored(parent, $"Tile_{x}_{y}", new Vector2(px, py), new Vector2(tw - 1f, th - 1f));
-            t.AddComponent<Image>().color = ((x + y) % 2 == 0) ? c1 : c2;
+            t.gameObject.AddComponent<Image>().color = ((x + y) % 2 == 0) ? c1 : c2;
         }
     }
 
@@ -249,22 +249,22 @@ public class BuildLevel4Computer : EditorWindow
         float w = 940f, h = 700f;
 
         // Rahmen-Streifen
-        MakeAnchored(parent, "WallTop",    new Vector2(0,     h*0.5f-8),  new Vector2(w, 16f)).AddComponent<Image>().color = wallCol;
-        MakeAnchored(parent, "WallBottom", new Vector2(0,    -h*0.5f+8),  new Vector2(w, 16f)).AddComponent<Image>().color = wallCol;
-        MakeAnchored(parent, "WallLeft",   new Vector2(-w*0.5f+8, 0),     new Vector2(16f, h)).AddComponent<Image>().color = wallCol;
-        MakeAnchored(parent, "WallRight",  new Vector2( w*0.5f-8, 0),     new Vector2(16f, h)).AddComponent<Image>().color = wallCol;
+        MakeAnchored(parent, "WallTop",    new Vector2(0,     h*0.5f-8),  new Vector2(w, 16f)).gameObject.AddComponent<Image>().color = wallCol;
+        MakeAnchored(parent, "WallBottom", new Vector2(0,    -h*0.5f+8),  new Vector2(w, 16f)).gameObject.AddComponent<Image>().color = wallCol;
+        MakeAnchored(parent, "WallLeft",   new Vector2(-w*0.5f+8, 0),     new Vector2(16f, h)).gameObject.AddComponent<Image>().color = wallCol;
+        MakeAnchored(parent, "WallRight",  new Vector2( w*0.5f-8, 0),     new Vector2(16f, h)).gameObject.AddComponent<Image>().color = wallCol;
 
         // Zinnen oben
         for (int i = 0; i < 24; i++)
         {
             float cx = -460f + i * 40f;
-            MakeAnchored(parent, $"CrownT_{i}", new Vector2(cx, h*0.5f-4),  new Vector2(18f, 16f)).AddComponent<Image>().color = crownCol;
+            MakeAnchored(parent, $"CrownT_{i}", new Vector2(cx, h*0.5f-4),  new Vector2(18f, 16f)).gameObject.AddComponent<Image>().color = crownCol;
         }
         // Zinnen unten
         for (int i = 0; i < 24; i++)
         {
             float cx = -460f + i * 40f;
-            MakeAnchored(parent, $"CrownB_{i}", new Vector2(cx, -h*0.5f+4), new Vector2(18f, 16f)).AddComponent<Image>().color = crownCol;
+            MakeAnchored(parent, $"CrownB_{i}", new Vector2(cx, -h*0.5f+4), new Vector2(18f, 16f)).gameObject.AddComponent<Image>().color = crownCol;
         }
     }
 
@@ -295,13 +295,13 @@ public class BuildLevel4Computer : EditorWindow
         foreach (var (pos, size, name) in blocks)
         {
             var block = MakeAnchored(parent, name, pos, size);
-            block.AddComponent<Image>().color = blockColor;
+            block.gameObject.AddComponent<Image>().color = blockColor;
 
             // Highlight oben und links (3D-Effekt)
             MakeAnchored(block, "Light", new Vector2(-size.x*0.5f + 2f, size.y*0.5f - 2f),
-                new Vector2(size.x, 3f)).AddComponent<Image>().color = blockLight;
+                new Vector2(size.x, 3f)).gameObject.AddComponent<Image>().color = blockLight;
             MakeAnchored(block, "Shadow", new Vector2(size.x*0.5f - 2f, -size.y*0.5f + 2f),
-                new Vector2(3f, size.y)).AddComponent<Image>().color = blockShadow;
+                new Vector2(3f, size.y)).gameObject.AddComponent<Image>().color = blockShadow;
 
             // Fugen-Muster auf dem Block
             if (size.x > 60f)
@@ -310,7 +310,7 @@ public class BuildLevel4Computer : EditorWindow
                 {
                     float gx = -size.x*0.5f + fi * 40f;
                     MakeAnchored(block, $"Fuge_{fi}", new Vector2(gx, 0), new Vector2(1f, size.y * 0.8f))
-                        .AddComponent<Image>().color = blockShadow;
+                        .gameObject.AddComponent<Image>().color = blockShadow;
                 }
             }
         }
@@ -324,22 +324,22 @@ public class BuildLevel4Computer : EditorWindow
     {
         // Äußerer Glowing-Ring (Cyan)
         var glow = MakeAnchored(parent, "Glow", Vector2.zero, new Vector2(38f, 38f));
-        var glowImg = glow.AddComponent<Image>();
+        var glowImg = glow.gameObject.AddComponent<Image>();
         glowImg.color = new Color(0.2f, 0.9f, 0.9f, 0.25f);
 
         // Körper
         var body = MakeAnchored(parent, "Body", Vector2.zero, new Vector2(26f, 26f));
-        body.AddComponent<Image>().color = new Color(0.3f, 1.0f, 0.9f);
+        body.gameObject.AddComponent<Image>().color = new Color(0.3f, 1.0f, 0.9f);
 
         // Gefängnisstreifen (3 dunkle Horizontalstreifen)
         Color stripe = new Color(0.05f, 0.30f, 0.28f);
-        MakeAnchored(body, "S1", new Vector2(0,  6f), new Vector2(26f, 4f)).AddComponent<Image>().color = stripe;
-        MakeAnchored(body, "S2", new Vector2(0,  0f), new Vector2(26f, 4f)).AddComponent<Image>().color = stripe;
-        MakeAnchored(body, "S3", new Vector2(0, -6f), new Vector2(26f, 4f)).AddComponent<Image>().color = stripe;
+        MakeAnchored(body, "S1", new Vector2(0,  6f), new Vector2(26f, 4f)).gameObject.AddComponent<Image>().color = stripe;
+        MakeAnchored(body, "S2", new Vector2(0,  0f), new Vector2(26f, 4f)).gameObject.AddComponent<Image>().color = stripe;
+        MakeAnchored(body, "S3", new Vector2(0, -6f), new Vector2(26f, 4f)).gameObject.AddComponent<Image>().color = stripe;
 
         // Pfeil (Blickrichtung, nach oben)
         var arrow = MakeAnchored(parent, "Arrow", new Vector2(0, 18f), new Vector2(10f, 10f));
-        arrow.AddComponent<Image>().color = new Color(0.3f, 1.0f, 0.9f, 0.7f);
+        arrow.gameObject.AddComponent<Image>().color = new Color(0.3f, 1.0f, 0.9f, 0.7f);
     }
 
     void BuildGuardIcon(RectTransform parent, int index)
@@ -355,52 +355,52 @@ public class BuildLevel4Computer : EditorWindow
 
         // Gefahren-Aura
         var aura = MakeAnchored(parent, "Aura", Vector2.zero, new Vector2(52f, 52f));
-        aura.AddComponent<Image>().color = new Color(col.r, col.g, col.b, 0.15f);
+        aura.gameObject.AddComponent<Image>().color = new Color(col.r, col.g, col.b, 0.15f);
 
         // Körper
         var body = MakeAnchored(parent, "Body", Vector2.zero, new Vector2(30f, 30f));
-        body.AddComponent<Image>().color = col;
+        body.gameObject.AddComponent<Image>().color = col;
 
         // Warnsymbol (!)
         var bang = MakeAnchored(body, "Bang", new Vector2(0, 2f), new Vector2(6f, 14f));
-        bang.AddComponent<Image>().color = new Color(1f, 1f, 0.2f);
+        bang.gameObject.AddComponent<Image>().color = new Color(1f, 1f, 0.2f);
         var bangDot = MakeAnchored(body, "BangDot", new Vector2(0, -8f), new Vector2(6f, 6f));
-        bangDot.AddComponent<Image>().color = new Color(1f, 1f, 0.2f);
+        bangDot.gameObject.AddComponent<Image>().color = new Color(1f, 1f, 0.2f);
 
         // Helm-Balken oben
         var helm = MakeAnchored(parent, "Helm", new Vector2(0, 12f), new Vector2(32f, 8f));
-        helm.AddComponent<Image>().color = new Color(col.r * 0.6f, col.g * 0.6f, col.b * 0.6f);
+        helm.gameObject.AddComponent<Image>().color = new Color(col.r * 0.6f, col.g * 0.6f, col.b * 0.6f);
 
         // Sichtbereich-Indikator (kleiner Kegel-Simulator, vorwärts)
         var vision = MakeAnchored(parent, "Vision", new Vector2(0, 28f), new Vector2(20f, 24f));
-        vision.AddComponent<Image>().color = new Color(col.r, col.g, col.b, 0.20f);
+        vision.gameObject.AddComponent<Image>().color = new Color(col.r, col.g, col.b, 0.20f);
     }
 
     void BuildGoalIcon(RectTransform parent)
     {
         // Glowing-Halo
         var halo = MakeAnchored(parent, "Halo", Vector2.zero, new Vector2(68f, 68f));
-        halo.AddComponent<Image>().color = new Color(1f, 0.85f, 0.1f, 0.18f);
+        halo.gameObject.AddComponent<Image>().color = new Color(1f, 0.85f, 0.1f, 0.18f);
 
         // Schuppen-Körper
         var body = MakeAnchored(parent, "Body", new Vector2(0, -4f), new Vector2(42f, 34f));
-        body.AddComponent<Image>().color = new Color(0.65f, 0.48f, 0.12f);
+        body.gameObject.AddComponent<Image>().color = new Color(0.65f, 0.48f, 0.12f);
 
         // Dach
         var roofBase = MakeAnchored(parent, "Roof", new Vector2(0, 14f), new Vector2(48f, 14f));
-        roofBase.AddComponent<Image>().color = new Color(0.45f, 0.30f, 0.08f);
+        roofBase.gameObject.AddComponent<Image>().color = new Color(0.45f, 0.30f, 0.08f);
 
         // Tür
         var door = MakeAnchored(body, "Door", new Vector2(0, -4f), new Vector2(12f, 20f));
-        door.AddComponent<Image>().color = new Color(0.35f, 0.22f, 0.06f);
+        door.gameObject.AddComponent<Image>().color = new Color(0.35f, 0.22f, 0.06f);
 
         // Highlight
         var shine = MakeAnchored(parent, "Shine", new Vector2(-10f, 6f), new Vector2(8f, 22f));
-        shine.AddComponent<Image>().color = new Color(1f, 0.95f, 0.5f, 0.35f);
+        shine.gameObject.AddComponent<Image>().color = new Color(1f, 0.95f, 0.5f, 0.35f);
 
         // "ZIEL"-Label
         var lbl    = MakeAnchored(parent, "Label", new Vector2(0, -38f), new Vector2(70f, 18f));
-        var lblTxt = lbl.AddComponent<TextMeshProUGUI>();
+        var lblTxt = lbl.gameObject.AddComponent<TextMeshProUGUI>();
         lblTxt.text      = "ZIEL";
         lblTxt.fontSize  = 13f;
         lblTxt.alignment = TextAlignmentOptions.Center;
@@ -411,8 +411,8 @@ public class BuildLevel4Computer : EditorWindow
     void MakeBolt(Transform parent, float x, float y, Color col)
     {
         var b = MakeAnchored(parent, $"Bolt_{x}_{y}", new Vector2(x, y), new Vector2(12f, 12f));
-        b.AddComponent<Image>().color = col;
-        MakeAnchored(b, "Inner", Vector2.zero, new Vector2(6f, 6f)).AddComponent<Image>().color =
+        b.gameObject.AddComponent<Image>().color = col;
+        MakeAnchored(b, "Inner", Vector2.zero, new Vector2(6f, 6f)).gameObject.AddComponent<Image>().color =
             new Color(col.r * 1.4f, col.g * 1.4f, col.b * 1.4f);
     }
 
@@ -424,16 +424,16 @@ public class BuildLevel4Computer : EditorWindow
     {
         // ── Titel-Leiste oben ──────────────────────────────────────────────
         var topBar = MakeAnchored(parent, "TopBar", new Vector2(0, 490f), new Vector2(1920f, 70f));
-        topBar.AddComponent<Image>().color = new Color(0.06f, 0.07f, 0.12f, 0.92f);
+        topBar.gameObject.AddComponent<Image>().color = new Color(0.06f, 0.07f, 0.12f, 0.92f);
 
         // Linke Trennlinie (leuchtend)
         MakeAnchored(topBar, "AccentL", new Vector2(-200f, 0), new Vector2(2f, 50f))
-            .AddComponent<Image>().color = new Color(0.3f, 0.8f, 1f, 0.8f);
+            .gameObject.AddComponent<Image>().color = new Color(0.3f, 0.8f, 1f, 0.8f);
         MakeAnchored(topBar, "AccentR", new Vector2( 200f, 0), new Vector2(2f, 50f))
-            .AddComponent<Image>().color = new Color(0.3f, 0.8f, 1f, 0.8f);
+            .gameObject.AddComponent<Image>().color = new Color(0.3f, 0.8f, 1f, 0.8f);
 
         var title    = MakeAnchored(topBar, "Title", Vector2.zero, new Vector2(500f, 50f));
-        var titleTxt = title.AddComponent<TextMeshProUGUI>();
+        var titleTxt = title.gameObject.AddComponent<TextMeshProUGUI>();
         titleTxt.text      = "GEFÄNGNISAUSBRUCH — PHASE 4";
         titleTxt.fontSize  = 26f;
         titleTxt.alignment = TextAlignmentOptions.Center;
@@ -442,7 +442,7 @@ public class BuildLevel4Computer : EditorWindow
 
         // Linke Info: Levelbezeichnung
         var levelLbl    = MakeAnchored(topBar, "LevelLbl", new Vector2(-700f, 0), new Vector2(280f, 40f));
-        var levelTxt    = levelLbl.AddComponent<TextMeshProUGUI>();
+        var levelTxt    = levelLbl.gameObject.AddComponent<TextMeshProUGUI>();
         levelTxt.text      = "LEVEL 04";
         levelTxt.fontSize  = 20f;
         levelTxt.alignment = TextAlignmentOptions.Left;
@@ -454,11 +454,11 @@ public class BuildLevel4Computer : EditorWindow
 
         // ── Untere Info-Leiste ─────────────────────────────────────────────
         var botBar = MakeAnchored(parent, "BottomBar", new Vector2(0, -490f), new Vector2(1920f, 60f));
-        botBar.AddComponent<Image>().color = new Color(0.05f, 0.06f, 0.10f, 0.92f);
+        botBar.gameObject.AddComponent<Image>().color = new Color(0.05f, 0.06f, 0.10f, 0.92f);
 
         // Steuerungshinweise
         var ctrlTxt = MakeAnchored(botBar, "Controls", new Vector2(-400f, 0), new Vector2(700f, 40f))
-            .AddComponent<TextMeshProUGUI>();
+            .gameObject.AddComponent<TextMeshProUGUI>();
         ctrlTxt.text      = "[ W A S D ]  Bewegen   —   Wärtern ausweichen   —   Schuppen erreichen";
         ctrlTxt.fontSize  = 16f;
         ctrlTxt.alignment = TextAlignmentOptions.Center;
@@ -466,7 +466,7 @@ public class BuildLevel4Computer : EditorWindow
 
         // Rechts: Spieler-Legende
         var legTxt = MakeAnchored(botBar, "Legend", new Vector2(600f, 0), new Vector2(500f, 40f))
-            .AddComponent<TextMeshProUGUI>();
+            .gameObject.AddComponent<TextMeshProUGUI>();
         legTxt.text      = "▣ = Du   ▣ = Wärter   ▣ = Ziel";
         legTxt.fontSize  = 15f;
         legTxt.alignment = TextAlignmentOptions.Right;
@@ -480,16 +480,16 @@ public class BuildLevel4Computer : EditorWindow
     void BuildStatusBadge(Transform parent, string label, Vector2 pos, Color col)
     {
         var badge = MakeAnchored(parent, $"Badge_{label}", pos, new Vector2(130f, 30f));
-        var bg    = badge.AddComponent<Image>();
+        var bg    = badge.gameObject.AddComponent<Image>();
         bg.color  = new Color(col.r * 0.3f, col.g * 0.3f, col.b * 0.3f, 0.8f);
 
         MakeAnchored(badge, "Border_L", new Vector2(-63f, 0), new Vector2(2f, 30f))
-            .AddComponent<Image>().color = col;
+            .gameObject.AddComponent<Image>().color = col;
         MakeAnchored(badge, "Border_R", new Vector2( 63f, 0), new Vector2(2f, 30f))
-            .AddComponent<Image>().color = col;
+            .gameObject.AddComponent<Image>().color = col;
 
         var txt    = MakeAnchored(badge, "Text", Vector2.zero, new Vector2(126f, 26f))
-            .AddComponent<TextMeshProUGUI>();
+            .gameObject.AddComponent<TextMeshProUGUI>();
         txt.text      = label;
         txt.fontSize  = 13f;
         txt.alignment = TextAlignmentOptions.Center;
@@ -500,21 +500,21 @@ public class BuildLevel4Computer : EditorWindow
     void BuildSidePanel(Transform parent, float x)
     {
         var panel = MakeAnchored(parent, $"SidePanel_{x}", new Vector2(x, 0), new Vector2(120f, 700f));
-        panel.AddComponent<Image>().color = new Color(0.05f, 0.06f, 0.10f, 0.85f);
+        panel.gameObject.AddComponent<Image>().color = new Color(0.05f, 0.06f, 0.10f, 0.85f);
 
         // Leuchtstreifen
         float sign = x < 0 ? 1f : -1f;
         MakeAnchored(panel, "Glow", new Vector2(sign * 58f, 0), new Vector2(2f, 700f))
-            .AddComponent<Image>().color = new Color(0.2f, 0.5f, 1f, 0.4f);
+            .gameObject.AddComponent<Image>().color = new Color(0.2f, 0.5f, 1f, 0.4f);
 
         // Vertikale "GEFÄNGNIS"-Beschriftung
         var textGO = new GameObject("SideText");
-        var textRT = textGO.AddComponent<RectTransform>();
+        var textRT = textGO.gameObject.AddComponent<RectTransform>();
         textRT.SetParent(panel, false);
         textRT.sizeDelta        = new Vector2(600f, 30f);
         textRT.anchoredPosition = Vector2.zero;
         textRT.localRotation    = Quaternion.Euler(0, 0, 90f);
-        var txt = textGO.AddComponent<TextMeshProUGUI>();
+        var txt = textGO.gameObject.AddComponent<TextMeshProUGUI>();
         txt.text      = "GEFÄNGNISHOF  ·  SICHERHEITSSTUFE MAXIMUM  ·  GEFÄNGNISHOF";
         txt.fontSize  = 11f;
         txt.alignment = TextAlignmentOptions.Center;
@@ -531,7 +531,7 @@ public class BuildLevel4Computer : EditorWindow
         var clip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Big Yahu/Untitled.mp3");
         if (clip == null) return;
         var go  = new GameObject("BackgroundMusic");
-        var src = go.AddComponent<AudioSource>();
+        var src = go.gameObject.AddComponent<AudioSource>();
         src.clip = clip; src.loop = true; src.playOnAwake = true; src.volume = 0.5f;
         SceneManager.MoveGameObjectToScene(go, scene);
     }
@@ -546,7 +546,7 @@ public class BuildLevel4Computer : EditorWindow
     {
         var go   = new GameObject(name);
         go.transform.SetParent(parent, false);
-        var rt   = go.AddComponent<RectTransform>();
+        var rt   = go.gameObject.AddComponent<RectTransform>();
         rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
         rt.offsetMin = offsetMin; rt.offsetMax  = offsetMax;
         return rt;
@@ -556,7 +556,7 @@ public class BuildLevel4Computer : EditorWindow
     {
         var go = new GameObject(name);
         go.transform.SetParent(parent, false);
-        var rt = go.AddComponent<RectTransform>();
+        var rt = go.gameObject.AddComponent<RectTransform>();
         rt.anchorMin        = new Vector2(0.5f, 0.5f);
         rt.anchorMax        = new Vector2(0.5f, 0.5f);
         rt.pivot            = new Vector2(0.5f, 0.5f);
