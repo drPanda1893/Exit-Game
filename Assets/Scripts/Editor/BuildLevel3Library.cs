@@ -43,10 +43,9 @@ public class BuildLevel3Library : EditorWindow
         cam.tag             = "MainCamera";
         camGO.AddComponent<AudioListener>();
         var follow = camGO.AddComponent<TopDownCameraFollow>();
-        follow.height     = 9f;
-        follow.pitchAngle = 62f;
-        // Kein fixedWorldPosition → Follow-Modus: Kamera folgt dem Spieler
-        // → Helios ist sichtbar sobald der Spieler sich dem Thresen nähert
+        // Feste Kamera am Eingang (wie Level 2), aber erhöht damit der ganze Raum sichtbar ist.
+        // LookAt-Modus: Kamera bleibt fix, dreht sich immer zum Spieler → Helios bei z=3.5 sichtbar.
+        follow.fixedWorldPosition = new Vector3(0f, 5.0f, -5.8f);
         SceneManager.MoveGameObjectToScene(camGO, scene);
 
         // Umgebung
