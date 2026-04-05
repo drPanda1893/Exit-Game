@@ -43,9 +43,7 @@ public class BuildLevel3Library : EditorWindow
         cam.tag             = "MainCamera";
         camGO.AddComponent<AudioListener>();
         var follow = camGO.AddComponent<TopDownCameraFollow>();
-        // Feste Kamera am Eingang (wie Level 2), aber erhöht damit der ganze Raum sichtbar ist.
-        // LookAt-Modus: Kamera bleibt fix, dreht sich immer zum Spieler → Helios bei z=3.5 sichtbar.
-        follow.fixedWorldPosition = new Vector3(0f, 5.0f, -5.8f);
+        follow.fixedWorldPosition = new Vector3(0f, 1.8f, -4.4f); // identisch mit Level 2
         SceneManager.MoveGameObjectToScene(camGO, scene);
 
         // Umgebung
