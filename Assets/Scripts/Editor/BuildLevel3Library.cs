@@ -442,7 +442,7 @@ public class BuildLevel3Library : EditorWindow
         // Kerze auf Theke
         BuildCandle(new Vector3(-0.9f, 0.975f, 0.0f), theke.transform, wax, flame, brass);
         AddLight("ThekeCandle", theke.transform, new Vector3(-0.9f, 1.15f, 0f),
-            LightType.Point, new Color(1f, 0.68f, 0.28f), 1.0f, 3.5f, shadows: LightShadows.Soft);
+            LightType.Point, new Color(1f, 0.68f, 0.28f), 1.0f, 3.5f, shadows: LightShadows.None);
 
         // Aufgeschlagenes Buch
         Box("BookL",    new Vector3(0.1f, 0.972f, -0.05f), new Vector3(0.24f, 0.006f, 0.30f), parchment, theke.transform,
@@ -643,7 +643,7 @@ public class BuildLevel3Library : EditorWindow
 
         // Feuerlicht
         AddLight("FireLight", g.transform, new Vector3(0f, 0.5f, -0.2f),
-            LightType.Point, new Color(1f, 0.52f, 0.10f), 3.5f, 7f, shadows: LightShadows.Soft);
+            LightType.Point, new Color(1f, 0.52f, 0.10f), 3.5f, 7f, shadows: LightShadows.None);
 
         var bc = g.AddComponent<BoxCollider>();
         bc.center = new Vector3(0, 1.3f, 0); bc.size = new Vector3(1.80f, 2.7f, 0.52f);
@@ -705,7 +705,7 @@ public class BuildLevel3Library : EditorWindow
         Box("ScrollRight", new Vector3( 0.06f,0.60f,0), new Vector3(0.22f,0.005f,0.22f), parchment, g.transform, col: false);
 
         AddLight("CaseLight", g.transform, new Vector3(0, 1.1f, -0.05f),
-            LightType.Point, new Color(0.9f, 0.85f, 0.65f), 0.6f, 1.5f);
+            LightType.Point, new Color(0.9f, 0.85f, 0.65f), 0.6f, 1.5f, shadows: LightShadows.None);
 
         var bc = g.AddComponent<BoxCollider>();
         bc.center = new Vector3(0, 0.66f, 0); bc.size = new Vector3(0.66f, 1.38f, 0.44f);
@@ -931,7 +931,7 @@ public class BuildLevel3Library : EditorWindow
         BuildCandle(new Vector3(-1.1f, 0.855f, 0f), table.transform, wax, flame, brass);
         BuildCandle(new Vector3( 1.1f, 0.855f, 0f), table.transform, wax, flame, brass);
         AddLight("TableCandle", table.transform, new Vector3(0, 1.2f, 0),
-            LightType.Point, new Color(1f, 0.68f, 0.28f), 1.5f, 4.5f, shadows: LightShadows.Soft);
+            LightType.Point, new Color(1f, 0.68f, 0.28f), 1.5f, 4.5f, shadows: LightShadows.None);
 
         var bc = table.AddComponent<BoxCollider>();
         bc.center = new Vector3(0, 0.41f, 0); bc.size = new Vector3(3.05f, 0.84f, 1.14f);
@@ -988,14 +988,14 @@ public class BuildLevel3Library : EditorWindow
         Box("Chain", new Vector3(0, 0.4f, 0), new Vector3(0.03f, 0.8f, 0.03f), brass, g.transform, col: false);
         Cyl("Ring",  new Vector3(0, 0,    0), new Vector3(0.70f, 0.04f, 0.70f), brass, g.transform);
         Cyl("Inner", new Vector3(0, 0,    0), new Vector3(0.54f, 0.045f,0.54f), M(new Color(0.12f,0.08f,0.04f)), g.transform);
+        // Nur 1 kombiniertes Licht pro Kronleuchter statt 6 Einzellichter → kein Lag
+        AddLight("CL_Center", g.transform, new Vector3(0, 0.15f, 0),
+            LightType.Point, new Color(1f, 0.70f, 0.32f), 2.5f, 7f, shadows: LightShadows.None);
         for (int i = 0; i < 6; i++)
         {
-            float a  = i * 60f * Mathf.Deg2Rad;
-            float cx = Mathf.Sin(a) * 0.30f;
-            float cz = Mathf.Cos(a) * 0.30f;
-            BuildCandle(new Vector3(cx, -0.02f, cz), g.transform, wax, flame, brass);
-            AddLight($"CL_{i}", g.transform, new Vector3(cx, 0.15f, cz),
-                LightType.Point, new Color(1f, 0.70f, 0.32f), 1.2f, 5f, shadows: LightShadows.Soft);
+            float a = i * 60f * Mathf.Deg2Rad;
+            BuildCandle(new Vector3(Mathf.Sin(a) * 0.30f, -0.02f, Mathf.Cos(a) * 0.30f),
+                        g.transform, wax, flame, brass);
         }
     }
 
@@ -1005,8 +1005,9 @@ public class BuildLevel3Library : EditorWindow
         Box("Bracket", new Vector3(0, 0, -0.12f), new Vector3(0.06f,0.06f,0.24f), brass, g.transform, col: false);
         Cyl("Cup",     new Vector3(0, 0,    0   ), new Vector3(0.10f,0.06f,0.10f), brass, g.transform);
         Cyl("Flame",   new Vector3(0, 0.07f, 0  ), new Vector3(0.06f,0.09f,0.06f), flame, g.transform);
+        // Keine Schatten bei Wandfackeln → Performance
         AddLight("TL", g.transform, new Vector3(0, 0.18f, 0),
-            LightType.Point, new Color(1f, 0.60f, 0.18f), 1.8f, 6.5f, shadows: LightShadows.Soft);
+            LightType.Point, new Color(1f, 0.60f, 0.18f), 1.8f, 6.5f, shadows: LightShadows.None);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1115,12 +1116,17 @@ public class BuildLevel3Library : EditorWindow
 
         // ── Helios instanziieren ──────────────────────────────────────────────
         const string fbxPath = "Assets/Big Yahu/Helios plotting.fbx";
+
+        // Animation-Setup ZUERST (ruft SaveAndReimport auf) damit die Instanz danach sauber ist
+        SetupHeliosAnimation(null, fbxPath);
+
         var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
         GameObject helios;
         if (prefab != null)
         {
             helios = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
             PrefabUtility.UnpackPrefabInstance(helios, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+            Debug.Log("[Level3] Helios plotting.fbx erfolgreich geladen.");
         }
         else
         {
@@ -1129,27 +1135,33 @@ public class BuildLevel3Library : EditorWindow
         }
         helios.name = "Helios";
 
-        // Skalierung: Zielgröße ~1.7m (gleich wie Big Yahu)
+        // Skalierung: Zielgröße ~1.7m
         var bounds = GetBounds(helios);
         float h     = bounds.size.y;
         float scale = (h > 0.1f) ? (1.7f / h) : 1f;
         helios.transform.localScale = Vector3.one * scale;
 
-        // Y-Offset: Füße exakt auf den Boden setzen (Pivot des FBX nicht immer an den Füßen)
+        // Y-Offset: Füße exakt auf den Boden setzen
         var scaledBounds = GetBounds(helios);
         float groundY = scaledBounds.min.y < 0f ? -scaledBounds.min.y : 0f;
 
-        // Hinter dem Thresen, vor dem Wandregal – beim Betreten des Raums sofort sichtbar
+        // Hinter dem Thresen, schaut zur Eingangstür
         helios.transform.position = new Vector3(0f, groundY, 3.5f);
-        helios.transform.rotation = Quaternion.Euler(0f, 180f, 0f); // schaut zur Eingangstür
+        helios.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
 
-        // Material zuweisen
+        // Material zuweisen – gespeichertes Asset damit es die Szene überlebt
         var heliosMat = CreateHeliosMaterial();
+        const string matSavePath = "Assets/Big Yahu/Material Helios/Helios_Runtime.mat";
+        if (AssetDatabase.LoadAssetAtPath<Material>(matSavePath) != null)
+            AssetDatabase.DeleteAsset(matSavePath);
+        AssetDatabase.CreateAsset(heliosMat, matSavePath);
+        AssetDatabase.SaveAssets();
+        heliosMat = AssetDatabase.LoadAssetAtPath<Material>(matSavePath);
         foreach (var r in helios.GetComponentsInChildren<Renderer>(true))
             r.sharedMaterial = heliosMat;
 
-        // Animation auf Loop
-        SetupHeliosAnimation(helios, fbxPath);
+        // Animation auf Loop an der frischen Instanz einrichten
+        SetupHeliosAnimationOnInstance(helios, fbxPath);
 
         // Spot auf Helios
         var spotGO = new GameObject("HeliosSpot");
@@ -1195,13 +1207,19 @@ public class BuildLevel3Library : EditorWindow
         SceneManager.MoveGameObjectToScene(helios,    scene);
     }
 
+    /// <summary>
+    /// Phase 1: FBX auf Legacy-Animation umstellen und Loop-Clip im Asset speichern.
+    /// Muss VOR dem Instantiieren aufgerufen werden (SaveAndReimport invalidiert offene Instanzen).
+    /// Wenn helios == null wird nur der Asset-Teil erledigt.
+    /// </summary>
     private void SetupHeliosAnimation(GameObject helios, string fbxPath)
     {
+        // ── Asset-Teil: Importer auf Legacy + Clip erzeugen ──────────────────
         var modelImporter = AssetImporter.GetAtPath(fbxPath) as ModelImporter;
         if (modelImporter != null && modelImporter.animationType != ModelImporterAnimationType.Legacy)
         {
             modelImporter.animationType = ModelImporterAnimationType.Legacy;
-            modelImporter.SaveAndReimport();
+            modelImporter.SaveAndReimport();          // ← daher VOR Instantiierung
         }
 
         AnimationClip src = null;
@@ -1222,7 +1240,25 @@ public class BuildLevel3Library : EditorWindow
         AnimationUtility.SetAnimationClipSettings(loop, cfg);
         AssetDatabase.CreateAsset(loop, clipPath);
         AssetDatabase.SaveAssets();
-        loop = AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath);
+
+        // ── Instanz-Teil: nur wenn eine Instanz mitgegeben wird ──────────────
+        if (helios != null)
+            SetupHeliosAnimationOnInstance(helios, fbxPath);
+    }
+
+    /// <summary>
+    /// Phase 2: Clip auf die bereits existierende, ungeprefabte Instanz anwenden.
+    /// </summary>
+    private void SetupHeliosAnimationOnInstance(GameObject helios, string fbxPath)
+    {
+        const string clipPath = "Assets/Big Yahu/Helios_Plot_Loop.anim";
+        var loop = AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath);
+        if (loop == null) { Debug.LogWarning("[Level3] Helios_Plot_Loop.anim nicht gefunden."); return; }
+
+        // Vorhandenen Animator deaktivieren (Legacy Animation braucht keinen)
+        var existingAnimator = helios.GetComponentInChildren<Animator>(true);
+        if (existingAnimator != null)
+            existingAnimator.runtimeAnimatorController = null;
 
         var anim = helios.GetComponentInChildren<Animation>(true) ?? helios.AddComponent<Animation>();
         anim.AddClip(loop, "Plot");
@@ -1230,10 +1266,6 @@ public class BuildLevel3Library : EditorWindow
         anim.playAutomatically = true;
         anim.wrapMode          = WrapMode.Loop;
         anim.Play("Plot");
-
-        var existingAnimator = helios.GetComponentInChildren<Animator>(true);
-        if (existingAnimator != null)
-            existingAnimator.runtimeAnimatorController = null;
     }
 
     // ── E-Taste Hinweis ──────────────────────────────────────────────────────
