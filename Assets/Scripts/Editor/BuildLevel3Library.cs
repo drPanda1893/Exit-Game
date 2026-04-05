@@ -1023,7 +1023,7 @@ public class BuildLevel3Library : EditorWindow
 
         var character = new GameObject("BigYahu") { tag = "Player" };
         character.transform.position = new Vector3(0f, 0f, -4.0f); // Eingang, vor der Kamera (z=-4.4)
-        character.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+        character.transform.rotation = Quaternion.Euler(0f, 0f, 0f);
 
         if (idleModel != null && runningModel != null)
         {
