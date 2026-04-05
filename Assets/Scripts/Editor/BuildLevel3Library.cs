@@ -37,13 +37,16 @@ public class BuildLevel3Library : EditorWindow
         var camGO = new GameObject("Main Camera");
         var cam   = camGO.AddComponent<Camera>();
         cam.clearFlags      = CameraClearFlags.SolidColor;
-        cam.backgroundColor = new Color(0.04f, 0.03f, 0.03f);
-        cam.farClipPlane    = 40f;
+        cam.backgroundColor = new Color(0.02f, 0.03f, 0.07f);
+        cam.farClipPlane    = 30f;
         cam.nearClipPlane   = 0.1f;
         cam.tag             = "MainCamera";
         camGO.AddComponent<AudioListener>();
+        // Identische Kamera-Startpose wie Level 2
+        camGO.transform.position = new Vector3(0f, 6f, -3f);
+        camGO.transform.rotation = Quaternion.Euler(60f, 0f, 0f);
         var follow = camGO.AddComponent<TopDownCameraFollow>();
-        follow.fixedWorldPosition = new Vector3(0f, 1.8f, -4.4f); // identisch mit Level 2
+        follow.fixedWorldPosition = new Vector3(0f, 1.8f, -4.4f);
         SceneManager.MoveGameObjectToScene(camGO, scene);
 
         // Umgebung
@@ -1020,6 +1023,7 @@ public class BuildLevel3Library : EditorWindow
 
         var character = new GameObject("BigYahu") { tag = "Player" };
         character.transform.position = new Vector3(0f, 0f, -1.5f);
+        character.transform.rotation = Quaternion.Euler(0f, 180f, 0f); // FBX-Modell schaut in -Z → 180° korrigiert auf +Z (in den Raum)
 
         if (idleModel != null && runningModel != null)
         {
