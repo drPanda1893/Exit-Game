@@ -38,15 +38,21 @@ public class Level4_StealthMinigame : MonoBehaviour
     void OnEnable()
     {
         active = false;
-        statusText.text = string.Empty;
-        BigYahuDialogSystem.Instance.ShowDialog(new[]
+        if (statusText != null) statusText.text = string.Empty;
+
+        if (BigYahuDialogSystem.Instance != null)
         {
-            "Big Yahu: Vorsicht! Wärter patrouillieren den Hof!",
-            "Big Yahu: Nutze WASD, weiche den Wächtern aus und erreiche den Schuppen!"
-        }, () => {
+            BigYahuDialogSystem.Instance.ShowDialog(new[]
+            {
+                "Big Yahu: Vorsicht! Wärter patrouillieren den Hof!",
+                "Big Yahu: Nutze WASD, weiche den Wächtern aus und erreiche den Schuppen!"
+            }, () => { ResetPositions(); active = true; });
+        }
+        else
+        {
             ResetPositions();
             active = true;
-        });
+        }
     }
 
     void Start()
@@ -143,10 +149,10 @@ public class Level4_StealthMinigame : MonoBehaviour
     IEnumerator Caught()
     {
         active = false;
-        statusText.text = "✗ Erwischt! Neustart...";
-        BigYahuDialogSystem.Instance.ShowDialog("Big Yahu: Autsch! Pass besser auf!");
+        if (statusText != null) statusText.text = "Erwischt! Neustart...";
+        BigYahuDialogSystem.Instance?.ShowDialog("Big Yahu: Autsch! Pass besser auf!");
         yield return new WaitForSeconds(1.8f);
-        statusText.text = string.Empty;
+        if (statusText != null) statusText.text = string.Empty;
         ResetPositions();
         active = true;
     }
@@ -154,7 +160,10 @@ public class Level4_StealthMinigame : MonoBehaviour
     IEnumerator DelayedComplete()
     {
         yield return new WaitForSeconds(0.6f);
-        GameManager.Instance.CompleteCurrentLevel();
+        if (GameManager.Instance != null)
+            GameManager.Instance.CompleteCurrentLevel();
+        else
+            Debug.Log("[Level4] Minigame abgeschlossen – kein GameManager in Szene.");
     }
 
     void ResetPositions()

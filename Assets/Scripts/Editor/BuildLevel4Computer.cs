@@ -46,14 +46,9 @@ public class BuildLevel4Computer : EditorWindow
         camGO.gameObject.AddComponent<AudioListener>();
         SceneManager.MoveGameObjectToScene(camGO, scene);
 
-        // Singletons
-        var gmGO = new GameObject("GameManager");
-        gmGO.gameObject.AddComponent<GameManager>();
-        SceneManager.MoveGameObjectToScene(gmGO, scene);
-
-        var dlgGO = new GameObject("BigYahuDialogSystem");
-        dlgGO.gameObject.AddComponent<BigYahuDialogSystem>();
-        SceneManager.MoveGameObjectToScene(dlgGO, scene);
+        // GameManager und BigYahuDialogSystem werden NICHT in die Standalone-Szene eingefügt –
+        // sie kommen via DontDestroyOnLoad aus dem vorherigen Level oder fehlen beim direkten Test
+        // (Level4_StealthMinigame startet ohne Dialog-System trotzdem korrekt dank Null-Checks)
 
         // Canvas
         var canvasGO = new GameObject("Level4Canvas");
@@ -467,7 +462,7 @@ public class BuildLevel4Computer : EditorWindow
         // Rechts: Spieler-Legende
         var legTxt = MakeAnchored(botBar, "Legend", new Vector2(600f, 0), new Vector2(500f, 40f))
             .gameObject.AddComponent<TextMeshProUGUI>();
-        legTxt.text      = "▣ = Du   ▣ = Wärter   ▣ = Ziel";
+        legTxt.text      = "[CYAN] = Du   [ROT] = Waerter   [GOLD] = Ziel";
         legTxt.fontSize  = 15f;
         legTxt.alignment = TextAlignmentOptions.Right;
         legTxt.color     = new Color(0.5f, 0.6f, 0.7f);
