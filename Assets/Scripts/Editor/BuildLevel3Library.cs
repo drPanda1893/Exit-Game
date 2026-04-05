@@ -1019,7 +1019,7 @@ public class BuildLevel3Library : EditorWindow
         var playerMat    = AssetDatabase.LoadAssetAtPath<Material>("Assets/Big Yahu/Big Yahu material.mat");
 
         var character = new GameObject("BigYahu") { tag = "Player" };
-        character.transform.position = new Vector3(0f, 0f, -4.8f);
+        character.transform.position = new Vector3(0f, 0f, -1.5f);
 
         if (idleModel != null && runningModel != null)
         {
