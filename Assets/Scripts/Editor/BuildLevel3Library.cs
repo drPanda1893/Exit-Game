@@ -1169,8 +1169,7 @@ public class BuildLevel3Library : EditorWindow
             if (b2.min.y < 0f) groundY = -b2.min.y;
         }
 
-        // Raummitte, direkt im Sichtfeld beim Spawn
-        helios.transform.position = new Vector3(0f, groundY, 0.5f);
+        helios.transform.position = new Vector3(0f, groundY, -2f);
         helios.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
 
         // Material aus gespeichertem Asset zuweisen
@@ -1189,7 +1188,7 @@ public class BuildLevel3Library : EditorWindow
 
         // Spot auf Helios
         var spotGO = new GameObject("HeliosSpot");
-        spotGO.transform.position = new Vector3(0f, 5.5f, 0.5f);
+        spotGO.transform.position = new Vector3(0f, 5.5f, -2f);
         var spot = spotGO.AddComponent<Light>();
         spot.type      = LightType.Spot;
         spot.color     = new Color(0.95f, 0.88f, 0.65f);
@@ -1219,7 +1218,7 @@ public class BuildLevel3Library : EditorWindow
 
         // ── HeliosInteraction Trigger ─────────────────────────────────────────
         var interGO = new GameObject("HeliosInteraction");
-        interGO.transform.position = new Vector3(0f, 1.0f, 0.5f);
+        interGO.transform.position = new Vector3(0f, 1.0f, -2f);
         var interCol = interGO.AddComponent<BoxCollider>();
         interCol.isTrigger = true;
         interCol.size = new Vector3(3.5f, 2.2f, 2.5f);
