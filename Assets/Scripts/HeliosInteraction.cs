@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 using TMPro;
 
 /// <summary>
@@ -32,7 +33,7 @@ public class HeliosInteraction : MonoBehaviour
     void Update()
     {
         if (solved || !inRange) return;
-        if (Input.GetKeyDown(KeyCode.E))
+        if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
             bookUI?.Show();
     }
 

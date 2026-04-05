@@ -1022,8 +1022,8 @@ public class BuildLevel3Library : EditorWindow
         var playerMat    = AssetDatabase.LoadAssetAtPath<Material>("Assets/Big Yahu/Big Yahu material.mat");
 
         var character = new GameObject("BigYahu") { tag = "Player" };
-        character.transform.position = new Vector3(0f, 0f, -1.5f);
-        character.transform.rotation = Quaternion.Euler(0f, 180f, 0f); // FBX-Modell schaut in -Z → 180° korrigiert auf +Z (in den Raum)
+        character.transform.position = new Vector3(0f, 0f, -4.0f); // Eingang, vor der Kamera (z=-4.4)
+        character.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
 
         if (idleModel != null && runningModel != null)
         {
