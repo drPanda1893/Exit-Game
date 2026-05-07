@@ -1,55 +1,109 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using System;
 
 /// <summary>
-/// Singleton – verwaltet den Level-Fortschritt und schaltet UI-Panels um.
-/// Jedes Level bekommt ein eigenes Panel als Kind des Haupt-Canvas.
-/// levelPanels[0] = Level 1, levelPanels[1] = Level 2, usw.
+/// Singleton – verwaltet den Level-Fortschritt.
+///
+/// Panel-Modus: levelPanels[] gesetzt → alle Level als UI-Panels in einer Szene.
+/// Szenen-Modus: levelPanels leer  → jedes Level eine eigene Szene (Standard).
+///
+/// Im Szenen-Modus wird CurrentLevel automatisch aus dem geladenen Szenennamen
+/// abgeleitet – kein manueller Start()-Aufruf nötig.
 /// </summary>
 public class GameManager : MonoBehaviour
 {
     public static GameManager Instance { get; private set; }
 
-    [Header("Level Panels (Index 0 = Level 1)")]
+    [Header("Panel-Modus (optional – alle Level in einer Szene)")]
     [SerializeField] private GameObject[] levelPanels;
     [SerializeField] private GameObject winScreen;
 
-    public int CurrentLevel { get; private set; }
+    [Header("Szenen-Modus (Standard – Index 0 = Level 1)")]
+    [SerializeField] private string[] levelSceneNames =
+        { "Level1", "Level2", "Level3", "Level4", "Level5", "Level6" };
 
+    public int CurrentLevel { get; private set; }
     public event Action<int> OnLevelLoaded;
+
+    bool PanelMode => levelPanels != null && levelPanels.Length > 0;
+
+    // -------------------------------------------------------------------------
 
     void Awake()
     {
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
         DontDestroyOnLoad(gameObject);
+        SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    void OnDestroy()
+    {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
     }
 
     void Start()
     {
-        LoadLevel(1);
+        // Panel-Modus: Level-1-Panel beim ersten Start aktivieren.
+        // Szenen-Modus: nichts tun – OnSceneLoaded setzt CurrentLevel automatisch.
+        if (PanelMode && CurrentLevel == 0)
+            LoadLevel(1);
     }
+
+    // Wird nach jedem SceneManager.LoadScene aufgerufen (auch beim ersten Laden).
+    void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (PanelMode) return;
+
+        for (int i = 0; i < levelSceneNames.Length; i++)
+        {
+            if (levelSceneNames[i] == scene.name)
+            {
+                CurrentLevel = i + 1;
+                OnLevelLoaded?.Invoke(CurrentLevel);
+                Debug.Log($"[GameManager] Szene '{scene.name}' → Level {CurrentLevel}");
+                return;
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
 
     public void LoadLevel(int level)
     {
         CurrentLevel = level;
+        int idx = level - 1;
 
-        foreach (var panel in levelPanels)
-            if (panel) panel.SetActive(false);
-
-        if (winScreen) winScreen.SetActive(false);
-
-        if (level >= 1 && level <= levelPanels.Length)
+        if (PanelMode)
         {
-            levelPanels[level - 1].SetActive(true);
+            foreach (var panel in levelPanels)
+                if (panel) panel.SetActive(false);
+            if (winScreen) winScreen.SetActive(false);
+
+            if (idx >= 0 && idx < levelPanels.Length && levelPanels[idx] != null)
+                levelPanels[idx].SetActive(true);
+            else if (winScreen)
+                winScreen.SetActive(true);
+
+            OnLevelLoaded?.Invoke(level);
+            Debug.Log($"[GameManager] Panel Level {level} aktiviert.");
+            return;
         }
-        else if (level > levelPanels.Length)
+
+        // Szenen-Modus
+        if (levelSceneNames != null && idx >= 0 && idx < levelSceneNames.Length)
         {
-            if (winScreen) winScreen.SetActive(true);
+            Debug.Log($"[GameManager] Lade Szene: {levelSceneNames[idx]}");
+            SceneManager.LoadScene(levelSceneNames[idx]);
+        }
+        else
+        {
+            // Kein weiteres Level definiert – Level-Script zeigt eigenen Win-Screen.
+            Debug.Log("[GameManager] Alle Level abgeschlossen.");
         }
 
         OnLevelLoaded?.Invoke(level);
-        Debug.Log($"[GameManager] Level {level} geladen.");
     }
 
     public void CompleteCurrentLevel() => LoadLevel(CurrentLevel + 1);

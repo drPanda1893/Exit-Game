@@ -2,7 +2,7 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// Trägt Level1, Level2 und Level3 automatisch in die Build Settings ein.
+/// Trägt alle 6 Level-Szenen automatisch in die Build Settings ein.
 /// Läuft einmalig wenn Unity das Projekt öffnet (InitializeOnLoad).
 /// Kann auch manuell über Tools → Setup Build Scenes ausgeführt werden.
 /// </summary>
@@ -11,17 +11,20 @@ public static class SetupBuildScenes
 {
     static SetupBuildScenes()
     {
-        // Verzögert ausführen damit Unity vollständig geladen ist
         EditorApplication.delayCall += Register;
     }
 
     [MenuItem("Tools/Setup Build Scenes")]
     public static void Register()
     {
-        string[] required = {
+        string[] required =
+        {
             "Assets/Scenes/Level1.unity",
             "Assets/Scenes/Level2.unity",
-            "Assets/Scenes/Level3.unity"
+            "Assets/Scenes/Level3.unity",
+            "Assets/Scenes/Level4.unity",
+            "Assets/Scenes/Level5.unity",
+            "Assets/Scenes/Level6.unity",
         };
 
         var existing = new System.Collections.Generic.List<EditorBuildSettingsScene>(
@@ -30,8 +33,7 @@ public static class SetupBuildScenes
         bool changed = false;
         foreach (string path in required)
         {
-            // Szene existiert auf Disk?
-            if (AssetDatabase.AssetPathToGUID(path) == "") continue;
+            if (AssetDatabase.AssetPathToGUID(path) == "") continue;  // Datei existiert noch nicht
 
             bool alreadyIn = false;
             foreach (var s in existing)
