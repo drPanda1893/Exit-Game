@@ -717,7 +717,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         var t1o = new GameObject("Text"); t1o.transform.SetParent(s1.transform);
         t1o.transform.localPosition = new Vector3(0, 0, -0.015f);
         var t1 = t1o.AddComponent<TextMeshPro>();
-        t1.text = "⚠ RESTRICTED ACCESS"; t1.fontSize = 0.28f;
+        t1.text = "!! RESTRICTED ACCESS"; t1.fontSize = 0.28f;
         t1.color = new Color(1f, 0.62f, 0.04f); t1.alignment = TextAlignmentOptions.Center;
         t1o.GetComponent<RectTransform>().sizeDelta = new Vector2(0.50f, 0.18f);
         Box("LEDs", new Vector3(0, 0.12f, 0.005f), new Vector3(0.52f, 0.014f, 0.008f), ledA, s1.transform, col: false);
