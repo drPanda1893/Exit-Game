@@ -73,7 +73,10 @@ public class Level2_DustWall : MonoBehaviour
         if (dustWallPanel)      dustWallPanel.SetActive(false);
         if (arrowPanel)         arrowPanel.SetActive(false);
         if (interactionPrompt)  interactionPrompt.SetActive(false);
+    }
 
+    void Start()
+    {
         StartJoshiDialog();
     }
 
