@@ -1,9 +1,11 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 using TMPro;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using UnityEngine.InputSystem;
 
 /// <summary>
 /// Singleton – zeigt Big Yahu's Dialog-Boxen mit Typewriter-Effekt.
@@ -81,6 +83,14 @@ public class BigYahuDialogSystem : MonoBehaviour
     {
         if (speakerLabel) speakerLabel.text = "Big Yahu";
         if (portraitImage && bigYahuPortrait) portraitImage.sprite = bigYahuPortrait;
+    }
+
+    void Update()
+    {
+        if (dialogPanel == null || !dialogPanel.activeSelf) return;
+        var kb = Keyboard.current;
+        if (kb != null && (kb.spaceKey.wasPressedThisFrame || kb.enterKey.wasPressedThisFrame))
+            OnContinue();
     }
 
     void ShowNext()

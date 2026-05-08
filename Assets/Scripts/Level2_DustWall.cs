@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 using TMPro;
 using UnityEngine.InputSystem;
 using System.Collections;
@@ -244,6 +245,7 @@ public class Level2_DustWall : MonoBehaviour
     {
         if (dustWallPanel) dustWallPanel.SetActive(false);
         if (arrowPanel)    arrowPanel.SetActive(true);
+        if (EventSystem.current) EventSystem.current.SetSelectedGameObject(null);
         comboIndex = 0;
         state      = State.ArrowCombo;
         RefreshFeedback();
