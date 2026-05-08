@@ -211,7 +211,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         Box("FrontWall_Top", new Vector3( 0f,    3.8f, -3.0f), new Vector3(6.0f, 2.4f, 0.24f), wallMat, root);
 
         // Unsichtbare Border – verhindert Rauslaufen, sitzt innerhalb des Raums
-        var border = new GameObject("EntranceBorder");
+        GameObject border = new GameObject("EntranceBorder");
         border.transform.position = new Vector3(0f, 1.5f, -2.6f);
         border.transform.SetParent(root);
         var bc = border.AddComponent<BoxCollider>();
@@ -322,6 +322,8 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         // Schwaches Füll-Licht für dunkle Ecken
         AddLight("FillDim", root, new Vector3(0f, 3.0f, 0f), LightType.Directional,
             new Color(0.55f, 0.45f, 0.30f), 0.35f, 0f, rotation: Quaternion.Euler(90f, 0f, 0f));
+
+        return border;
     }
 
     // ─── Workstation ─────────────────────────────────────────────────────────
@@ -776,8 +778,6 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         AddLight("AmbBlue2",   root, new Vector3(-2.6f,0.5f,  0.0f), LightType.Point,       new Color(0.14f,0.38f,1.00f), 0.32f,3.0f);
         AddLight("AmbAmber",   root, new Vector3(0,    0.5f, -2.6f), LightType.Point,       new Color(1.00f,0.60f,0.06f), 0.32f,3.0f);
         AddLight("FillDir",    root, new Vector3(0,    4.0f,  0.0f), LightType.Directional, new Color(0.55f,0.65f,0.90f), 1.2f, 0f, rotation: Quaternion.Euler(90f, 0f, 0f));
-
-        return border;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
