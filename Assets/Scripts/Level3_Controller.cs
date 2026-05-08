@@ -5,11 +5,11 @@ using System;
 /// Level 3 – Bibliothek: Phasen-Controller.
 /// Orchestriert drei Phasen:
 ///   A) Buch-Auswahl  (Level3_BookSelection)
-///   B) Farbcode       (Level3_ColorCode)
+///   B) Farbcode       (Level3_ColorPuzzle)
 ///   C) Generator      (TBD)
 ///
 /// Phase A übergibt die Farbsequenz via NotifyBookSolved(names, colors).
-/// Der Controller leitet sie an Level3_ColorCode.SetSolution() weiter.
+/// Der Controller leitet sie an Level3_ColorPuzzle.SetSolution() weiter.
 /// </summary>
 public class Level3_Controller : MonoBehaviour
 {
@@ -25,12 +25,12 @@ public class Level3_Controller : MonoBehaviour
     private enum Phase { BookSelection, ColorCode, Generator }
     private Phase currentPhase;
 
-    private Level3_ColorCode colorCodeScript;
+    private Level3_ColorPuzzle colorPuzzleScript;
 
     void Awake()
     {
         if (phaseB_ColorCode != null)
-            colorCodeScript = phaseB_ColorCode.GetComponent<Level3_ColorCode>();
+            colorPuzzleScript = phaseB_ColorCode.GetComponent<Level3_ColorPuzzle>();
     }
 
     void OnEnable()
@@ -60,7 +60,7 @@ public class Level3_Controller : MonoBehaviour
 
     void AdvanceToColorCode(string[] names, Color[] colors)
     {
-        colorCodeScript?.SetSolution(names, colors);
+        colorPuzzleScript?.SetSolution(names, colors);
         SetPhase(Phase.ColorCode);
     }
 
@@ -80,6 +80,6 @@ public class Level3_Controller : MonoBehaviour
     /// <summary>Phase B abgeschlossen: Farbsequenz korrekt eingegeben.</summary>
     public static void NotifyColorSolved() => OnColorCodeSolved?.Invoke();
 
-    /// <summary>Alias für NotifyColorSolved – direkter Aufruf aus Level3_ColorCode.</summary>
+    /// <summary>Alias für NotifyColorSolved – direkter Aufruf aus Level3_ColorPuzzle.</summary>
     public static void NextPhase() => OnColorCodeSolved?.Invoke();
 }
