@@ -55,7 +55,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         // ── Umgebung ──────────────────────────────────────────────────────────
         GameObject root = new GameObject("Environment");
         SceneManager.MoveGameObjectToScene(root, scene);
-        BuildRoom(root.transform);
+        var entranceBorder = BuildRoom(root.transform);
 
         // ── Spieler-Charakter ─────────────────────────────────────────────────
         GameObject player = AddPlayer(scene);
@@ -73,7 +73,11 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
 
         // ── Staubfleck an der Wand + Trigger ──────────────────────────────────
         var wallSpot = BuildDustyWallSpot(root.transform, scene);
-        BuildUI(scene, wallSpot);
+
+        // ── Schloss am Eingang ────────────────────────────────────────────────
+        var lockSpotGO = BuildLockSpot(root.transform);
+
+        BuildUI(scene, wallSpot, lockSpotGO, entranceBorder);
 
         EditorSceneManager.SaveScene(scene);
         Debug.Log("[Level2] Wartungsraum fertig.");
@@ -156,7 +160,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
     // Raum
     // ═══════════════════════════════════════════════════════════════════════
 
-    private void BuildRoom(Transform root)
+    private GameObject BuildRoom(Transform root)
     {
         // ── Materialien – verlassene Abstellkammer ───────────────────────────
         var wallMat     = M(new Color(0.30f, 0.27f, 0.23f), 0.03f, 0.07f);  // schmutziger Putz
@@ -772,6 +776,8 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         AddLight("AmbBlue2",   root, new Vector3(-2.6f,0.5f,  0.0f), LightType.Point,       new Color(0.14f,0.38f,1.00f), 0.32f,3.0f);
         AddLight("AmbAmber",   root, new Vector3(0,    0.5f, -2.6f), LightType.Point,       new Color(1.00f,0.60f,0.06f), 0.32f,3.0f);
         AddLight("FillDir",    root, new Vector3(0,    4.0f,  0.0f), LightType.Directional, new Color(0.55f,0.65f,0.90f), 1.2f, 0f, rotation: Quaternion.Euler(90f, 0f, 0f));
+
+        return border;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1102,10 +1108,41 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
     }
 
     // ═══════════════════════════════════════════════════════════════════════
+    // 3D Schloss am Eingang
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private GameObject BuildLockSpot(Transform root)
+    {
+        var lockMat  = M(new Color(0.15f, 0.13f, 0.10f), 0.6f, 0.3f);   // dunkles Metall
+        var shackMat = M(new Color(0.28f, 0.25f, 0.18f), 0.7f, 0.4f);
+
+        var lockGO = new GameObject("LockObject");
+        lockGO.transform.SetParent(root);
+
+        // Schloss-Koerper (kleiner Quader am rechten Tuerrahmen)
+        var body = Box("LockBody", new Vector3(0.75f, 1.05f, -2.88f),
+            new Vector3(0.14f, 0.11f, 0.06f), lockMat, lockGO.transform, col: false);
+        // Bügel oben
+        Cyl("LockShackle", new Vector3(0.75f, 1.17f, -2.88f),
+            new Vector3(0.018f, 0.06f, 0.018f), shackMat, lockGO.transform);
+
+        // Trigger-Zone (Spieler muss nah ran)
+        var trigGO = new GameObject("LockTrigger");
+        trigGO.transform.SetParent(lockGO.transform);
+        trigGO.transform.position = new Vector3(0.75f, 1.05f, -2.5f);
+        var bc2 = trigGO.AddComponent<BoxCollider>();
+        bc2.size      = new Vector3(1.4f, 1.8f, 1.0f);
+        bc2.isTrigger = true;
+        trigGO.AddComponent<DustyWallSpot>();
+
+        return trigGO;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     // UI – Canvas, DialogSystem, DustWallPanel, ArrowPanel
     // ═══════════════════════════════════════════════════════════════════════
 
-    private void BuildUI(Scene scene, GameObject wallSpotGO)
+    private void BuildUI(Scene scene, GameObject wallSpotGO, GameObject lockSpotGO, GameObject entranceBorderGO)
     {
         // EventSystem (benötigt für Button-Klicks)
         var esGO = new GameObject("EventSystem");
@@ -1248,53 +1285,75 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         dustInstructRT.anchoredPosition = new Vector2(0f, -32f);
         dustInstructRT.sizeDelta        = new Vector2(0f, 50f);
 
-        // ── Arrow Panel ──────────────────────────────────────────────────────
+        // ── Lock Interaction Prompt ──────────────────────────────────────────
+        var lockPromptGO = UiPanel("LockInteractionPrompt", canvasGO.transform,
+            new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+            new Vector2(0f, 80f), new Vector2(340f, 60f),
+            new Vector2(0.5f, 0f), new Color(0.0f, 0.0f, 0.0f, 0.72f));
+        lockPromptGO.SetActive(false);
+        var lockPromptTextGO  = new GameObject("Text");
+        lockPromptTextGO.transform.SetParent(lockPromptGO.transform, false);
+        var lockPromptTMP = lockPromptTextGO.AddComponent<TextMeshProUGUI>();
+        lockPromptTMP.text      = "[E] Schloss untersuchen";
+        lockPromptTMP.fontSize  = 22f;
+        lockPromptTMP.alignment = TextAlignmentOptions.Center;
+        lockPromptTMP.color     = Color.white;
+        var lockPromptRT = lockPromptTextGO.GetComponent<RectTransform>();
+        lockPromptRT.anchorMin = Vector2.zero;
+        lockPromptRT.anchorMax = Vector2.one;
+        lockPromptRT.offsetMin = new Vector2(8f, 4f);
+        lockPromptRT.offsetMax = new Vector2(-8f, -4f);
+
+        // ── Arrow Panel (kompaktes Overlay unten) ────────────────────────────
         var arrowPanelGO = UiPanel("ArrowPanel", canvasGO.transform,
-            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
-            new Vector2(0.5f, 0.5f), new Color(0.03f, 0.02f, 0.04f, 0.95f));
+            new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+            new Vector2(0f, 20f), new Vector2(620f, 210f),
+            new Vector2(0.5f, 0f), new Color(0.03f, 0.02f, 0.04f, 0.93f));
         arrowPanelGO.SetActive(false);
 
-        // Großer Pfeil-Hinweis (die enthüllte Kombination)
+        // Anleitung oben im Panel
+        var arrowSubGO  = new GameObject("ArrowSubtitle");
+        arrowSubGO.transform.SetParent(arrowPanelGO.transform, false);
+        var arrowSubTMP = arrowSubGO.AddComponent<TextMeshProUGUI>();
+        arrowSubTMP.text      = "Sequenz eingeben:";
+        arrowSubTMP.fontSize  = 22f;
+        arrowSubTMP.alignment = TextAlignmentOptions.Center;
+        arrowSubTMP.color     = new Color(0.78f, 0.78f, 0.78f);
+        var arrowSubRT = arrowSubGO.GetComponent<RectTransform>();
+        arrowSubRT.anchorMin        = new Vector2(0f, 1f);
+        arrowSubRT.anchorMax        = new Vector2(1f, 1f);
+        arrowSubRT.pivot            = new Vector2(0.5f, 1f);
+        arrowSubRT.anchoredPosition = new Vector2(0f, -14f);
+        arrowSubRT.sizeDelta        = new Vector2(0f, 36f);
+
+        // Pfeil-Hinweis (Combo-Anzeige, dummy – wird via ArrowHintText nicht genutzt)
         var arrowHintGO  = new GameObject("ArrowHintText");
         arrowHintGO.transform.SetParent(arrowPanelGO.transform, false);
         var arrowHintTMP = arrowHintGO.AddComponent<TextMeshProUGUI>();
-        arrowHintTMP.text      = "↑  ↑  ↓  ↓";
-        arrowHintTMP.fontSize  = 88f;
+        arrowHintTMP.text      = "";
+        arrowHintTMP.fontSize  = 28f;
         arrowHintTMP.alignment = TextAlignmentOptions.Center;
         arrowHintTMP.color     = new Color(1f, 0.85f, 0.2f);
         var arrowHintRT = arrowHintGO.GetComponent<RectTransform>();
         arrowHintRT.anchorMin        = new Vector2(0.5f, 0.5f);
         arrowHintRT.anchorMax        = new Vector2(0.5f, 0.5f);
-        arrowHintRT.anchoredPosition = new Vector2(0f, 100f);
-        arrowHintRT.sizeDelta        = new Vector2(850f, 130f);
-
-        // Anleitung
-        var arrowSubGO  = new GameObject("ArrowSubtitle");
-        arrowSubGO.transform.SetParent(arrowPanelGO.transform, false);
-        var arrowSubTMP = arrowSubGO.AddComponent<TextMeshProUGUI>();
-        arrowSubTMP.text      = "Gib die Sequenz mit den Pfeiltasten ein";
-        arrowSubTMP.fontSize  = 26f;
-        arrowSubTMP.alignment = TextAlignmentOptions.Center;
-        arrowSubTMP.color     = new Color(0.78f, 0.78f, 0.78f);
-        var arrowSubRT = arrowSubGO.GetComponent<RectTransform>();
-        arrowSubRT.anchorMin        = new Vector2(0.5f, 0.5f);
-        arrowSubRT.anchorMax        = new Vector2(0.5f, 0.5f);
-        arrowSubRT.anchoredPosition = new Vector2(0f, -10f);
-        arrowSubRT.sizeDelta        = new Vector2(700f, 50f);
+        arrowHintRT.anchoredPosition = new Vector2(0f, 20f);
+        arrowHintRT.sizeDelta        = new Vector2(580f, 50f);
 
         // Eingabe-Feedback (zeigt Fortschritt farbig an)
         var feedbackGO  = new GameObject("InputFeedback");
         feedbackGO.transform.SetParent(arrowPanelGO.transform, false);
         var feedbackTMP = feedbackGO.AddComponent<TextMeshProUGUI>();
-        feedbackTMP.text      = "<color=#555555>↑  ↑  ↓  ↓</color>";
-        feedbackTMP.fontSize  = 62f;
+        feedbackTMP.text      = "<color=#555555>hoch  hoch  runter  runter</color>";
+        feedbackTMP.fontSize  = 46f;
         feedbackTMP.alignment = TextAlignmentOptions.Center;
         feedbackTMP.color     = Color.white;
         var feedbackRT = feedbackGO.GetComponent<RectTransform>();
-        feedbackRT.anchorMin        = new Vector2(0.5f, 0.5f);
-        feedbackRT.anchorMax        = new Vector2(0.5f, 0.5f);
-        feedbackRT.anchoredPosition = new Vector2(0f, -140f);
-        feedbackRT.sizeDelta        = new Vector2(850f, 110f);
+        feedbackRT.anchorMin        = new Vector2(0.5f, 0f);
+        feedbackRT.anchorMax        = new Vector2(0.5f, 0f);
+        feedbackRT.pivot            = new Vector2(0.5f, 0f);
+        feedbackRT.anchoredPosition = new Vector2(0f, 18f);
+        feedbackRT.sizeDelta        = new Vector2(580f, 80f);
 
         // ── BigYahuDialogSystem ──────────────────────────────────────────────
         var dsGO = new GameObject("BigYahuDialogSystem");
@@ -1314,18 +1373,22 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         var dw   = dwGO.AddComponent<Level2_DustWall>();
         dw.enabled = true;
         var dwso = new SerializedObject(dw);
-        dwso.FindProperty("dustWallPanel").objectReferenceValue     = dustPanelGO;
-        dwso.FindProperty("arrowPanel").objectReferenceValue        = arrowPanelGO;
-        dwso.FindProperty("interactionPrompt").objectReferenceValue = promptGO;
-        dwso.FindProperty("dustyWallSpot").objectReferenceValue     =
+        dwso.FindProperty("dustWallPanel").objectReferenceValue         = dustPanelGO;
+        dwso.FindProperty("arrowPanel").objectReferenceValue            = arrowPanelGO;
+        dwso.FindProperty("interactionPrompt").objectReferenceValue     = promptGO;
+        dwso.FindProperty("dustyWallSpot").objectReferenceValue         =
             wallSpotGO != null ? wallSpotGO.GetComponent<DustyWallSpot>() : null;
-        dwso.FindProperty("dustOverlay").objectReferenceValue       = dustOverlayImg;
-        dwso.FindProperty("arrowHintText").objectReferenceValue     = arrowHintTMP;
-        dwso.FindProperty("inputFeedbackText").objectReferenceValue = feedbackTMP;
-        dwso.FindProperty("instructionText").objectReferenceValue   = dustInstructTMP;
+        dwso.FindProperty("lockSpot").objectReferenceValue              =
+            lockSpotGO != null ? lockSpotGO.GetComponent<DustyWallSpot>() : null;
+        dwso.FindProperty("lockInteractionPrompt").objectReferenceValue = lockPromptGO;
+        dwso.FindProperty("entranceBorderGO").objectReferenceValue      = entranceBorderGO;
+        dwso.FindProperty("dustOverlay").objectReferenceValue           = dustOverlayImg;
+        dwso.FindProperty("arrowHintText").objectReferenceValue         = arrowHintTMP;
+        dwso.FindProperty("inputFeedbackText").objectReferenceValue     = feedbackTMP;
+        dwso.FindProperty("instructionText").objectReferenceValue       = dustInstructTMP;
         dwso.ApplyModifiedPropertiesWithoutUndo();
 
-        Debug.Log("[Level2] UI aufgebaut: Canvas, DialogSystem, Prompt, DustWall, ArrowPanel.");
+        Debug.Log("[Level2] UI aufgebaut: Canvas, DialogSystem, Prompt, Schloss, DustWall, ArrowPanel.");
     }
 
     // ── UI-Hilfs-Methoden ────────────────────────────────────────────────────
