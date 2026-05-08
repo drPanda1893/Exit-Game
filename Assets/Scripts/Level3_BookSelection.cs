@@ -163,10 +163,14 @@ public class Level3_BookSelection : MonoBehaviour
 
     void InitBookshelf()
     {
+        if (bookButtons == null) return;
+
         for (int i = 0; i < bookButtons.Length; i++)
         {
+            if (bookButtons[i] == null) continue;
+
             // Labels setzen (falls kein manueller Text im Editor)
-            if (bookLabels != null && i < bookLabels.Length &&
+            if (bookLabels != null && i < bookLabels.Length && bookLabels[i] != null &&
                 string.IsNullOrEmpty(bookLabels[i].text) &&
                 i < DefaultBookTitles.Length)
             {
@@ -294,7 +298,11 @@ public class Level3_BookSelection : MonoBehaviour
         if (confirmReadButton != null)
             confirmReadButton.onClick.RemoveListener(OnConfirmRead);
 
+        if (bookButtons == null) return;
         foreach (var btn in bookButtons)
-            btn.onClick.RemoveAllListeners();
+        {
+            if (btn != null)
+                btn.onClick.RemoveAllListeners();
+        }
     }
 }

@@ -1224,7 +1224,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         var continueBtnGO = UiButton("ContinueButton", dialogPanelGO.transform,
             new Vector2(1f, 0f), new Vector2(1f, 0f),
             new Vector2(-14f, 14f), new Vector2(130f, 42f),
-            new Vector2(1f, 0f), new Color(0.12f, 0.52f, 0.22f), "Weiter ▶");
+            new Vector2(1f, 0f), new Color(0.12f, 0.52f, 0.22f), "Weiter >");
 
         // ── Interaktions-Prompt ("[E] Untersuchen") ──────────────────────────
         var promptGO = UiPanel("InteractionPrompt", canvasGO.transform,
