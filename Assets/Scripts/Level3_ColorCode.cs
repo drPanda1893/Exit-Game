@@ -7,16 +7,15 @@ using System.Collections.Generic;
 /// <summary>
 /// Level 3 – Phase B: Farbcode-Eingabe.
 ///
-/// Spieler hat die Bibel aufgeschlagen (Phase A abgeschlossen) und kennt
-/// die Farbsequenz. Nun muss er sie eingeben:
-///   • Fallback-Modus: 4 farbige UI-Buttons (Maus/Touch)
-///   • Arduino-Modus:  Farb-Sensor (Command 0x20) über ArduinoBridge
+/// Empfängt die Lösung (4 Farbnamen + Color-Werte) von Level3_Controller,
+/// nachdem Phase A (Bibel) abgeschlossen wurde. Der Spieler gibt die Sequenz
+/// über vier farbige UI-Buttons ein. Falsche Eingabe → Buttons blinken rot,
+/// Reset. Richtige Eingabe → Level3_Controller.NextPhase().
 ///
-/// Nach korrekter Eingabe → Level3_Controller.NotifyColorSolved().
+/// Arduino-Modus (0x20): Farb-Sensor scannt dieselben Namen.
 /// </summary>
 public class Level3_ColorCode : MonoBehaviour
 {
-    // ── UI-Buttons (Fallback) ─────────────────────────────────
     [Header("Farb-Buttons (Fallback-Modus)")]
     [SerializeField] private Button redButton;
     [SerializeField] private Button greenButton;
@@ -29,24 +28,18 @@ public class Level3_ColorCode : MonoBehaviour
     [Header("Feedback")]
     [SerializeField] private TextMeshProUGUI feedbackText;
 
-    // ── Arduino ───────────────────────────────────────────────
     [Header("Arduino-Integration")]
-    [Tooltip("Wenn true, werden UI-Buttons angezeigt als Fallback.")]
+    [Tooltip("Wenn true, werden UI-Buttons als Fallback angezeigt.")]
     [SerializeField] private bool arduinoFallback = true;
-
-    [Tooltip("Panel mit den manuellen Farb-Buttons.")]
     [SerializeField] private GameObject fallbackButtonPanel;
-
-    [Tooltip("Anweisung für Arduino-Modus ('Halte den Sensor an die Farbe …')")]
     [SerializeField] private TextMeshProUGUI arduinoInstructionText;
 
-    // ── Helios NPC ────────────────────────────────────────────
     [Header("Helios NPC")]
     [SerializeField] private Sprite heliosPortrait;
 
-    // ── Lösung ────────────────────────────────────────────────
-    private static readonly string[] Solution = { "Red", "Blue", "Yellow", "Green" };
-    private static readonly Color[] SolutionColors =
+    // Fallback-Lösung, wenn Phase A keine Lösung übergibt
+    private static readonly string[] DefaultSolutionNames = { "Red", "Blue", "Yellow", "Green" };
+    private static readonly Color[] DefaultSolutionColors =
     {
         Color.red,
         new Color(0.2f, 0.4f, 1f),
@@ -54,15 +47,42 @@ public class Level3_ColorCode : MonoBehaviour
         Color.green
     };
 
+    private string[] solutionNames;
+    private Color[] solutionColors;
     private readonly List<string> playerInput = new();
     private bool locked;
+    private Button[] allColorButtons;
+
+    // ══════════════════════════════════════════════════════════
+    // API für Level3_Controller
+    // ══════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Wird von Level3_Controller aufgerufen, sobald Phase A die Bibel-Farben liefert.
+    /// </summary>
+    public void SetSolution(string[] names, Color[] colors)
+    {
+        solutionNames = names;
+        solutionColors = colors;
+    }
 
     // ══════════════════════════════════════════════════════════
     // Lifecycle
     // ══════════════════════════════════════════════════════════
 
+    void Awake()
+    {
+        allColorButtons = new[] { redButton, greenButton, blueButton, yellowButton };
+    }
+
     void OnEnable()
     {
+        if (solutionNames == null || solutionNames.Length == 0)
+        {
+            solutionNames = DefaultSolutionNames;
+            solutionColors = DefaultSolutionColors;
+        }
+
         playerInput.Clear();
         locked = false;
         ResetIndicators();
@@ -76,7 +96,6 @@ public class Level3_ColorCode : MonoBehaviour
 
     void Start()
     {
-        // UI-Button Listener (Fallback)
         redButton.onClick.AddListener(()    => Press("Red",    Color.red));
         blueButton.onClick.AddListener(()   => Press("Blue",   new Color(0.2f, 0.4f, 1f)));
         yellowButton.onClick.AddListener(() => Press("Yellow", Color.yellow));
@@ -85,53 +104,40 @@ public class Level3_ColorCode : MonoBehaviour
 
     void OnDisable()
     {
-        // Arduino-Events abmelden (wenn implementiert)
         // ArduinoBridge.OnColorReading -= OnArduinoColor;
     }
 
     // ══════════════════════════════════════════════════════════
-    // Input-Modus konfigurieren
+    // Input-Modus
     // ══════════════════════════════════════════════════════════
 
     void ConfigureInputMode()
     {
         bool useArduino = !arduinoFallback && IsArduinoConnected();
 
-        // Fallback-Buttons ein/ausblenden
         if (fallbackButtonPanel != null)
             fallbackButtonPanel.SetActive(!useArduino);
 
-        // Arduino-Anweisung ein/ausblenden
         if (arduinoInstructionText != null)
         {
             arduinoInstructionText.gameObject.SetActive(useArduino);
             arduinoInstructionText.text = "Halte den Farb-Sensor an die richtige Farbe …";
         }
 
-        if (useArduino)
-        {
-            // TODO: Arduino-Event registrieren
-            // ArduinoBridge.Instance.OnColorReading += OnArduinoColor;
-        }
+        // if (useArduino) ArduinoBridge.Instance.OnColorReading += OnArduinoColor;
     }
 
-    /// <summary>
-    /// Prüft, ob ArduinoBridge verbunden ist.
-    /// Placeholder bis ArduinoBridge-Singleton existiert.
-    /// </summary>
-    bool IsArduinoConnected()
-    {
-        // TODO: return ArduinoBridge.Instance != null && ArduinoBridge.Instance.IsConnected;
-        return false;
-    }
+    bool IsArduinoConnected() => false;
+    // TODO: return ArduinoBridge.Instance != null && ArduinoBridge.Instance.IsConnected;
 
     // ══════════════════════════════════════════════════════════
-    // Helios Dialog (Phase B)
+    // NPC Dialog
     // ══════════════════════════════════════════════════════════
 
     void ShowHeliosColorPrompt()
     {
         var dialog = BigYahuDialogSystem.Instance;
+        if (dialog == null) { Debug.LogWarning("[Level3] BigYahuDialogSystem nicht in Scene gefunden."); return; }
         dialog.SetSpeaker("Helios", heliosPortrait);
 
         if (arduinoFallback || !IsArduinoConnected())
@@ -153,15 +159,13 @@ public class Level3_ColorCode : MonoBehaviour
     }
 
     // ══════════════════════════════════════════════════════════
-    // Eingabe-Verarbeitung
+    // Eingabe
     // ══════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// Wird von UI-Buttons ODER Arduino-Callback aufgerufen.
-    /// </summary>
+    /// <summary>Wird von UI-Buttons ODER Arduino-Callback aufgerufen.</summary>
     void Press(string color, Color uiColor)
     {
-        if (locked || playerInput.Count >= Solution.Length) return;
+        if (locked || playerInput.Count >= solutionNames.Length) return;
 
         playerInput.Add(color);
         int idx = playerInput.Count - 1;
@@ -169,17 +173,13 @@ public class Level3_ColorCode : MonoBehaviour
         if (sequenceIndicators != null && idx < sequenceIndicators.Length)
             sequenceIndicators[idx].color = uiColor;
 
-        if (playerInput.Count == Solution.Length)
+        if (playerInput.Count == solutionNames.Length)
             StartCoroutine(Evaluate());
     }
 
-    /// <summary>
-    /// Arduino-Farbsensor Callback (Command 0x20).
-    /// Mappt den Sensor-String auf unsere Farbnamen.
-    /// </summary>
+    /// <summary>Arduino-Farbsensor Callback (Command 0x20). Format: "COLOR:Red"</summary>
     void OnArduinoColor(string sensorValue)
     {
-        // Erwartetes Format von Arduino: "COLOR:Red", "COLOR:Blue", etc.
         string colorName = sensorValue.Replace("COLOR:", "").Trim();
 
         Color uiColor = colorName switch
@@ -210,9 +210,9 @@ public class Level3_ColorCode : MonoBehaviour
         yield return new WaitForSeconds(0.4f);
 
         bool correct = true;
-        for (int i = 0; i < Solution.Length; i++)
+        for (int i = 0; i < solutionNames.Length; i++)
         {
-            if (playerInput[i] != Solution[i])
+            if (playerInput[i] != solutionNames[i])
             {
                 correct = false;
                 break;
@@ -221,21 +221,56 @@ public class Level3_ColorCode : MonoBehaviour
 
         if (correct)
         {
-            feedbackText.text = "✓ Korrekte Sequenz!";
-            yield return new WaitForSeconds(0.9f);
+            if (feedbackText != null)
+                feedbackText.text = "✓ Korrekte Sequenz!";
 
-            // Über Controller weiterleiten (nicht direkt CompleteCurrentLevel)
-            Level3_Controller.NotifyColorSolved();
+            yield return new WaitForSeconds(0.9f);
+            Level3_Controller.NextPhase();
         }
         else
         {
-            feedbackText.text = "✗ Falsche Reihenfolge!";
-            yield return new WaitForSeconds(1.1f);
+            if (feedbackText != null)
+                feedbackText.text = "✗ Falsche Reihenfolge!";
+
+            yield return StartCoroutine(BlinkButtonsRed());
 
             playerInput.Clear();
             ResetIndicators();
-            feedbackText.text = string.Empty;
+            if (feedbackText != null)
+                feedbackText.text = string.Empty;
             locked = false;
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // Visuelles Fehler-Feedback
+    // ══════════════════════════════════════════════════════════
+
+    IEnumerator BlinkButtonsRed()
+    {
+        Color errorRed = new Color(0.85f, 0.15f, 0.15f);
+        var originals = new Color[allColorButtons.Length];
+
+        for (int blink = 0; blink < 2; blink++)
+        {
+            for (int i = 0; i < allColorButtons.Length; i++)
+            {
+                if (allColorButtons[i] == null) continue;
+                if (blink == 0) originals[i] = allColorButtons[i].colors.normalColor;
+                var cb = allColorButtons[i].colors;
+                cb.normalColor = errorRed;
+                allColorButtons[i].colors = cb;
+            }
+            yield return new WaitForSeconds(0.3f);
+
+            for (int i = 0; i < allColorButtons.Length; i++)
+            {
+                if (allColorButtons[i] == null) continue;
+                var cb = allColorButtons[i].colors;
+                cb.normalColor = originals[i];
+                allColorButtons[i].colors = cb;
+            }
+            yield return new WaitForSeconds(0.2f);
         }
     }
 

@@ -43,14 +43,15 @@ public class PlayerController : MonoBehaviour
 
     void FixedUpdate()
     {
+        if (rb == null) return;
+
         if (moveDirection.sqrMagnitude > 0f)
         {
             rb.MovePosition(rb.position + moveDirection * moveSpeed * Time.fixedDeltaTime);
         }
         else
         {
-            // Velocity komplett nullen — verhindert Driften und Schweben
-            rb.linearVelocity        = Vector3.zero;
+            rb.linearVelocity  = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
         }
     }

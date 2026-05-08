@@ -64,6 +64,9 @@ public class Level3_BookSelection : MonoBehaviour
         Color.green
     };
 
+    [Tooltip("Farbnamen parallel zu hintColors – werden als Lösung an Phase B übergeben.")]
+    [SerializeField] private string[] hintColorNames = { "Red", "Blue", "Yellow", "Green" };
+
     [SerializeField] private string pageNumber = "316";
 
     // ── Bücherliste (Default-Titel) ───────────────────────────
@@ -111,8 +114,8 @@ public class Level3_BookSelection : MonoBehaviour
     void ShowHeliosIntro()
     {
         var dialog = BigYahuDialogSystem.Instance;
+        if (dialog == null) { Debug.LogWarning("[Level3] BigYahuDialogSystem nicht in Scene gefunden."); return; }
 
-        // Dynamisch auf Helios umschalten
         dialog.SetSpeaker("Helios", heliosPortrait);
 
         dialog.ShowDialog(new[]
@@ -126,6 +129,7 @@ public class Level3_BookSelection : MonoBehaviour
     void ShowHeliosWrongBook(string bookTitle)
     {
         var dialog = BigYahuDialogSystem.Instance;
+        if (dialog == null) return;
         dialog.SetSpeaker("Helios", heliosPortrait);
 
         // Verschiedene Reaktionen für Abwechslung
@@ -143,6 +147,7 @@ public class Level3_BookSelection : MonoBehaviour
     void ShowHeliosCorrectBook()
     {
         var dialog = BigYahuDialogSystem.Instance;
+        if (dialog == null) return;
         dialog.SetSpeaker("Helios", heliosPortrait);
 
         dialog.ShowDialog(new[]
@@ -260,6 +265,11 @@ public class Level3_BookSelection : MonoBehaviour
         {
             for (int i = 0; i < colorHintImages.Length && i < hintColors.Length; i++)
             {
+                if (colorHintImages[i] == null)
+                {
+                    Debug.LogWarning($"[Level3] colorHintImages[{i}] nicht im Inspector zugewiesen.");
+                    continue;
+                }
                 colorHintImages[i].color = hintColors[i];
                 colorHintImages[i].gameObject.SetActive(true);
             }
@@ -271,7 +281,7 @@ public class Level3_BookSelection : MonoBehaviour
     {
         if (!bookOpened) return;
 
-        Level3_Controller.NotifyBookSolved();
+        Level3_Controller.NotifyBookSolved(hintColorNames, hintColors);
     }
 
     // ══════════════════════════════════════════════════════════
