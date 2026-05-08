@@ -75,6 +75,17 @@ public class ArduinoBridge : MonoBehaviour
             Connect(portName, baudRate);
     }
 
+    // Nach Connect kurz warten, dann Ping senden um Verbindung zu bestätigen
+    System.Collections.IEnumerator AutoPingRoutine()
+    {
+        yield return new WaitForSeconds(1.2f);
+        if (IsConnected)
+        {
+            Debug.Log("[ArduinoBridge] Auto-Ping...");
+            Send(0xFF, "ping");
+        }
+    }
+
     void Update()
     {
         // Alle eingehenden Nachrichten auf dem Main Thread dispatchen
@@ -117,6 +128,7 @@ public class ArduinoBridge : MonoBehaviour
 
             Debug.Log($"[ArduinoBridge] Verbunden: {portName} @ {baudRate} Baud");
             OnConnectionChanged?.Invoke(true);
+            StartCoroutine(AutoPingRoutine());
         }
         catch (Exception ex)
         {
@@ -266,4 +278,13 @@ public class ArduinoBridge : MonoBehaviour
         Send(0xFF, "ping");
         return true;
     }
+
+    [ContextMenu("Ping senden (Test)")]
+    void PingFromInspector() => Ping();
+
+    [ContextMenu("Verbindung trennen")]
+    void DisconnectFromInspector() => Disconnect();
+
+    [ContextMenu("Neu verbinden")]
+    void ReconnectFromInspector() => Connect(portName, baudRate);
 }
