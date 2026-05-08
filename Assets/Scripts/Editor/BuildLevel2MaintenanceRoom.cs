@@ -1066,7 +1066,6 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
 
         var spotGO = new GameObject("DustyWallSpot");
         spotGO.transform.SetParent(root);
-        SceneManager.MoveGameObjectToScene(spotGO, scene);
 
         // Sichtbare Schmutzfläche – leicht hervorstehend von der Rückwand
         var patch = GameObject.CreatePrimitive(PrimitiveType.Cube);
