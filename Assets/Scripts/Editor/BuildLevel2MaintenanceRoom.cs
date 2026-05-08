@@ -71,6 +71,18 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
 
         AddBackgroundMusic(scene);
 
+        // ── GameManager ───────────────────────────────────────────────────────
+        var gmGO = new GameObject("GameManager");
+        SceneManager.MoveGameObjectToScene(gmGO, scene);
+        var gm = gmGO.AddComponent<GameManager>();
+        var gmso = new SerializedObject(gm);
+        var sceneNamesArr = gmso.FindProperty("levelSceneNames");
+        sceneNamesArr.arraySize = 6;
+        string[] names = { "Level1", "Level2", "Level3", "Level4", "Level5", "Level6" };
+        for (int i = 0; i < names.Length; i++)
+            sceneNamesArr.GetArrayElementAtIndex(i).stringValue = names[i];
+        gmso.ApplyModifiedPropertiesWithoutUndo();
+
         // ── Staubfleck an der Wand + Trigger ──────────────────────────────────
         var wallSpot = BuildDustyWallSpot(root.transform, scene);
 
