@@ -69,7 +69,10 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         RenderSettings.ambientLight = new Color(0.18f, 0.15f, 0.10f);
 
         AddBackgroundMusic(scene);
-        BuildUI(scene);
+
+        // ── Staubfleck an der Wand + Trigger ──────────────────────────────────
+        var wallSpot = BuildDustyWallSpot(root.transform, scene);
+        BuildUI(scene, wallSpot);
 
         EditorSceneManager.SaveScene(scene);
         Debug.Log("[Level2] Wartungsraum fertig.");
@@ -1054,10 +1057,55 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
     }
 
     // ═══════════════════════════════════════════════════════════════════════
+    // 3D Staubfleck an der Wand
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private GameObject BuildDustyWallSpot(Transform root, Scene scene)
+    {
+        var spotMat = M(new Color(0.58f, 0.50f, 0.32f), 0f, 0.04f);   // staubig-gelblich
+
+        var spotGO = new GameObject("DustyWallSpot");
+        spotGO.transform.SetParent(root);
+        SceneManager.MoveGameObjectToScene(spotGO, scene);
+
+        // Sichtbare Schmutzfläche – leicht hervorstehend von der Rückwand
+        var patch = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        patch.name = "DustPatch";
+        patch.transform.SetParent(spotGO.transform);
+        patch.transform.position   = new Vector3(-1.2f, 1.35f, 2.89f);
+        patch.transform.localScale = new Vector3(0.90f, 0.65f, 0.02f);
+        patch.GetComponent<Renderer>().material = spotMat;
+        Object.DestroyImmediate(patch.GetComponent<Collider>());
+
+        // Trigger-Zone (unsichtbar, etwas tiefer in den Raum)
+        var triggerGO = new GameObject("Trigger");
+        triggerGO.transform.SetParent(spotGO.transform);
+        triggerGO.transform.position = new Vector3(-1.2f, 1.35f, 2.4f);
+        var bc = triggerGO.AddComponent<BoxCollider>();
+        bc.size      = new Vector3(1.2f, 1.2f, 1.0f);
+        bc.isTrigger = true;
+        triggerGO.AddComponent<DustyWallSpot>();
+
+        // Kleiner Pfeil-Hinweis auf dem Staubfleck (Rätsel-Spur)
+        var markGO = new GameObject("DustMark");
+        markGO.transform.SetParent(spotGO.transform);
+        markGO.transform.position = new Vector3(-1.2f, 1.35f, 2.878f);
+        markGO.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+        var markText = markGO.AddComponent<TextMeshPro>();
+        markText.text      = "?";
+        markText.fontSize  = 1.4f;
+        markText.color     = new Color(0.40f, 0.34f, 0.18f);   // kaum sichtbar
+        markText.alignment = TextAlignmentOptions.Center;
+        markGO.GetComponent<RectTransform>().sizeDelta = new Vector2(0.9f, 0.7f);
+
+        return triggerGO;   // DustyWallSpot-Komponente liegt hier drauf
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     // UI – Canvas, DialogSystem, DustWallPanel, ArrowPanel
     // ═══════════════════════════════════════════════════════════════════════
 
-    private void BuildUI(Scene scene)
+    private void BuildUI(Scene scene, GameObject wallSpotGO)
     {
         // EventSystem (benötigt für Button-Klicks)
         var esGO = new GameObject("EventSystem");
@@ -1076,52 +1124,77 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         scaler.referenceResolution = new Vector2(1920f, 1080f);
         canvasGO.AddComponent<GraphicRaycaster>();
 
-        // ── Dialog Panel (unterer Streifen) ──────────────────────────────────
+        // ── Dialog Panel (unterer Streifen – größer für bessere Sichtbarkeit) ─
         var dialogPanelGO = UiPanel("DialogPanel", canvasGO.transform,
             new Vector2(0f, 0f), new Vector2(1f, 0f),
-            new Vector2(0f, 0f), new Vector2(0f, 200f),
-            new Vector2(0.5f, 0f), new Color(0.04f, 0.04f, 0.08f, 0.93f));
+            new Vector2(0f, 0f), new Vector2(0f, 260f),
+            new Vector2(0.5f, 0f), new Color(0.03f, 0.03f, 0.06f, 0.97f));
         dialogPanelGO.SetActive(false);
+
+        // Obere Trennlinie (damit Panel sich vom 3D-Bild absetzt)
+        var borderGO = UiImage("TopBorder", dialogPanelGO.transform,
+            new Vector2(0f, 1f), new Vector2(1f, 1f),
+            Vector2.zero, new Vector2(0f, 3f),
+            new Color(0.55f, 0.45f, 0.20f));
 
         // Portrait links
         var portraitGO = UiImage("Portrait", dialogPanelGO.transform,
             new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
-            new Vector2(100f, 0f), new Vector2(160f, 160f),
-            new Color(0.35f, 0.35f, 0.45f, 1f));
+            new Vector2(110f, 0f), new Vector2(190f, 190f),
+            new Color(0.30f, 0.28f, 0.38f, 1f));
 
         // Speaker-Label
         var speakerGO  = new GameObject("SpeakerLabel");
         speakerGO.transform.SetParent(dialogPanelGO.transform, false);
         var speakerTMP = speakerGO.AddComponent<TextMeshProUGUI>();
         speakerTMP.text      = "Joshi";
-        speakerTMP.fontSize  = 22f;
+        speakerTMP.fontSize  = 26f;
         speakerTMP.fontStyle = FontStyles.Bold;
-        speakerTMP.color     = new Color(1f, 0.88f, 0.55f);
+        speakerTMP.color     = new Color(1f, 0.85f, 0.45f);
         var speakerRT = speakerGO.GetComponent<RectTransform>();
         speakerRT.anchorMin        = new Vector2(0f, 1f);
         speakerRT.anchorMax        = new Vector2(1f, 1f);
         speakerRT.pivot            = new Vector2(0f, 1f);
-        speakerRT.anchoredPosition = new Vector2(210f, -8f);
-        speakerRT.sizeDelta        = new Vector2(-330f, 32f);
+        speakerRT.anchoredPosition = new Vector2(240f, -12f);
+        speakerRT.sizeDelta        = new Vector2(-370f, 36f);
 
-        // Dialog-Text
+        // Dialog-Text (größer)
         var dialogTextGO  = new GameObject("DialogText");
         dialogTextGO.transform.SetParent(dialogPanelGO.transform, false);
         var dialogTMP = dialogTextGO.AddComponent<TextMeshProUGUI>();
-        dialogTMP.text    = "";
-        dialogTMP.fontSize = 20f;
-        dialogTMP.color   = Color.white;
+        dialogTMP.text     = "";
+        dialogTMP.fontSize = 24f;
+        dialogTMP.color    = Color.white;
         var dialogRT = dialogTextGO.GetComponent<RectTransform>();
         dialogRT.anchorMin = Vector2.zero;
         dialogRT.anchorMax = Vector2.one;
-        dialogRT.offsetMin = new Vector2(210f, 42f);
-        dialogRT.offsetMax = new Vector2(-130f, -14f);
+        dialogRT.offsetMin = new Vector2(240f, 48f);
+        dialogRT.offsetMax = new Vector2(-145f, -16f);
 
         // Weiter-Button (rechts unten)
         var continueBtnGO = UiButton("ContinueButton", dialogPanelGO.transform,
             new Vector2(1f, 0f), new Vector2(1f, 0f),
-            new Vector2(-12f, 12f), new Vector2(115f, 36f),
+            new Vector2(-14f, 14f), new Vector2(130f, 42f),
             new Vector2(1f, 0f), new Color(0.12f, 0.52f, 0.22f), "Weiter ▶");
+
+        // ── Interaktions-Prompt ("[E] Untersuchen") ──────────────────────────
+        var promptGO = UiPanel("InteractionPrompt", canvasGO.transform,
+            new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+            new Vector2(0f, 80f), new Vector2(340f, 60f),
+            new Vector2(0.5f, 0f), new Color(0.0f, 0.0f, 0.0f, 0.72f));
+        promptGO.SetActive(false);
+        var promptTextGO  = new GameObject("PromptText");
+        promptTextGO.transform.SetParent(promptGO.transform, false);
+        var promptTMP = promptTextGO.AddComponent<TextMeshProUGUI>();
+        promptTMP.text      = "<color=#FFD966>[E]</color>  Untersuchen";
+        promptTMP.fontSize  = 24f;
+        promptTMP.alignment = TextAlignmentOptions.Center;
+        promptTMP.color     = Color.white;
+        var promptTxtRT = promptTextGO.GetComponent<RectTransform>();
+        promptTxtRT.anchorMin = Vector2.zero;
+        promptTxtRT.anchorMax = Vector2.one;
+        promptTxtRT.offsetMin = Vector2.zero;
+        promptTxtRT.offsetMax = Vector2.zero;
 
         // ── Dust Wall Panel ──────────────────────────────────────────────────
         var dustPanelGO = UiPanel("DustWallPanel", canvasGO.transform,
@@ -1239,16 +1312,20 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         var dwGO = new GameObject("Level2_DustWall");
         SceneManager.MoveGameObjectToScene(dwGO, scene);
         var dw   = dwGO.AddComponent<Level2_DustWall>();
+        dw.enabled = true;
         var dwso = new SerializedObject(dw);
         dwso.FindProperty("dustWallPanel").objectReferenceValue     = dustPanelGO;
         dwso.FindProperty("arrowPanel").objectReferenceValue        = arrowPanelGO;
+        dwso.FindProperty("interactionPrompt").objectReferenceValue = promptGO;
+        dwso.FindProperty("dustyWallSpot").objectReferenceValue     =
+            wallSpotGO != null ? wallSpotGO.GetComponent<DustyWallSpot>() : null;
         dwso.FindProperty("dustOverlay").objectReferenceValue       = dustOverlayImg;
         dwso.FindProperty("arrowHintText").objectReferenceValue     = arrowHintTMP;
         dwso.FindProperty("inputFeedbackText").objectReferenceValue = feedbackTMP;
         dwso.FindProperty("instructionText").objectReferenceValue   = dustInstructTMP;
         dwso.ApplyModifiedPropertiesWithoutUndo();
 
-        Debug.Log("[Level2] UI aufgebaut: Canvas, DialogSystem, DustWall, ArrowPanel.");
+        Debug.Log("[Level2] UI aufgebaut: Canvas, DialogSystem, Prompt, DustWall, ArrowPanel.");
     }
 
     // ── UI-Hilfs-Methoden ────────────────────────────────────────────────────

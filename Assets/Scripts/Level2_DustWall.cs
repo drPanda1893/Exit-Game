@@ -5,33 +5,52 @@ using UnityEngine.InputSystem;
 using System.Collections;
 
 /// <summary>
-/// Level 2 – Staubige Wand (zwei Phasen).
+/// Level 2 – Staubige Wand.
 ///
-/// Phase 1 – Scratch: Joshi-Dialog → Spieler reibt Staub mit Maus weg.
-/// Phase 2 – Combo:  Pfeilsequenz ↑↑↓↓ per Pfeiltasten eingeben.
-/// Erfolg → GameManager.CompleteCurrentLevel()
+/// State-Machine:
+///   Idle → JoshiDialog → WaitingInteraction → Scratching → ArrowCombo → Done
+///
+/// Spieler bekommt Rätseldialog von Joshi, sucht den Staubfleck in der Wand,
+/// drückt [E] → Scratch-UI öffnet sich → Pfeil-Combo ↑↑↓↓ → nächstes Level.
 /// </summary>
 public class Level2_DustWall : MonoBehaviour
 {
+    public static Level2_DustWall Instance { get; private set; }
+
+    // ── Panels ────────────────────────────────────────────────────────────────
+
     [Header("Panels")]
     [SerializeField] private GameObject dustWallPanel;
     [SerializeField] private GameObject arrowPanel;
+    [SerializeField] private GameObject interactionPrompt;   // "[E] Untersuchen"
+
+    // ── 3D Wand-Trigger ───────────────────────────────────────────────────────
+
+    [Header("3D Interaktion")]
+    [SerializeField] private DustyWallSpot dustyWallSpot;
+
+    // ── Scratch-Bereich ───────────────────────────────────────────────────────
 
     [Header("Scratch-Bereich")]
     [SerializeField] private RawImage dustOverlay;
     [SerializeField] private int brushRadius = 28;
     [SerializeField][Range(0f, 1f)] private float revealThreshold = 0.65f;
 
+    // ── Pfeil-Combo ───────────────────────────────────────────────────────────
+
     [Header("Pfeil-Combo")]
     [SerializeField] private TextMeshProUGUI arrowHintText;
     [SerializeField] private TextMeshProUGUI inputFeedbackText;
     [SerializeField] private TextMeshProUGUI instructionText;
 
+    // ── State ─────────────────────────────────────────────────────────────────
+
+    private enum State { Idle, WaitingInteraction, Scratching, ArrowCombo, Done }
+    private State state = State.Idle;
+
     private Texture2D dustTex;
     private int totalPixels;
     private int clearedPixels;
-    private bool dustDone;
-    private bool comboActive;
     private int comboIndex;
 
     private static readonly Key[] correctKeys =
@@ -42,50 +61,87 @@ public class Level2_DustWall : MonoBehaviour
     // Lifecycle
     // =========================================================================
 
+    void Awake() => Instance = this;
+
     void OnEnable()
     {
-        dustDone      = false;
-        comboActive   = false;
-        comboIndex    = 0;
+        state         = State.Idle;
         clearedPixels = 0;
+        comboIndex    = 0;
         dustTex       = null;
 
-        if (dustWallPanel) dustWallPanel.SetActive(false);
-        if (arrowPanel)    arrowPanel.SetActive(false);
+        if (dustWallPanel)      dustWallPanel.SetActive(false);
+        if (arrowPanel)         arrowPanel.SetActive(false);
+        if (interactionPrompt)  interactionPrompt.SetActive(false);
 
-        if (BigYahuDialogSystem.Instance == null) { StartDustPhase(); return; }
-
-        BigYahuDialogSystem.Instance.SetSpeaker("Joshi");
-        BigYahuDialogSystem.Instance.ShowDialog(new[]
-        {
-            "Joshi: Hey! Endlich wacht jemand auf.",
-            "Joshi: Ich bin schon eine Weile hier drin. Aber ich kenn den Weg raus.",
-            "Joshi: Siehst du diese staubige Wand? Dahinter ist ein Code.",
-            "Joshi: Reib den Staub mit der Maus weg!"
-        }, () =>
-        {
-            BigYahuDialogSystem.Instance.ResetSpeaker();
-            StartDustPhase();
-        });
+        StartJoshiDialog();
     }
 
     void OnDisable()
     {
-        comboActive = false;
+        state = State.Idle;
+        if (interactionPrompt) interactionPrompt.SetActive(false);
     }
 
     void Update()
     {
-        if (!dustDone && dustTex != null) HandleScratch();
-        if (comboActive)                  HandleArrowInput();
+        switch (state)
+        {
+            case State.WaitingInteraction: HandleWaiting();    break;
+            case State.Scratching:         HandleScratch();    break;
+            case State.ArrowCombo:         HandleArrowInput(); break;
+        }
+    }
+
+    // =========================================================================
+    // Joshi-Rätseldialog
+    // =========================================================================
+
+    void StartJoshiDialog()
+    {
+        if (BigYahuDialogSystem.Instance == null) { state = State.WaitingInteraction; return; }
+
+        BigYahuDialogSystem.Instance.SetSpeaker("Joshi");
+        BigYahuDialogSystem.Instance.ShowDialog(new[]
+        {
+            "Joshi: Oh – du bist wach! Gut. Ich warte schon eine Weile auf jemanden.",
+            "Joshi: Weißt du... ich war schon mal kurz davor, hier rauszukommen. Hatte alles vorbereitet.",
+            "Joshi: Die Antwort steckt noch in diesen Wänden. Buchstäblich.",
+            "Joshi: Such nach dem, was die Zeit vergessen hat. Wo der Staub am dicksten liegt."
+        }, () =>
+        {
+            BigYahuDialogSystem.Instance.ResetSpeaker();
+            state = State.WaitingInteraction;
+        });
+    }
+
+    // =========================================================================
+    // Phase 0 – Warten auf Interaktion
+    // =========================================================================
+
+    void HandleWaiting()
+    {
+        if (dustyWallSpot == null) return;
+
+        if (interactionPrompt)
+            interactionPrompt.SetActive(dustyWallSpot.PlayerNearby);
+
+        if (!dustyWallSpot.PlayerNearby) return;
+
+        if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
+        {
+            if (interactionPrompt) interactionPrompt.SetActive(false);
+            ActivateScratch();
+        }
     }
 
     // =========================================================================
     // Phase 1 – Scratch
     // =========================================================================
 
-    void StartDustPhase()
+    void ActivateScratch()
     {
+        state = State.Scratching;
         if (dustWallPanel) dustWallPanel.SetActive(true);
         StartCoroutine(BuildTexture());
     }
@@ -112,11 +168,13 @@ public class Level2_DustWall : MonoBehaviour
 
     void HandleScratch()
     {
+        if (dustTex == null) return;
+
         var mouse = Mouse.current;
         if (mouse == null || !mouse.leftButton.isPressed) return;
 
         Vector2 screenPos = mouse.position.ReadValue();
-        RectTransform rt = dustOverlay.rectTransform;
+        RectTransform rt  = dustOverlay.rectTransform;
         Canvas canvas = rt.GetComponentInParent<Canvas>();
         Camera cam = (canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay)
             ? null : Camera.main;
@@ -149,20 +207,20 @@ public class Level2_DustWall : MonoBehaviour
         if (!changed) return;
         dustTex.Apply();
 
-        if (!dustDone && (float)clearedPixels / totalPixels >= revealThreshold)
+        if ((float)clearedPixels / totalPixels >= revealThreshold)
             StartCoroutine(OnDustCleared());
     }
 
     IEnumerator OnDustCleared()
     {
-        dustDone = true;
+        state = State.Idle;   // Eingabe pausieren während Dialog läuft
         yield return new WaitForSeconds(0.4f);
 
         if (BigYahuDialogSystem.Instance != null)
         {
             BigYahuDialogSystem.Instance.SetSpeaker("Joshi");
             BigYahuDialogSystem.Instance.ShowDialog(
-                "Joshi: Da! Siehst du die Pfeile? Gib die Sequenz mit den Pfeiltasten ein!",
+                "Joshi: Da! Siehst du die Pfeile? Das ist mein Code. Gib die Sequenz ein!",
                 () =>
                 {
                     BigYahuDialogSystem.Instance.ResetSpeaker();
@@ -183,8 +241,8 @@ public class Level2_DustWall : MonoBehaviour
     {
         if (dustWallPanel) dustWallPanel.SetActive(false);
         if (arrowPanel)    arrowPanel.SetActive(true);
-        comboIndex  = 0;
-        comboActive = true;
+        comboIndex = 0;
+        state      = State.ArrowCombo;
         RefreshFeedback();
     }
 
@@ -227,7 +285,7 @@ public class Level2_DustWall : MonoBehaviour
 
     IEnumerator OnComboDone()
     {
-        comboActive = false;
+        state = State.Done;
         if (inputFeedbackText)
             inputFeedbackText.text = "<color=#00FF88>↑  ↑  ↓  ↓  ✓</color>";
         yield return new WaitForSeconds(0.6f);
@@ -236,7 +294,7 @@ public class Level2_DustWall : MonoBehaviour
         {
             BigYahuDialogSystem.Instance.SetSpeaker("Joshi");
             BigYahuDialogSystem.Instance.ShowDialog(
-                "Joshi: Perfekt! Das Schloss öffnet sich. Los, weiter!",
+                "Joshi: Perfekt! Das Schloss öffnet sich. Los, weiter – ich zeig dir den Weg!",
                 () =>
                 {
                     BigYahuDialogSystem.Instance.ResetSpeaker();
