@@ -5,6 +5,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 using TMPro;
 
 /// <summary>
@@ -1109,7 +1110,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         // EventSystem (benötigt für Button-Klicks)
         var esGO = new GameObject("EventSystem");
         esGO.AddComponent<EventSystem>();
-        esGO.AddComponent<StandaloneInputModule>();
+        esGO.AddComponent<InputSystemUIInputModule>();
         SceneManager.MoveGameObjectToScene(esGO, scene);
 
         // Root Canvas
@@ -1168,7 +1169,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         dialogRT.anchorMin = Vector2.zero;
         dialogRT.anchorMax = Vector2.one;
         dialogRT.offsetMin = new Vector2(240f, 48f);
-        dialogRT.offsetMax = new Vector2(-145f, -16f);
+        dialogRT.offsetMax = new Vector2(-145f, -52f);
 
         // Weiter-Button (rechts unten)
         var continueBtnGO = UiButton("ContinueButton", dialogPanelGO.transform,
