@@ -28,8 +28,9 @@ public class Level6_FinalGate : MonoBehaviour
     [SerializeField] private GameObject gateOpenVisual;          // Offenes Tor (optional)
 
     [Header("Win Screen")]
-    [SerializeField] private GameObject winOverlay;
-    [SerializeField] private Button     restartButton;
+    [SerializeField] private GameObject        winOverlay;
+    [SerializeField] private Button            restartButton;
+    [SerializeField] private TextMeshProUGUI   timerText;
 
     [Header("Einstellungen")]
     [SerializeField] private float heatSpeed = 0.10f;   // Bar-Füllung / Sekunde beim Halten
@@ -152,6 +153,14 @@ public class Level6_FinalGate : MonoBehaviour
 
     void ShowWinScreen()
     {
+        GameManager.Instance?.StopTimer();
+        if (timerText && GameManager.Instance != null)
+        {
+            float t   = GameManager.Instance.ElapsedSeconds;
+            int   min = Mathf.FloorToInt(t / 60f);
+            int   sec = Mathf.FloorToInt(t % 60f);
+            timerText.text = $"Zeit: {min:00}:{sec:00}";
+        }
         if (winOverlay) winOverlay.SetActive(true);
     }
 

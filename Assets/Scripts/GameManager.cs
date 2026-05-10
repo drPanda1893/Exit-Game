@@ -26,6 +26,15 @@ public class GameManager : MonoBehaviour
     public int CurrentLevel { get; private set; }
     public event Action<int> OnLevelLoaded;
 
+    private float startRealTime = -1f;
+    private float elapsedAtWin  = -1f;
+
+    public float ElapsedSeconds =>
+        elapsedAtWin >= 0 ? elapsedAtWin :
+        startRealTime >= 0 ? Time.realtimeSinceStartup - startRealTime : 0f;
+
+    public void StopTimer() { if (elapsedAtWin < 0) elapsedAtWin = ElapsedSeconds; }
+
     bool PanelMode => levelPanels != null && levelPanels.Length > 0;
 
     // -------------------------------------------------------------------------
@@ -61,6 +70,7 @@ public class GameManager : MonoBehaviour
             if (levelSceneNames[i] == scene.name)
             {
                 CurrentLevel = i + 1;
+                if (CurrentLevel == 1) { startRealTime = Time.realtimeSinceStartup; elapsedAtWin = -1f; }
                 OnLevelLoaded?.Invoke(CurrentLevel);
                 Debug.Log($"[GameManager] Szene '{scene.name}' → Level {CurrentLevel}");
                 return;
@@ -108,5 +118,5 @@ public class GameManager : MonoBehaviour
 
     public void CompleteCurrentLevel() => LoadLevel(CurrentLevel + 1);
 
-    public void RestartGame() => LoadLevel(1);
+    public void RestartGame() { startRealTime = -1f; elapsedAtWin = -1f; LoadLevel(1); }
 }

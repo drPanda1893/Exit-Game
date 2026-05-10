@@ -94,10 +94,10 @@ public class BuildLevel6FinalGate : EditorWindow
 
         BuildHUD(canvasGO.transform);
 
-        var winOverlayRT = BuildWinOverlay(canvasGO.transform, out Button restartBtn);
+        var winOverlayRT = BuildWinOverlay(canvasGO.transform, out Button restartBtn, out TextMeshProUGUI timerTxt);
 
         BuildPuzzleControls(canvasGO.transform, lockImg, gateClosedVis, gateOpenVis,
-            winOverlayRT.gameObject, restartBtn);
+            winOverlayRT.gameObject, restartBtn, timerTxt);
 
         AddBackgroundMusic(scene);
 
@@ -314,7 +314,7 @@ public class BuildLevel6FinalGate : EditorWindow
 
     void BuildPuzzleControls(Transform parent,
         Image lockImg, GameObject closedVis, GameObject openVis,
-        GameObject winOverlay, Button restartBtn)
+        GameObject winOverlay, Button restartBtn, TextMeshProUGUI timerTxt)
     {
         // Hintergrund-Leiste unten
         var controlBG = Anchored(parent, "ControlBG", new Vector2(0, -280f), new Vector2(700f, 340f));
@@ -432,6 +432,7 @@ public class BuildLevel6FinalGate : EditorWindow
         so.FindProperty("gateOpenVisual").objectReferenceValue   = openVis;
         so.FindProperty("winOverlay").objectReferenceValue       = winOverlay;
         so.FindProperty("restartButton").objectReferenceValue    = restartBtn;
+        so.FindProperty("timerText").objectReferenceValue        = timerTxt;
         so.ApplyModifiedProperties();
     }
 
@@ -439,7 +440,7 @@ public class BuildLevel6FinalGate : EditorWindow
     // Win-Overlay
     // =========================================================================
 
-    RectTransform BuildWinOverlay(Transform parent, out Button restartBtn)
+    RectTransform BuildWinOverlay(Transform parent, out Button restartBtn, out TextMeshProUGUI timerTxt)
     {
         // Vollbild-Overlay (dunkel, zunächst inaktiv)
         var overlay = MakePanel(parent, "WinOverlay", Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
@@ -493,16 +494,25 @@ public class BuildLevel6FinalGate : EditorWindow
         Anchored(overlay, "Divider", new Vector2(0, -40f), new Vector2(500f, 2f))
             .gameObject.AddComponent<Image>().color = new Color(1f, 0.8f, 0.3f, 0.5f);
 
+        // Timer-Anzeige
+        var timerGO = Anchored(overlay, "TimerText", new Vector2(0, -85f), new Vector2(400f, 42f));
+        timerTxt = timerGO.gameObject.AddComponent<TextMeshProUGUI>();
+        timerTxt.text = "";
+        timerTxt.fontSize = 28f;
+        timerTxt.alignment = TextAlignmentOptions.Center;
+        timerTxt.color = new Color(1f, 0.92f, 0.5f);
+        timerTxt.fontStyle = FontStyles.Bold;
+
         // Danke-Text
-        var thanksGO  = Anchored(overlay, "Thanks", new Vector2(0, -80f), new Vector2(700f, 45f));
+        var thanksGO  = Anchored(overlay, "Thanks", new Vector2(0, -130f), new Vector2(700f, 40f));
         var thanksTxt = thanksGO.gameObject.AddComponent<TextMeshProUGUI>();
         thanksTxt.text = "Herzlichen Glückwunsch! Du hast alle 6 Level gemeistert.";
-        thanksTxt.fontSize = 22f;
+        thanksTxt.fontSize = 20f;
         thanksTxt.alignment = TextAlignmentOptions.Center;
         thanksTxt.color = new Color(0.70f, 0.65f, 0.55f);
 
         // Restart-Button
-        var restartGO  = Anchored(overlay, "RestartButton", new Vector2(0, -190f), new Vector2(360f, 60f));
+        var restartGO  = Anchored(overlay, "RestartButton", new Vector2(0, -210f), new Vector2(360f, 60f));
         var restartBG  = restartGO.gameObject.AddComponent<Image>();
         restartBG.color = new Color(0.20f, 0.16f, 0.08f);
         restartBtn = restartGO.gameObject.AddComponent<Button>();
