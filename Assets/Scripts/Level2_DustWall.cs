@@ -9,14 +9,20 @@ using System.Collections;
 /// Level 2 – Staubige Wand.
 ///
 /// State-Machine:
-///   Idle → WaitingInteraction → Scratching → WaitingLock → ArrowCombo → Done
+///   Idle → WaitingJoshi → WaitingInteraction → Scratching
+///        → WaitingLock → ArrowCombo → WaitingExit → Done
 ///
-/// Scratch-Panel schließt nach 65 % → Joshi-Dialog → Spieler sucht
-/// Schloss am Eingang → [E] → Pfeil-Combo ↑↑↓↓ → Tür öffnet sich.
+/// Spieler drückt [E] auf Joshi → Intro-Dialog.
+/// Dann: Staubwand kratzen (65 %) → Schloss am Eingang → Combo ↑↑↓↓
+/// → Tür öffnet sich → Spieler geht hindurch → Level 3.
 /// </summary>
 public class Level2_DustWall : MonoBehaviour
 {
     public static Level2_DustWall Instance { get; private set; }
+
+    [Header("Joshi NPC")]
+    [SerializeField] private DustyWallSpot joshiSpot;
+    [SerializeField] private GameObject    joshiPrompt;
 
     [Header("Panels")]
     [SerializeField] private GameObject dustWallPanel;
@@ -28,8 +34,11 @@ public class Level2_DustWall : MonoBehaviour
 
     [Header("3D Schloss-Trigger")]
     [SerializeField] private DustyWallSpot lockSpot;
-    [SerializeField] private GameObject lockInteractionPrompt;
-    [SerializeField] private GameObject entranceBorderGO;
+    [SerializeField] private GameObject    lockInteractionPrompt;
+    [SerializeField] private GameObject    entranceBorderGO;
+
+    [Header("Ausgang-Trigger")]
+    [SerializeField] private DustyWallSpot exitSpot;
 
     [Header("Scratch-Bereich")]
     [SerializeField] private RawImage dustOverlay;
@@ -41,7 +50,7 @@ public class Level2_DustWall : MonoBehaviour
     [SerializeField] private TextMeshProUGUI inputFeedbackText;
     [SerializeField] private TextMeshProUGUI instructionText;
 
-    private enum State { Idle, WaitingInteraction, Scratching, WaitingLock, ArrowCombo, Done }
+    private enum State { Idle, WaitingJoshi, WaitingInteraction, Scratching, WaitingLock, ArrowCombo, WaitingExit, Done }
     private State state = State.Idle;
 
     private Texture2D dustTex;
@@ -68,17 +77,19 @@ public class Level2_DustWall : MonoBehaviour
         dustTex       = null;
         dustClearing  = false;
 
+        if (joshiPrompt)           joshiPrompt.SetActive(false);
         if (dustWallPanel)         dustWallPanel.SetActive(false);
         if (arrowPanel)            arrowPanel.SetActive(false);
         if (interactionPrompt)     interactionPrompt.SetActive(false);
         if (lockInteractionPrompt) lockInteractionPrompt.SetActive(false);
     }
 
-    void Start() => StartJoshiDialog();
+    void Start() => state = State.WaitingJoshi;
 
     void OnDisable()
     {
         state = State.Idle;
+        if (joshiPrompt)           joshiPrompt.SetActive(false);
         if (interactionPrompt)     interactionPrompt.SetActive(false);
         if (lockInteractionPrompt) lockInteractionPrompt.SetActive(false);
     }
@@ -87,16 +98,31 @@ public class Level2_DustWall : MonoBehaviour
     {
         switch (state)
         {
-            case State.WaitingInteraction: HandleWaiting();     break;
-            case State.Scratching:         HandleScratch();     break;
-            case State.WaitingLock:        HandleWaitingLock(); break;
-            case State.ArrowCombo:         HandleArrowInput();  break;
+            case State.WaitingJoshi:        HandleWaitingJoshi();  break;
+            case State.WaitingInteraction:  HandleWaiting();       break;
+            case State.Scratching:          HandleScratch();       break;
+            case State.WaitingLock:         HandleWaitingLock();   break;
+            case State.ArrowCombo:          HandleArrowInput();    break;
+            case State.WaitingExit:         HandleWaitingExit();   break;
         }
     }
 
     // =========================================================================
-    // Joshi-Rätseldialog
+    // Phase 0 – Joshi ansprechen
     // =========================================================================
+
+    void HandleWaitingJoshi()
+    {
+        bool near = joshiSpot != null && joshiSpot.PlayerNearby;
+        if (joshiPrompt) joshiPrompt.SetActive(near);
+
+        if (!near) return;
+        if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
+        {
+            if (joshiPrompt) joshiPrompt.SetActive(false);
+            StartJoshiDialog();
+        }
+    }
 
     void StartJoshiDialog()
     {
@@ -117,27 +143,31 @@ public class Level2_DustWall : MonoBehaviour
     }
 
     // =========================================================================
-    // Phase 0 – Wand suchen
+    // Phase 1 – Wand suchen
     // =========================================================================
 
     void HandleWaiting()
     {
+        // Schloss-Prompt ist schon sichtbar, aber noch nicht interaktiv
+        if (lockSpot != null && lockInteractionPrompt)
+            lockInteractionPrompt.SetActive(lockSpot.PlayerNearby);
+
         if (dustyWallSpot == null) return;
 
-        if (interactionPrompt)
-            interactionPrompt.SetActive(dustyWallSpot.PlayerNearby);
+        bool nearWall = dustyWallSpot.PlayerNearby;
+        if (interactionPrompt) interactionPrompt.SetActive(nearWall);
 
-        if (!dustyWallSpot.PlayerNearby) return;
-
+        if (!nearWall) return;
         if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
         {
-            if (interactionPrompt) interactionPrompt.SetActive(false);
+            if (interactionPrompt)     interactionPrompt.SetActive(false);
+            if (lockInteractionPrompt) lockInteractionPrompt.SetActive(false);
             ActivateScratch();
         }
     }
 
     // =========================================================================
-    // Phase 1 – Scratch
+    // Phase 2 – Scratch
     // =========================================================================
 
     void ActivateScratch()
@@ -247,12 +277,12 @@ public class Level2_DustWall : MonoBehaviour
     }
 
     // =========================================================================
-    // Phase 2 – Schloss suchen
+    // Phase 3 – Schloss suchen
     // =========================================================================
 
     void HandleWaitingLock()
     {
-        if (lockSpot == null) { state = State.ArrowCombo; OpenArrowPanel(); return; }
+        if (lockSpot == null) { OpenArrowPanel(); return; }
 
         if (lockInteractionPrompt)
             lockInteractionPrompt.SetActive(lockSpot.PlayerNearby);
@@ -276,7 +306,7 @@ public class Level2_DustWall : MonoBehaviour
     }
 
     // =========================================================================
-    // Phase 3 – Arrow Combo
+    // Phase 4 – Arrow Combo
     // =========================================================================
 
     void HandleArrowInput()
@@ -308,39 +338,43 @@ public class Level2_DustWall : MonoBehaviour
     void RefreshFeedback()
     {
         if (inputFeedbackText == null) return;
+        // Nur bereits eingegebene Symbole anzeigen, kein Vorweg-Hint
         string s = "";
-        for (int i = 0; i < arrowSymbols.Length; i++)
-            s += (i < comboIndex
-                ? $"<color=#00FF88>{arrowSymbols[i]}</color>"
-                : $"<color=#555555>{arrowSymbols[i]}</color>") + "  ";
+        for (int i = 0; i < comboIndex; i++)
+            s += $"<color=#00FF88>{arrowSymbols[i]}</color>  ";
         inputFeedbackText.text = s.TrimEnd();
     }
 
     IEnumerator OnComboDone()
     {
-        state = State.Done;
+        state = State.WaitingExit;
         if (inputFeedbackText)
-            inputFeedbackText.text = "<color=#00FF88>hoch  hoch  runter  runter  OK</color>";
+            inputFeedbackText.text = "<color=#00FF88>hoch  hoch  runter  runter  ✓</color>";
         yield return new WaitForSeconds(0.8f);
 
         if (arrowPanel) arrowPanel.SetActive(false);
 
-        // Eingangs-Sperre entfernen
+        // Eingangs-Sperre entfernen – Tür öffnet sich
         if (entranceBorderGO) entranceBorderGO.SetActive(false);
+    }
 
-        if (BigYahuDialogSystem.Instance != null)
+    // =========================================================================
+    // Phase 5 – Ausgang: Spieler geht durch die Tür
+    // =========================================================================
+
+    void HandleWaitingExit()
+    {
+        if (exitSpot == null)
         {
-            BigYahuDialogSystem.Instance.SetSpeaker("Joshi");
-            BigYahuDialogSystem.Instance.ShowDialog(
-                "Joshi: Perfekt! Das Schloss ist offen. Los, weiter – ich zeig dir den Weg!",
-                () =>
-                {
-                    BigYahuDialogSystem.Instance.ResetSpeaker();
-                    GameManager.Instance?.CompleteCurrentLevel();
-                });
+            // Kein Trigger konfiguriert – sofort laden
+            GameManager.Instance?.CompleteCurrentLevel();
+            state = State.Done;
+            return;
         }
-        else
+
+        if (exitSpot.PlayerNearby)
         {
+            state = State.Done;
             GameManager.Instance?.CompleteCurrentLevel();
         }
     }

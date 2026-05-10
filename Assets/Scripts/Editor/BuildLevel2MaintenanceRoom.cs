@@ -89,7 +89,13 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         // ── Schloss am Eingang ────────────────────────────────────────────────
         var lockSpotGO = BuildLockSpot(root.transform);
 
-        BuildUI(scene, wallSpot, lockSpotGO, entranceBorder);
+        // ── Joshi-Trigger (Spieler nähert sich → [E] startet Dialog) ──────────
+        var joshiSpotGO = BuildJoshiSpot(root.transform);
+
+        // ── Exit-Trigger (hinter der Eingangstür) ─────────────────────────────
+        var exitSpotGO = BuildExitSpot(root.transform);
+
+        BuildUI(scene, wallSpot, lockSpotGO, entranceBorder, joshiSpotGO, exitSpotGO);
 
         EditorSceneManager.SaveScene(scene);
         Debug.Log("[Level2] Wartungsraum fertig.");
@@ -1150,11 +1156,38 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         return trigGO;
     }
 
+    private GameObject BuildJoshiSpot(Transform root)
+    {
+        // Trigger-Zone um Joshi (sitzt bei 0, 0.2, -0.5)
+        var go = new GameObject("JoshiSpot");
+        go.transform.SetParent(root);
+        go.transform.position = new Vector3(0f, 0.8f, -0.5f);
+        var bc = go.AddComponent<BoxCollider>();
+        bc.size      = new Vector3(1.6f, 1.8f, 1.6f);
+        bc.isTrigger = true;
+        go.AddComponent<DustyWallSpot>();
+        return go;
+    }
+
+    private GameObject BuildExitSpot(Transform root)
+    {
+        // Trigger hinter der Eingangstür (außerhalb des Raums bei z < -3)
+        var go = new GameObject("ExitSpot");
+        go.transform.SetParent(root);
+        go.transform.position = new Vector3(0f, 1.0f, -3.6f);
+        var bc = go.AddComponent<BoxCollider>();
+        bc.size      = new Vector3(2.2f, 2.0f, 0.8f);
+        bc.isTrigger = true;
+        go.AddComponent<DustyWallSpot>();
+        return go;
+    }
+
     // ═══════════════════════════════════════════════════════════════════════
     // UI – Canvas, DialogSystem, DustWallPanel, ArrowPanel
     // ═══════════════════════════════════════════════════════════════════════
 
-    private void BuildUI(Scene scene, GameObject wallSpotGO, GameObject lockSpotGO, GameObject entranceBorderGO)
+    private void BuildUI(Scene scene, GameObject wallSpotGO, GameObject lockSpotGO,
+                         GameObject entranceBorderGO, GameObject joshiSpotGO, GameObject exitSpotGO)
     {
         // EventSystem (benötigt für Button-Klicks)
         var esGO = new GameObject("EventSystem");
@@ -1316,6 +1349,25 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         lockPromptRT.offsetMin = new Vector2(8f, 4f);
         lockPromptRT.offsetMax = new Vector2(-8f, -4f);
 
+        // ── Joshi-Prompt ─────────────────────────────────────────────────────
+        var joshiPromptGO = UiPanel("JoshiPrompt", canvasGO.transform,
+            new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+            new Vector2(0f, 80f), new Vector2(360f, 60f),
+            new Vector2(0.5f, 0f), new Color(0.0f, 0.0f, 0.0f, 0.72f));
+        joshiPromptGO.SetActive(false);
+        var joshiPromptTextGO = new GameObject("Text");
+        joshiPromptTextGO.transform.SetParent(joshiPromptGO.transform, false);
+        var joshiPromptTMP = joshiPromptTextGO.AddComponent<TextMeshProUGUI>();
+        joshiPromptTMP.text      = "[E] Mit Joshi sprechen";
+        joshiPromptTMP.fontSize  = 22f;
+        joshiPromptTMP.alignment = TextAlignmentOptions.Center;
+        joshiPromptTMP.color     = Color.white;
+        var joshiPromptRT = joshiPromptTextGO.GetComponent<RectTransform>();
+        joshiPromptRT.anchorMin = Vector2.zero;
+        joshiPromptRT.anchorMax = Vector2.one;
+        joshiPromptRT.offsetMin = new Vector2(8f, 4f);
+        joshiPromptRT.offsetMax = new Vector2(-8f, -4f);
+
         // ── Arrow Panel (kompaktes Overlay unten) ────────────────────────────
         var arrowPanelGO = UiPanel("ArrowPanel", canvasGO.transform,
             new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
@@ -1356,7 +1408,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         var feedbackGO  = new GameObject("InputFeedback");
         feedbackGO.transform.SetParent(arrowPanelGO.transform, false);
         var feedbackTMP = feedbackGO.AddComponent<TextMeshProUGUI>();
-        feedbackTMP.text      = "<color=#555555>hoch  hoch  runter  runter</color>";
+        feedbackTMP.text      = "";
         feedbackTMP.fontSize  = 46f;
         feedbackTMP.alignment = TextAlignmentOptions.Center;
         feedbackTMP.color     = Color.white;
@@ -1385,6 +1437,9 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         var dw   = dwGO.AddComponent<Level2_DustWall>();
         dw.enabled = true;
         var dwso = new SerializedObject(dw);
+        dwso.FindProperty("joshiSpot").objectReferenceValue             =
+            joshiSpotGO != null ? joshiSpotGO.GetComponent<DustyWallSpot>() : null;
+        dwso.FindProperty("joshiPrompt").objectReferenceValue           = joshiPromptGO;
         dwso.FindProperty("dustWallPanel").objectReferenceValue         = dustPanelGO;
         dwso.FindProperty("arrowPanel").objectReferenceValue            = arrowPanelGO;
         dwso.FindProperty("interactionPrompt").objectReferenceValue     = promptGO;
@@ -1394,6 +1449,8 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
             lockSpotGO != null ? lockSpotGO.GetComponent<DustyWallSpot>() : null;
         dwso.FindProperty("lockInteractionPrompt").objectReferenceValue = lockPromptGO;
         dwso.FindProperty("entranceBorderGO").objectReferenceValue      = entranceBorderGO;
+        dwso.FindProperty("exitSpot").objectReferenceValue              =
+            exitSpotGO != null ? exitSpotGO.GetComponent<DustyWallSpot>() : null;
         dwso.FindProperty("dustOverlay").objectReferenceValue           = dustOverlayImg;
         dwso.FindProperty("arrowHintText").objectReferenceValue         = arrowHintTMP;
         dwso.FindProperty("inputFeedbackText").objectReferenceValue     = feedbackTMP;
