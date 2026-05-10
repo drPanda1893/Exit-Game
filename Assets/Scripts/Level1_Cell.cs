@@ -22,9 +22,11 @@ public class Level1_Cell : MonoBehaviour
 
     void Start()
     {
-        // Dialog beim Betreten des Levels
-        BigYahuDialogSystem.Instance.ShowDialog(
-            "Big Yahu: Hmm... dieser Stein sieht locker aus. Klick drauf!");
+        BigYahuDialogSystem.Instance?.ShowDialog(new[]
+        {
+            "Big Yahu: Hmm... dieser Stein sieht locker aus. Klick drauf!",
+            "Big Yahu: Aber ich brauche einen Code... den hat sicher jemand irgendwo versteckt."
+        });
 
         numpadPanel.SetActive(false);
         stoneButton.onClick.AddListener(OpenNumpad);

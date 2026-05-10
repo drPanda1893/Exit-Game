@@ -1394,7 +1394,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         var arrowHintGO  = new GameObject("ArrowHintText");
         arrowHintGO.transform.SetParent(arrowPanelGO.transform, false);
         var arrowHintTMP = arrowHintGO.AddComponent<TextMeshProUGUI>();
-        arrowHintTMP.text      = "";
+        arrowHintTMP.text      = "Sequenz:  ↑  ↑  ↓  ↓";
         arrowHintTMP.fontSize  = 28f;
         arrowHintTMP.alignment = TextAlignmentOptions.Center;
         arrowHintTMP.color     = new Color(1f, 0.85f, 0.2f);

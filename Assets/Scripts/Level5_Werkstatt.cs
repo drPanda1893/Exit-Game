@@ -74,6 +74,13 @@ public class Level5_Werkstatt : MonoBehaviour
                 if (nodeButtons[i]) nodeButtons[i].onClick.AddListener(() => OnNodeClicked(idx));
             }
         state = State.WaitingBreadboard;
+
+        BigYahuDialogSystem.Instance?.ShowDialog(new[]
+        {
+            "Big Yahu: Eine Werkstatt! Und da liegt ein Breadboard auf dem Werktisch.",
+            "Big Yahu: Der Schaltplan steht daneben – ich muss die richtigen Knoten verbinden.",
+            "Big Yahu: Wenn ich das repariere, öffnet sich vielleicht die Tür da hinten!"
+        });
     }
 
     void Update()
