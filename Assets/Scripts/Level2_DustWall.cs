@@ -143,6 +143,8 @@ public class Level2_DustWall : MonoBehaviour
     void ActivateScratch()
     {
         state = State.Scratching;
+        Cursor.visible   = true;
+        Cursor.lockState = CursorLockMode.None;
         if (dustWallPanel) dustWallPanel.SetActive(true);
         StartCoroutine(BuildTexture());
     }
@@ -222,6 +224,8 @@ public class Level2_DustWall : MonoBehaviour
         yield return new WaitForSeconds(0.6f);
 
         if (dustWallPanel) dustWallPanel.SetActive(false);
+        Cursor.visible   = false;
+        Cursor.lockState = CursorLockMode.Locked;
 
         if (BigYahuDialogSystem.Instance != null)
         {
