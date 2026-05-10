@@ -130,6 +130,7 @@ public abstract class LevelBuilderBase : EditorWindow
 
         var anim = instance.GetComponent<Animator>() ?? instance.AddComponent<Animator>();
         anim.runtimeAnimatorController = ctrl;
+        anim.applyRootMotion = false;
     }
 
     // ═══════════════════════════════════════════════════════════════════════

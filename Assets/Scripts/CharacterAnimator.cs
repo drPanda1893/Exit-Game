@@ -31,13 +31,13 @@ public class CharacterAnimator : MonoBehaviour
 
     private void ShowIdle()
     {
-        idleModel?.gameObject.SetActive(true);
-        runningModel?.gameObject.SetActive(false);
+        if (runningModel) { runningModel.localPosition = Vector3.zero; runningModel.localRotation = Quaternion.identity; runningModel.gameObject.SetActive(false); }
+        if (idleModel)    { idleModel.localPosition    = Vector3.zero; idleModel.localRotation    = Quaternion.identity; idleModel.gameObject.SetActive(true); }
     }
 
     private void ShowRunning()
     {
-        idleModel?.gameObject.SetActive(false);
-        runningModel?.gameObject.SetActive(true);
+        if (idleModel)    { idleModel.localPosition    = Vector3.zero; idleModel.localRotation    = Quaternion.identity; idleModel.gameObject.SetActive(false); }
+        if (runningModel) { runningModel.localPosition = Vector3.zero; runningModel.localRotation = Quaternion.identity; runningModel.gameObject.SetActive(true); }
     }
 }
