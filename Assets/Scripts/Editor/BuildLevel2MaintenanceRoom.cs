@@ -1161,9 +1161,9 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         // Trigger-Zone um Joshi (sitzt bei 0, 0.2, -0.5)
         var go = new GameObject("JoshiSpot");
         go.transform.SetParent(root);
-        go.transform.position = new Vector3(0f, 0.8f, -0.5f);
+        go.transform.position = new Vector3(0f, 0.8f, -0.3f);
         var bc = go.AddComponent<BoxCollider>();
-        bc.size      = new Vector3(1.6f, 1.8f, 1.6f);
+        bc.size      = new Vector3(1.6f, 1.8f, 1.0f);
         bc.isTrigger = true;
         go.AddComponent<DustyWallSpot>();
         return go;
