@@ -4,6 +4,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 using TMPro;
 
 /// <summary>
@@ -66,10 +67,25 @@ public class BuildLevel6FinalGate : EditorWindow
         canvasGO.AddComponent<GraphicRaycaster>();
         SceneManager.MoveGameObjectToScene(canvasGO, scene);
 
+        // GameManager – nötig wenn Level 6 direkt gestartet wird
+        var gmGO = new GameObject("GameManager");
+        var gm   = gmGO.AddComponent<GameManager>();
+        var gmSo = new UnityEditor.SerializedObject(gm);
+        var levelNames = gmSo.FindProperty("levelSceneNames");
+        levelNames.arraySize = 6;
+        levelNames.GetArrayElementAtIndex(0).stringValue = "Level1";
+        levelNames.GetArrayElementAtIndex(1).stringValue = "Level2";
+        levelNames.GetArrayElementAtIndex(2).stringValue = "Level3";
+        levelNames.GetArrayElementAtIndex(3).stringValue = "Level4";
+        levelNames.GetArrayElementAtIndex(4).stringValue = "Level5";
+        levelNames.GetArrayElementAtIndex(5).stringValue = "Level6";
+        gmSo.ApplyModifiedPropertiesWithoutUndo();
+        SceneManager.MoveGameObjectToScene(gmGO, scene);
+
         // EventSystem
         var evGO = new GameObject("EventSystem");
         evGO.AddComponent<EventSystem>();
-        evGO.AddComponent<StandaloneInputModule>();
+        evGO.AddComponent<InputSystemUIInputModule>();
         SceneManager.MoveGameObjectToScene(evGO, scene);
 
         BuildBackground(canvasGO.transform);
