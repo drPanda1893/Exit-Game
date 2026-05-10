@@ -347,7 +347,7 @@ public class Level2_DustWall : MonoBehaviour
 
     IEnumerator OnComboDone()
     {
-        state = State.WaitingExit;
+        state = State.Idle;
         if (inputFeedbackText)
             inputFeedbackText.text = "<color=#00FF88>hoch  hoch  runter  runter  ✓</color>";
         yield return new WaitForSeconds(0.8f);
@@ -356,6 +356,25 @@ public class Level2_DustWall : MonoBehaviour
 
         // Eingangs-Sperre entfernen – Tür öffnet sich
         if (entranceBorderGO) entranceBorderGO.SetActive(false);
+
+        if (BigYahuDialogSystem.Instance != null)
+        {
+            BigYahuDialogSystem.Instance.SetSpeaker("Joshi");
+            BigYahuDialogSystem.Instance.ShowDialog(new[]
+            {
+                "Joshi: Gut gemacht. Die Tuer steht offen.",
+                "Joshi: Noch ein Rat fuer den naechsten Raum: Nicht jedes Buch wurde geschrieben, um gelesen zu werden.",
+                "Joshi: Manche wurden geschrieben, um gefunden zu werden. Greif nach dem, das die Menschen seit Jahrtausenden suchen."
+            }, () =>
+            {
+                BigYahuDialogSystem.Instance.ResetSpeaker();
+                state = State.WaitingExit;
+            });
+        }
+        else
+        {
+            state = State.WaitingExit;
+        }
     }
 
     // =========================================================================
