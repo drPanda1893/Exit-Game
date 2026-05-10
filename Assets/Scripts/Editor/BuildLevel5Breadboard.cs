@@ -80,6 +80,7 @@ public class BuildLevel5Breadboard : EditorWindow
         // ── Trigger-Spots ─────────────────────────────────────────────────────
         var breadboardTrigger = BuildBreadboardTrigger(root.transform);
         var brennerTrigger    = BuildBrennerTrigger(root.transform);
+        var exitTrigger       = BuildExitTrigger(root.transform);
 
         // ── GameManager ────────────────────────────────────────────────────────
         var gmGO = new GameObject("GameManager");
@@ -93,7 +94,7 @@ public class BuildLevel5Breadboard : EditorWindow
         gmso.ApplyModifiedPropertiesWithoutUndo();
 
         // ── UI ─────────────────────────────────────────────────────────────────
-        BuildUI(scene, breadboardTrigger, brennerTrigger, doorGO);
+        BuildUI(scene, breadboardTrigger, brennerTrigger, exitTrigger, doorGO);
 
         EditorSceneManager.SaveScene(scene);
         Debug.Log("[Level5] Schuppen + Werkstatt fertig gebaut.");
@@ -193,6 +194,18 @@ public class BuildLevel5Breadboard : EditorWindow
         return go;
     }
 
+    GameObject BuildExitTrigger(Transform root)
+    {
+        var go = new GameObject("ExitTrigger");
+        go.transform.SetParent(root);
+        go.transform.position = new Vector3(0f, 1f, -3.6f);
+        var bc = go.AddComponent<BoxCollider>();
+        bc.size      = new Vector3(2f, 2f, 0.6f);
+        bc.isTrigger = true;
+        go.AddComponent<DustyWallSpot>();
+        return go;
+    }
+
     // =========================================================================
     // Spieler
     // =========================================================================
@@ -218,7 +231,7 @@ public class BuildLevel5Breadboard : EditorWindow
     // UI
     // =========================================================================
 
-    void BuildUI(Scene scene, GameObject breadboardTrigger, GameObject brennerTrigger, GameObject doorGO)
+    void BuildUI(Scene scene, GameObject breadboardTrigger, GameObject brennerTrigger, GameObject exitTrigger, GameObject doorGO)
     {
         // EventSystem
         var esGO = new GameObject("EventSystem");
@@ -358,6 +371,14 @@ public class BuildLevel5Breadboard : EditorWindow
             new Vector2(0.5f,0.5f), new Color(1f,0.7f,0.2f,0.35f));
         flashGO.SetActive(false);
 
+        // ── Exit-Prompt (Ausgang nach Brenner-Pickup) ─────────────────────────
+        var exitPromptGO = UiPanel("ExitPrompt", canvasGO.transform,
+            new Vector2(0.5f,0f), new Vector2(0.5f,0f),
+            new Vector2(0f,80f), new Vector2(360f,60f),
+            new Vector2(0.5f,0f), new Color(0f,0f,0f,0.72f));
+        exitPromptGO.SetActive(false);
+        AddPromptText(exitPromptGO.transform, "[E] Schuppen verlassen");
+
         // ── BigYahuDialogSystem ───────────────────────────────────────────────
         var dsGO = new GameObject("BigYahuDialogSystem");
         SceneManager.MoveGameObjectToScene(dsGO, scene);
@@ -391,6 +412,10 @@ public class BuildLevel5Breadboard : EditorWindow
             brennerTrigger?.GetComponent<DustyWallSpot>();
         l5so.FindProperty("interactionPrompt").objectReferenceValue = pickupPromptGO;
         l5so.FindProperty("pickupFlash").objectReferenceValue       = flashGO;
+        // Ausgang
+        l5so.FindProperty("exitSpot").objectReferenceValue   =
+            exitTrigger?.GetComponent<DustyWallSpot>();
+        l5so.FindProperty("exitPrompt").objectReferenceValue = exitPromptGO;
         l5so.ApplyModifiedPropertiesWithoutUndo();
 
         Debug.Log("[Level5] UI und GameLogic verdrahtet.");

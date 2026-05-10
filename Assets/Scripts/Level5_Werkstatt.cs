@@ -32,7 +32,11 @@ public class Level5_Werkstatt : MonoBehaviour
     [SerializeField] private GameObject    interactionPrompt;
     [SerializeField] private GameObject    pickupFlash;
 
-    private enum State { Idle, WaitingBreadboard, SolvingBreadboard, WaitingPickup, Done }
+    [Header("Ausgang")]
+    [SerializeField] private DustyWallSpot exitSpot;
+    [SerializeField] private GameObject    exitPrompt;
+
+    private enum State { Idle, WaitingBreadboard, SolvingBreadboard, WaitingPickup, WaitingExit, Done }
     private State state = State.Idle;
 
     // Puzzle-Zustand
@@ -58,6 +62,7 @@ public class Level5_Werkstatt : MonoBehaviour
         if (interactionPrompt) interactionPrompt.SetActive(false);
         if (pickupFlash)       pickupFlash.SetActive(false);
         if (doorObject)        doorObject.SetActive(true);
+        if (exitPrompt)        exitPrompt.SetActive(false);
     }
 
     void Start()
@@ -91,6 +96,22 @@ public class Level5_Werkstatt : MonoBehaviour
                     StartCoroutine(PickupBrenner());
                 }
                 break;
+
+            case State.WaitingExit:
+                HandleWaitingExit();
+                break;
+        }
+    }
+
+    void HandleWaitingExit()
+    {
+        bool nearExit = exitSpot != null && exitSpot.PlayerNearby;
+        if (exitPrompt) exitPrompt.SetActive(nearExit);
+        if (nearExit && Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
+        {
+            state = State.Done;
+            if (exitPrompt) exitPrompt.SetActive(false);
+            GameManager.Instance?.CompleteCurrentLevel();
         }
     }
 
@@ -179,10 +200,9 @@ public class Level5_Werkstatt : MonoBehaviour
 
     IEnumerator PickupBrenner()
     {
-        state = State.Done;
         if (pickupFlash) pickupFlash.SetActive(true);
         yield return new WaitForSeconds(0.5f);
         if (pickupFlash) pickupFlash.SetActive(false);
-        GameManager.Instance?.CompleteCurrentLevel();
+        state = State.WaitingExit;
     }
 }

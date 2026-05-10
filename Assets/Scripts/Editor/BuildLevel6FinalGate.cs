@@ -8,29 +8,25 @@ using UnityEngine.InputSystem.UI;
 using TMPro;
 
 /// <summary>
-/// Baut Level 6 – Das finale Gefängnistor.
-/// Menü: Tools → Build Level 6 Final Gate
+/// Baut Level 6 – Das finale Gefängnistor (3D-Szene).
 ///
-/// Layout:
-///   - Atmosphärischer Nachthimmel-Hintergrund
-///   - Massives Gefängnistor mit Ketten und Schloss (Mitte)
-///   - Bunsenbrenner-Button (groß, unten, rot-orange)
-///   - Temperatur-Bar (blau → rot)
-///   - Win-Overlay (zunächst versteckt) – "FREIHEIT!"
+/// Layout: langer Korridor endet am massiven Eisentor. Spieler kommt von Süden,
+/// läuft zum Tor, drückt [E] → Bunsenbrenner-Panel → Schloss erhitzen → Sieg.
+///
+/// Menue: Tools → Build Level 6 Final Gate
 /// </summary>
-public class BuildLevel6FinalGate : EditorWindow
+public class BuildLevel6FinalGate : LevelBuilderBase
 {
     [MenuItem("Tools/Build Level 6 Final Gate")]
     public static void ShowWindow() => GetWindow<BuildLevel6FinalGate>("Level 6 Builder");
 
     void OnGUI()
     {
-        GUILayout.Label("Level 6 – Das finale Gefängnistor", EditorStyles.boldLabel);
+        GUILayout.Label("Level 6 – Finales Gefängnistor (3D)", EditorStyles.boldLabel);
         GUILayout.Space(8);
         EditorGUILayout.HelpBox(
-            "Das letzte Level: Bunsenbrenner-Button halten → Schloss erhitzt sich → " +
-            "bei 100 % bricht es auf → Big Yahu ist frei!\n" +
-            "Win-Screen zeigt sich direkt in dieser Szene.",
+            "3D-Korridor mit massivem Eisentor am Ende.\n" +
+            "Spieler nähert sich → [E] → Bunsenbrenner-Minispiel → Tor öffnet → Sieg.",
             MessageType.Info);
         GUILayout.Space(12);
         if (GUILayout.Button("Level 6 bauen", GUILayout.Height(36)))
@@ -46,624 +42,479 @@ public class BuildLevel6FinalGate : EditorWindow
         Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
         EditorSceneManager.SaveScene(scene, "Assets/Scenes/Level6.unity");
 
-        // Kamera
+        // ── Kamera ───────────────────────────────────────────────────────────
         var camGO = new GameObject("Main Camera");
-        var cam = camGO.AddComponent<Camera>();
-        cam.clearFlags = CameraClearFlags.SolidColor;
-        cam.backgroundColor = new Color(0.01f, 0.01f, 0.03f);
-        cam.tag = "MainCamera";
+        var cam   = camGO.AddComponent<Camera>();
+        cam.clearFlags      = CameraClearFlags.SolidColor;
+        cam.backgroundColor = new Color(0.02f, 0.02f, 0.04f);
+        cam.farClipPlane    = 40f;
+        cam.tag             = "MainCamera";
         camGO.AddComponent<AudioListener>();
+        camGO.transform.position = new Vector3(0f, 11f, 0f);
+        camGO.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+        var follow = camGO.AddComponent<TopDownCameraFollow>();
         SceneManager.MoveGameObjectToScene(camGO, scene);
 
-        // Canvas
-        var canvasGO = new GameObject("Level6Canvas");
-        var canvas = canvasGO.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 0;
-        var scaler = canvasGO.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920, 1080);
-        scaler.matchWidthOrHeight = 0.5f;
-        canvasGO.AddComponent<GraphicRaycaster>();
-        SceneManager.MoveGameObjectToScene(canvasGO, scene);
+        // ── Umgebung ─────────────────────────────────────────────────────────
+        var root = new GameObject("Environment");
+        SceneManager.MoveGameObjectToScene(root, scene);
+        var gateBarsGO = BuildEnvironment(root.transform);
 
-        // GameManager – nötig wenn Level 6 direkt gestartet wird
-        var gmGO = new GameObject("GameManager");
-        var gm   = gmGO.AddComponent<GameManager>();
-        var gmSo = new UnityEditor.SerializedObject(gm);
-        var levelNames = gmSo.FindProperty("levelSceneNames");
-        levelNames.arraySize = 6;
-        levelNames.GetArrayElementAtIndex(0).stringValue = "Level1";
-        levelNames.GetArrayElementAtIndex(1).stringValue = "Level2";
-        levelNames.GetArrayElementAtIndex(2).stringValue = "Level3";
-        levelNames.GetArrayElementAtIndex(3).stringValue = "Level4";
-        levelNames.GetArrayElementAtIndex(4).stringValue = "Level5";
-        levelNames.GetArrayElementAtIndex(5).stringValue = "Level6";
-        gmSo.ApplyModifiedPropertiesWithoutUndo();
-        SceneManager.MoveGameObjectToScene(gmGO, scene);
+        // ── Spieler ──────────────────────────────────────────────────────────
+        var player = AddPlayer(scene, new Vector3(0f, 0f, -5f));
+        if (player != null) follow.SetTarget(player.transform);
 
-        // EventSystem
-        var evGO = new GameObject("EventSystem");
-        evGO.AddComponent<EventSystem>();
-        evGO.AddComponent<InputSystemUIInputModule>();
-        SceneManager.MoveGameObjectToScene(evGO, scene);
+        // ── Beleuchtung ───────────────────────────────────────────────────────
+        RenderSettings.ambientMode  = UnityEngine.Rendering.AmbientMode.Flat;
+        RenderSettings.ambientLight = new Color(0.06f, 0.05f, 0.04f);
+        AddLight("CorridorLight", root.transform, new Vector3(0f, 4f, -2f),
+            LightType.Point, new Color(0.85f, 0.75f, 0.55f), 1.4f, 10f, LightShadows.Soft);
+        AddLight("GateSpot_L", root.transform, new Vector3(-2f, 5f, 3.5f),
+            LightType.Spot, new Color(1f, 0.6f, 0.2f), 3.0f, 12f, LightShadows.Hard,
+            Quaternion.Euler(60f, 30f, 0f));
+        AddLight("GateSpot_R", root.transform, new Vector3(2f, 5f, 3.5f),
+            LightType.Spot, new Color(1f, 0.5f, 0.15f), 3.0f, 12f, LightShadows.Hard,
+            Quaternion.Euler(60f, -30f, 0f));
 
-        BuildBackground(canvasGO.transform);
+        // ── Gate-Trigger ──────────────────────────────────────────────────────
+        var gateTrigger = BuildGateTrigger(root.transform);
 
-        var (lockImg, gateClosedVis, gateOpenVis) = BuildGate(canvasGO.transform);
-
-        BuildHUD(canvasGO.transform);
-
-        var winOverlayRT = BuildWinOverlay(canvasGO.transform, out Button restartBtn, out TextMeshProUGUI timerTxt);
-
-        BuildPuzzleControls(canvasGO.transform, lockImg, gateClosedVis, gateOpenVis,
-            winOverlayRT.gameObject, restartBtn, timerTxt);
-
+        // ── Hintergrundmusik ──────────────────────────────────────────────────
         AddBackgroundMusic(scene);
+
+        // ── GameManager ───────────────────────────────────────────────────────
+        var gmGO = new GameObject("GameManager");
+        SceneManager.MoveGameObjectToScene(gmGO, scene);
+        var gm   = gmGO.AddComponent<GameManager>();
+        var gmso = new SerializedObject(gm);
+        var arr  = gmso.FindProperty("levelSceneNames");
+        arr.arraySize = 6;
+        string[] names = { "Level1", "Level2", "Level3", "Level4", "Level5", "Level6" };
+        for (int i = 0; i < names.Length; i++) arr.GetArrayElementAtIndex(i).stringValue = names[i];
+        gmso.ApplyModifiedPropertiesWithoutUndo();
+
+        // ── UI ────────────────────────────────────────────────────────────────
+        BuildUI(scene, gateTrigger, gateBarsGO);
 
         EditorSceneManager.SaveScene(scene);
         Debug.Log("[Level6] Finales Gefängnistor fertig gebaut.");
     }
 
     // =========================================================================
-    // Hintergrund – dunkle Nacht mit Scheinwerfer-Effekt
+    // 3D Umgebung
     // =========================================================================
 
-    void BuildBackground(Transform parent)
+    /// <summary>Baut den Korridor + das Eisentor. Gibt das GateBars-GO zurück.</summary>
+    GameObject BuildEnvironment(Transform root)
     {
-        var bg = MakePanel(parent, "Background", Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-        bg.gameObject.AddComponent<Image>().color = new Color(0.01f, 0.01f, 0.04f);
+        var concreteMat = M(new Color(0.22f, 0.20f, 0.18f), 0.01f, 0.05f);
+        var stoneMat    = M(new Color(0.18f, 0.17f, 0.15f), 0.00f, 0.03f);
+        var ironMat     = M(new Color(0.25f, 0.23f, 0.20f), 0.65f, 0.30f);
+        var rustMat     = M(new Color(0.30f, 0.15f, 0.05f), 0.40f, 0.10f);
 
-        // Sternenhimmel (kleine weiße Punkte)
-        for (int i = 0; i < 80; i++)
+        // ── Korridor (z -6 … +2) ─────────────────────────────────────────────
+        Box("Boden",      new Vector3(0f, -0.08f, -2f), new Vector3(6f, 0.16f, 16f), concreteMat, root);
+        Box("Wand_Links", new Vector3(-3f, 2.5f, -2f),  new Vector3(0.22f, 5f, 16f), stoneMat,    root);
+        Box("Wand_Rechts",new Vector3( 3f, 2.5f, -2f),  new Vector3(0.22f, 5f, 16f), stoneMat,    root);
+        Box("Decke",      new Vector3(0f, 5.1f, -2f),   new Vector3(6.44f, 0.2f, 16f), concreteMat, root, col: false);
+        Box("EW_Links",   new Vector3(-2f, 2.5f, -6f),  new Vector3(2f, 5f, 0.22f),  stoneMat,    root);
+        Box("EW_Rechts",  new Vector3( 2f, 2.5f, -6f),  new Vector3(2f, 5f, 0.22f),  stoneMat,    root);
+        Box("EW_Top",     new Vector3( 0f, 3.8f, -6f),  new Vector3(6f, 2.4f, 0.22f),stoneMat,    root);
+
+        // ── Tor-Rahmen ────────────────────────────────────────────────────────
+        Box("Pfeiler_L",  new Vector3(-2.6f, 2.5f, 2f), new Vector3(1.0f, 5f, 0.6f), stoneMat, root);
+        Box("Pfeiler_R",  new Vector3( 2.6f, 2.5f, 2f), new Vector3(1.0f, 5f, 0.6f), stoneMat, root);
+        Box("Sturz",      new Vector3(0f, 4.1f, 2f),    new Vector3(6.44f, 0.8f, 0.6f), stoneMat, root);
+        Box("Schloss",    new Vector3(0f, 1.4f, 1.76f), new Vector3(0.32f, 0.40f, 0.12f), rustMat, root, col: false);
+
+        // ── Tor-Stäbe (werden bei Sieg deaktiviert) ───────────────────────────
+        var bars = new GameObject("GateBars");
+        bars.transform.SetParent(root);
+        bars.transform.position = Vector3.zero;
+        for (int i = 0; i < 5; i++)
         {
-            float x = Random.Range(-900f, 900f);
-            float y = Random.Range(-200f, 520f);
-            float s = Random.Range(2f, 5f);
-            float brightness = Random.Range(0.5f, 1f);
-            Anchored(bg, $"Star_{i}", new Vector2(x, y), new Vector2(s, s))
-                .gameObject.AddComponent<Image>().color = new Color(brightness, brightness, brightness, brightness);
+            float x = -1.6f + i * 0.8f;
+            Box($"Bar_{i}", new Vector3(x, 2.0f, 2f), new Vector3(0.10f, 4.0f, 0.10f), ironMat, bars.transform, col: false);
         }
+        Box("Bar_H1", new Vector3(0f, 3.2f, 2f), new Vector3(3.4f, 0.10f, 0.10f), ironMat, bars.transform, col: false);
+        Box("Bar_H2", new Vector3(0f, 1.0f, 2f), new Vector3(3.4f, 0.10f, 0.10f), ironMat, bars.transform, col: false);
+        var barsCol = bars.AddComponent<BoxCollider>();
+        barsCol.size   = new Vector3(4f, 4f, 0.2f);
+        barsCol.center = new Vector3(0f, 2f, 2f);
 
-        // Scheinwerfer-Kegel (oben links und rechts, auf Tor gerichtet)
-        BuildSpotlight(bg, new Vector2(-500f,  420f), new Vector2(120f, 520f), -20f);
-        BuildSpotlight(bg, new Vector2( 500f,  420f), new Vector2(120f, 520f),  20f);
+        // ── Atmosphäre ────────────────────────────────────────────────────────
+        var debrisMat = M(new Color(0.18f, 0.14f, 0.09f));
+        Box("Kiste_L",  new Vector3(-2.2f, 0.25f, -3f),  new Vector3(0.55f, 0.50f, 0.55f), debrisMat, root);
+        Box("Kiste_R",  new Vector3( 2.3f, 0.22f, -1.5f),new Vector3(0.45f, 0.44f, 0.45f), debrisMat, root);
+        Box("Stein",    new Vector3(-1.8f, 0.12f, 0.5f), new Vector3(0.30f, 0.24f, 0.28f), stoneMat,  root, col: false);
 
-        // Boden-Schatten (unten dunkel)
-        Anchored(bg, "GroundShadow", new Vector2(0, -460f), new Vector2(1920f, 180f))
-            .gameObject.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.7f);
-
-        // Seitliche Wände
-        Anchored(bg, "WallL", new Vector2(-680f, -100f), new Vector2(300f, 700f))
-            .gameObject.AddComponent<Image>().color = new Color(0.07f, 0.06f, 0.05f);
-        Anchored(bg, "WallR", new Vector2( 680f, -100f), new Vector2(300f, 700f))
-            .gameObject.AddComponent<Image>().color = new Color(0.07f, 0.06f, 0.05f);
-
-        // Mauer-Steinmuster (Wand links)
-        BuildBrickPattern(bg, new Vector2(-680f, -100f), 6, 9);
-        BuildBrickPattern(bg, new Vector2( 680f, -100f), 6, 9);
-    }
-
-    void BuildSpotlight(Transform parent, Vector2 pos, Vector2 size, float angle)
-    {
-        var go = Anchored(parent, $"Spotlight_{pos.x}", pos, size);
-        var img = go.gameObject.AddComponent<Image>();
-        img.color = new Color(0.9f, 0.85f, 0.6f, 0.04f);
-        go.localRotation = Quaternion.Euler(0, 0, angle);
-    }
-
-    void BuildBrickPattern(Transform parent, Vector2 center, int cols, int rows)
-    {
-        Color brick  = new Color(0.09f, 0.07f, 0.06f);
-        Color mortar = new Color(0.05f, 0.04f, 0.03f);
-        float bw = 44f, bh = 22f;
-        for (int r = 0; r < rows; r++)
-        for (int c = 0; c < cols; c++)
-        {
-            float ox = (r % 2 == 0) ? 0f : bw * 0.5f;
-            float x  = center.x - cols * bw * 0.5f + c * bw + ox + bw * 0.5f;
-            float y  = center.y - rows * bh * 0.5f + r * bh + bh * 0.5f;
-            var b = Anchored(parent, $"Brick_{center.x}_{r}_{c}", new Vector2(x, y),
-                new Vector2(bw - 2f, bh - 2f));
-            b.gameObject.AddComponent<Image>().color = brick;
-        }
+        return bars;
     }
 
     // =========================================================================
-    // Tor-Visual
+    // Gate-Trigger
     // =========================================================================
 
-    (Image lockImg, GameObject closedVis, GameObject openVis) BuildGate(Transform parent)
+    GameObject BuildGateTrigger(Transform root)
     {
-        // ── Geschlossenes Tor ─────────────────────────────────────────────────
-        var closedRoot = new GameObject("GateClosed");
-        closedRoot.transform.SetParent(parent, false);
-        var closedRT = closedRoot.AddComponent<RectTransform>();
-        closedRT.anchorMin = new Vector2(0.5f, 0.5f);
-        closedRT.anchorMax = new Vector2(0.5f, 0.5f);
-        closedRT.pivot     = new Vector2(0.5f, 0.5f);
-        closedRT.anchoredPosition = new Vector2(0, 80f);
-        closedRT.sizeDelta        = new Vector2(440f, 520f);
-
-        // Tor-Rahmen
-        var frameOuter = Anchored(closedRoot.transform, "FrameOuter", Vector2.zero, new Vector2(440f, 520f));
-        frameOuter.gameObject.AddComponent<Image>().color = new Color(0.18f, 0.16f, 0.12f);
-        var frameInner = Anchored(closedRoot.transform, "FrameInner", Vector2.zero, new Vector2(420f, 500f));
-        frameInner.gameObject.AddComponent<Image>().color = new Color(0.10f, 0.09f, 0.07f);
-
-        // Eckbolzen
-        Color boltCol = new Color(0.28f, 0.24f, 0.18f);
-        foreach (var (bx, by) in new[]{(-200f,-230f),(200f,-230f),(-200f,230f),(200f,230f)})
-            BuildBolt(closedRoot.transform, bx, by, boltCol);
-
-        // Vertikale Gitterstäbe (7 Stück)
-        Color barCol = new Color(0.22f, 0.20f, 0.15f);
-        Color barShine = new Color(0.32f, 0.28f, 0.22f);
-        for (int i = 0; i < 7; i++)
-        {
-            float xOff = -180f + i * 60f;
-            var bar = Anchored(closedRoot.transform, $"Bar_{i}", new Vector2(xOff, 0), new Vector2(22f, 490f));
-            bar.gameObject.AddComponent<Image>().color = barCol;
-            // Glanzstreifen
-            Anchored(bar, "Shine", new Vector2(-6f, 0), new Vector2(4f, 490f))
-                .gameObject.AddComponent<Image>().color = barShine;
-        }
-
-        // Horizontale Querriegel (3 Stück)
-        for (int i = 0; i < 3; i++)
-        {
-            float yOff = -150f + i * 150f;
-            var bar = Anchored(closedRoot.transform, $"HBar_{i}", new Vector2(0, yOff), new Vector2(400f, 20f));
-            bar.gameObject.AddComponent<Image>().color = barCol;
-        }
-
-        // Kette links
-        BuildChain(closedRoot.transform, new Vector2(-165f, 0), 380f);
-        // Kette rechts
-        BuildChain(closedRoot.transform, new Vector2( 165f, 0), 380f);
-
-        // Schloss in der Mitte
-        var lockRoot = Anchored(closedRoot.transform, "Lock", Vector2.zero, new Vector2(80f, 90f));
-        lockRoot.gameObject.AddComponent<Image>().color = new Color(0.35f, 0.28f, 0.15f);
-
-        // Schloss-Bogen
-        var arch = Anchored(lockRoot, "Arch", new Vector2(0, 30f), new Vector2(44f, 40f));
-        arch.gameObject.AddComponent<Image>().color = new Color(0.28f, 0.22f, 0.12f);
-        Anchored(arch, "ArchHole", Vector2.zero, new Vector2(22f, 28f))
-            .gameObject.AddComponent<Image>().color = new Color(0.05f, 0.04f, 0.03f);
-
-        // Schlüsselloch
-        Anchored(lockRoot, "Keyhole", new Vector2(0, -8f), new Vector2(14f, 20f))
-            .gameObject.AddComponent<Image>().color = new Color(0.05f, 0.04f, 0.03f);
-
-        // Image-Referenz für den Script
-        var lockImg = lockRoot.gameObject.GetComponent<Image>();
-
-        // ── Offenes Tor (zunächst deaktiviert) ───────────────────────────────
-        var openRoot = new GameObject("GateOpen");
-        openRoot.transform.SetParent(parent, false);
-        var openRT = openRoot.AddComponent<RectTransform>();
-        openRT.anchorMin = new Vector2(0.5f, 0.5f);
-        openRT.anchorMax = new Vector2(0.5f, 0.5f);
-        openRT.pivot     = new Vector2(0.5f, 0.5f);
-        openRT.anchoredPosition = new Vector2(0, 80f);
-        openRT.sizeDelta        = new Vector2(440f, 520f);
-
-        // Zwei halb-geöffnete Torflügel
-        BuildOpenGateWing(openRoot.transform, -130f, -1f);   // linker Flügel (aufgeschwungen links)
-        BuildOpenGateWing(openRoot.transform,  130f,  1f);   // rechter Flügel
-
-        // Freiheits-Leuchten hinter dem Tor
-        Anchored(openRoot.transform, "FreedomGlow", Vector2.zero, new Vector2(300f, 300f))
-            .gameObject.AddComponent<Image>().color = new Color(1f, 0.95f, 0.6f, 0.12f);
-        Anchored(openRoot.transform, "FreedomGlowInner", Vector2.zero, new Vector2(180f, 180f))
-            .gameObject.AddComponent<Image>().color = new Color(1f, 0.98f, 0.8f, 0.20f);
-
-        openRoot.SetActive(false);
-
-        return (lockImg, closedRoot, openRoot);
-    }
-
-    void BuildChain(Transform parent, Vector2 center, float height)
-    {
-        Color link = new Color(0.30f, 0.26f, 0.18f);
-        int count = 8;
-        float spacing = height / count;
-        for (int i = 0; i < count; i++)
-        {
-            float y = center.y - height * 0.5f + i * spacing;
-            bool horiz = (i % 2 == 0);
-            var w = horiz ? new Vector2(18f, 8f) : new Vector2(8f, 18f);
-            Anchored(parent, $"Chain_{center.x}_{i}", new Vector2(center.x, y), w)
-                .gameObject.AddComponent<Image>().color = link;
-        }
-    }
-
-    void BuildOpenGateWing(Transform parent, float xCenter, float skewSign)
-    {
-        Color wingCol = new Color(0.18f, 0.16f, 0.12f);
-        // Torflügel leicht schräg (simuliert durch leichte x-Verschiebung der Stäbe)
-        for (int i = 0; i < 3; i++)
-        {
-            float xOff = xCenter - 50f + i * 50f + skewSign * 20f;
-            var bar = Anchored(parent, $"WingBar_{xCenter}_{i}", new Vector2(xOff, 0),
-                new Vector2(18f, 490f));
-            bar.gameObject.AddComponent<Image>().color = wingCol;
-        }
-        // Querriegel
-        for (int i = 0; i < 3; i++)
-        {
-            float y = -150f + i * 150f;
-            var bar = Anchored(parent, $"WingHBar_{xCenter}_{i}", new Vector2(xCenter + skewSign * 10f, y),
-                new Vector2(160f, 14f));
-            bar.gameObject.AddComponent<Image>().color = wingCol;
-        }
-    }
-
-    void BuildBolt(Transform parent, float x, float y, Color col)
-    {
-        var b = Anchored(parent, $"Bolt_{x}_{y}", new Vector2(x, y), new Vector2(16f, 16f));
-        b.gameObject.AddComponent<Image>().color = col;
-        Anchored(b, "Inner", Vector2.zero, new Vector2(8f, 8f))
-            .gameObject.AddComponent<Image>().color = new Color(col.r * 1.4f, col.g * 1.4f, col.b * 1.4f);
+        var go = new GameObject("GateTrigger");
+        go.transform.SetParent(root);
+        go.transform.position = new Vector3(0f, 1f, 0.5f);
+        var bc = go.AddComponent<BoxCollider>();
+        bc.size      = new Vector3(4f, 2f, 2f);
+        bc.isTrigger = true;
+        go.AddComponent<DustyWallSpot>();
+        return go;
     }
 
     // =========================================================================
-    // Puzzle-Steuerung (Bunsenbrenner)
+    // UI
     // =========================================================================
 
-    void BuildPuzzleControls(Transform parent,
-        Image lockImg, GameObject closedVis, GameObject openVis,
-        GameObject winOverlay, Button restartBtn, TextMeshProUGUI timerTxt)
+    void BuildUI(Scene scene, GameObject gateTrigger, GameObject gateBarsGO)
     {
-        // Hintergrund-Leiste unten
-        var controlBG = Anchored(parent, "ControlBG", new Vector2(0, -280f), new Vector2(700f, 340f));
-        controlBG.gameObject.AddComponent<Image>().color = new Color(0.06f, 0.05f, 0.04f, 0.92f);
+        // EventSystem
+        var esGO = new GameObject("EventSystem");
+        esGO.AddComponent<EventSystem>();
+        esGO.AddComponent<InputSystemUIInputModule>();
+        SceneManager.MoveGameObjectToScene(esGO, scene);
 
-        // Rahmen
-        Anchored(controlBG, "Border", Vector2.zero, new Vector2(698f, 338f))
-            .gameObject.AddComponent<Image>().color = new Color(0.20f, 0.16f, 0.10f);
+        // Canvas
+        var canvasGO = new GameObject("UICanvas");
+        SceneManager.MoveGameObjectToScene(canvasGO, scene);
+        var canvas = canvasGO.AddComponent<Canvas>();
+        canvas.renderMode   = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 10;
+        var scaler = canvasGO.AddComponent<CanvasScaler>();
+        scaler.uiScaleMode         = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920, 1080);
+        scaler.matchWidthOrHeight  = 0.5f;
+        canvasGO.AddComponent<GraphicRaycaster>();
 
-        // Status-Text
-        var statusGO  = Anchored(controlBG, "StatusText", new Vector2(0, 120f), new Vector2(640f, 35f));
-        var statusTxt = statusGO.gameObject.AddComponent<TextMeshProUGUI>();
-        statusTxt.text = string.Empty;
-        statusTxt.fontSize = 20f;
-        statusTxt.alignment = TextAlignmentOptions.Center;
-        statusTxt.color = new Color(1f, 0.8f, 0.3f);
-        statusTxt.fontStyle = FontStyles.Bold;
+        // ── Dialog-Panel ──────────────────────────────────────────────────────
+        var dialogPanelGO = UiPanel("DialogPanel", canvasGO.transform,
+            new Vector2(0f,0f), new Vector2(1f,0f),
+            new Vector2(0f,0f), new Vector2(0f, 260f),
+            new Vector2(0.5f,0f), new Color(0.03f, 0.03f, 0.06f, 0.97f));
+        dialogPanelGO.SetActive(false);
+        UiImage("TopBorder", dialogPanelGO.transform,
+            new Vector2(0f,1f), new Vector2(1f,1f), Vector2.zero, new Vector2(0f,3f),
+            new Color(0.55f, 0.45f, 0.20f));
+        var portraitGO = UiImage("Portrait", dialogPanelGO.transform,
+            new Vector2(0f,0.5f), new Vector2(0f,0.5f),
+            new Vector2(110f,0f), new Vector2(190f,190f), new Color(0.30f,0.28f,0.38f));
+        var speakerGO  = new GameObject("SpeakerLabel");
+        speakerGO.transform.SetParent(dialogPanelGO.transform, false);
+        var speakerTMP = speakerGO.AddComponent<TextMeshProUGUI>();
+        speakerTMP.text      = "Big Yahu";
+        speakerTMP.fontSize  = 26f;
+        speakerTMP.fontStyle = FontStyles.Bold;
+        speakerTMP.color     = new Color(1f, 0.85f, 0.45f);
+        var speakerRT = speakerGO.GetComponent<RectTransform>();
+        speakerRT.anchorMin = new Vector2(0f,1f); speakerRT.anchorMax = new Vector2(1f,1f);
+        speakerRT.pivot = new Vector2(0f,1f);
+        speakerRT.anchoredPosition = new Vector2(240f,-12f);
+        speakerRT.sizeDelta = new Vector2(-370f, 36f);
+        var dialogTextGO = new GameObject("DialogText");
+        dialogTextGO.transform.SetParent(dialogPanelGO.transform, false);
+        var dialogTMP = dialogTextGO.AddComponent<TextMeshProUGUI>();
+        dialogTMP.text = ""; dialogTMP.fontSize = 24f; dialogTMP.color = Color.white;
+        var dialogRT = dialogTextGO.GetComponent<RectTransform>();
+        dialogRT.anchorMin = Vector2.zero; dialogRT.anchorMax = Vector2.one;
+        dialogRT.offsetMin = new Vector2(240f, 48f);
+        dialogRT.offsetMax = new Vector2(-145f,-52f);
+        var continueBtnGO = UiButton("ContinueButton", dialogPanelGO.transform,
+            new Vector2(1f,0f), new Vector2(1f,0f),
+            new Vector2(-14f,14f), new Vector2(130f,42f),
+            new Vector2(1f,0f), new Color(0.12f,0.52f,0.22f), "Weiter ▶");
 
-        // Temperatur-Label (über der Bar)
-        var tempLblGO  = Anchored(controlBG, "TempLbl", new Vector2(-240f, 68f), new Vector2(120f, 30f));
-        var tempLblTxt = tempLblGO.gameObject.AddComponent<TextMeshProUGUI>();
-        tempLblTxt.text = "TEMPERATUR";
-        tempLblTxt.fontSize = 12f;
-        tempLblTxt.color = new Color(0.7f, 0.5f, 0.3f);
-        tempLblTxt.alignment = TextAlignmentOptions.Left;
+        // ── Interaction Prompt ────────────────────────────────────────────────
+        var promptGO = UiPanel("InteractionPrompt", canvasGO.transform,
+            new Vector2(0.5f,0f), new Vector2(0.5f,0f),
+            new Vector2(0f,80f), new Vector2(400f,60f),
+            new Vector2(0.5f,0f), new Color(0f,0f,0f,0.72f));
+        promptGO.SetActive(false);
+        AddPromptText(promptGO.transform, "[E] Schloss erhitzen");
 
-        // Temperatur-Bar
-        var sliderGO = new GameObject("TempBar");
-        sliderGO.transform.SetParent(controlBG, false);
-        var sliderRT = sliderGO.AddComponent<RectTransform>();
-        sliderRT.anchorMin = new Vector2(0.5f, 0.5f);
-        sliderRT.anchorMax = new Vector2(0.5f, 0.5f);
-        sliderRT.pivot     = new Vector2(0.5f, 0.5f);
-        sliderRT.anchoredPosition = new Vector2(0, 55f);
-        sliderRT.sizeDelta        = new Vector2(560f, 30f);
+        // ── Heat Panel ────────────────────────────────────────────────────────
+        var heatPanelGO = UiPanel("HeatPanel", canvasGO.transform,
+            new Vector2(0.5f,0.5f), new Vector2(0.5f,0.5f),
+            Vector2.zero, new Vector2(700f, 440f),
+            new Vector2(0.5f,0.5f), new Color(0.05f,0.04f,0.04f,0.96f));
+        heatPanelGO.SetActive(false);
+
+        // Titel
+        var hpTitle = new GameObject("Title");
+        hpTitle.transform.SetParent(heatPanelGO.transform, false);
+        var hpTitleTMP = hpTitle.AddComponent<TextMeshProUGUI>();
+        hpTitleTMP.text      = "SCHLOSS ERHITZEN";
+        hpTitleTMP.fontSize  = 30f;
+        hpTitleTMP.fontStyle = FontStyles.Bold;
+        hpTitleTMP.color     = new Color(1f, 0.65f, 0.10f);
+        hpTitleTMP.alignment = TextAlignmentOptions.Center;
+        var hpTitleRT = hpTitle.GetComponent<RectTransform>();
+        hpTitleRT.anchorMin = new Vector2(0f,1f); hpTitleRT.anchorMax = new Vector2(1f,1f);
+        hpTitleRT.pivot = new Vector2(0.5f,1f);
+        hpTitleRT.anchoredPosition = new Vector2(0f,-18f);
+        hpTitleRT.sizeDelta = new Vector2(0f, 48f);
+
+        // Instruction
+        var instrGO = new GameObject("Instruction");
+        instrGO.transform.SetParent(heatPanelGO.transform, false);
+        var instrTMP = instrGO.AddComponent<TextMeshProUGUI>();
+        instrTMP.text      = "Halte den Brenner gedrückt!";
+        instrTMP.fontSize  = 22f;
+        instrTMP.color     = new Color(0.8f, 0.8f, 0.8f);
+        instrTMP.alignment = TextAlignmentOptions.Center;
+        var instrRT = instrGO.GetComponent<RectTransform>();
+        instrRT.anchorMin = new Vector2(0f,1f); instrRT.anchorMax = new Vector2(1f,1f);
+        instrRT.pivot = new Vector2(0.5f,1f);
+        instrRT.anchoredPosition = new Vector2(0f,-75f);
+        instrRT.sizeDelta = new Vector2(0f, 34f);
+
+        // Temperatur-Prozent Label
+        var tempLabelGO = new GameObject("TemperatureLabel");
+        tempLabelGO.transform.SetParent(heatPanelGO.transform, false);
+        var tempLabelTMP = tempLabelGO.AddComponent<TextMeshProUGUI>();
+        tempLabelTMP.text      = "0 %";
+        tempLabelTMP.fontSize  = 52f;
+        tempLabelTMP.fontStyle = FontStyles.Bold;
+        tempLabelTMP.color     = new Color(0.25f, 0.55f, 1f);
+        tempLabelTMP.alignment = TextAlignmentOptions.Center;
+        var tempLabelRT = tempLabelGO.GetComponent<RectTransform>();
+        tempLabelRT.anchorMin = new Vector2(0.5f,0.5f); tempLabelRT.anchorMax = new Vector2(0.5f,0.5f);
+        tempLabelRT.pivot = new Vector2(0.5f,0.5f);
+        tempLabelRT.anchoredPosition = new Vector2(0f, 30f);
+        tempLabelRT.sizeDelta = new Vector2(300f, 70f);
+
+        // Slider (Temperatur-Bar)
+        var sliderGO = new GameObject("TemperatureBar");
+        sliderGO.transform.SetParent(heatPanelGO.transform, false);
+        var sliderRT = sliderGO.GetComponent<RectTransform>() ?? sliderGO.AddComponent<RectTransform>();
+        sliderRT.anchorMin = new Vector2(0.5f,0.5f); sliderRT.anchorMax = new Vector2(0.5f,0.5f);
+        sliderRT.pivot = new Vector2(0.5f,0.5f);
+        sliderRT.anchoredPosition = new Vector2(0f, -40f);
+        sliderRT.sizeDelta = new Vector2(560f, 48f);
         var slider = sliderGO.AddComponent<Slider>();
-
-        // Bar-Hintergrund
-        var bgRect = Anchored(sliderGO.transform, "Background", Vector2.zero, new Vector2(560f, 30f));
-        bgRect.gameObject.AddComponent<Image>().color = new Color(0.08f, 0.07f, 0.05f);
-        slider.targetGraphic = bgRect.GetComponent<Image>();
-
-        // Fill-Area
-        var fillArea = Anchored(bgRect, "Fill Area", Vector2.zero, new Vector2(554f, 28f));
-        var fill     = Anchored(fillArea, "Fill", Vector2.zero, new Vector2(554f, 28f));
-        var fillImg  = fill.gameObject.AddComponent<Image>();
-        fillImg.color = new Color(0.25f, 0.55f, 1f);
-        slider.fillRect = fill;
-
-        slider.minValue = 0f;
-        slider.maxValue = 1f;
-        slider.value    = 0f;
+        slider.minValue = 0f; slider.maxValue = 1f; slider.value = 0f;
         slider.interactable = false;
+        UiImage("Background", sliderGO.transform,
+            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
+            new Color(0.15f,0.15f,0.15f));
+        var fillAreaGO = new GameObject("Fill Area");
+        fillAreaGO.transform.SetParent(sliderGO.transform, false);
+        var faRT = fillAreaGO.GetComponent<RectTransform>() ?? fillAreaGO.AddComponent<RectTransform>();
+        faRT.anchorMin = Vector2.zero; faRT.anchorMax = Vector2.one;
+        faRT.offsetMin = Vector2.zero; faRT.offsetMax = Vector2.zero;
+        var fillGO = UiImage("Fill", fillAreaGO.transform,
+            Vector2.zero, Vector2.zero, Vector2.zero, Vector2.zero,
+            new Color(0.25f, 0.55f, 1f));
+        var fillRT = fillGO.GetComponent<RectTransform>();
+        fillRT.anchorMin = Vector2.zero; fillRT.anchorMax = new Vector2(0f,1f);
+        fillRT.sizeDelta = Vector2.zero;
+        slider.fillRect = fillRT;
 
-        // Prozentanzeige
-        var pctGO  = Anchored(controlBG, "PctText", new Vector2(320f, 55f), new Vector2(80f, 30f));
-        var pctTxt = pctGO.gameObject.AddComponent<TextMeshProUGUI>();
-        pctTxt.text = "0 %";
-        pctTxt.fontSize = 18f;
-        pctTxt.alignment = TextAlignmentOptions.Left;
-        pctTxt.color = new Color(0.9f, 0.7f, 0.4f);
-        pctTxt.fontStyle = FontStyles.Bold;
+        // Status Text
+        var statusGO = new GameObject("StatusText");
+        statusGO.transform.SetParent(heatPanelGO.transform, false);
+        var statusTMP = statusGO.AddComponent<TextMeshProUGUI>();
+        statusTMP.text      = string.Empty;
+        statusTMP.fontSize  = 26f;
+        statusTMP.fontStyle = FontStyles.Bold;
+        statusTMP.color     = new Color(1f, 0.90f, 0.30f);
+        statusTMP.alignment = TextAlignmentOptions.Center;
+        var statusRT = statusGO.GetComponent<RectTransform>();
+        statusRT.anchorMin = new Vector2(0f,0f); statusRT.anchorMax = new Vector2(1f,0f);
+        statusRT.pivot = new Vector2(0.5f,0f);
+        statusRT.anchoredPosition = new Vector2(0f, 90f);
+        statusRT.sizeDelta = new Vector2(0f, 40f);
 
-        // Bunsenbrenner-Button
-        var btnGO = Anchored(controlBG, "HeatButton", new Vector2(0, -40f), new Vector2(500f, 70f));
-        var btnBG = btnGO.gameObject.AddComponent<Image>();
-        btnBG.color = new Color(0.55f, 0.15f, 0.05f);
-        var btn = btnGO.gameObject.AddComponent<Button>();
-        btn.targetGraphic = btnBG;
+        // Heat Button
+        var heatBtnGO = UiButton("HeatButton", heatPanelGO.transform,
+            new Vector2(0.5f,0f), new Vector2(0.5f,0f),
+            new Vector2(0f, 18f), new Vector2(320f, 70f),
+            new Vector2(0.5f,0f), new Color(0.72f, 0.18f, 0.05f), "BRENNER HALTEN");
+        var heatBtnLbl = heatBtnGO.GetComponentInChildren<TextMeshProUGUI>();
+        if (heatBtnLbl) { heatBtnLbl.fontSize = 22f; heatBtnLbl.fontStyle = FontStyles.Bold; }
 
-        // Button-Zustands-Farben
-        var colors = btn.colors;
-        colors.normalColor      = new Color(0.55f, 0.15f, 0.05f);
-        colors.highlightedColor = new Color(0.75f, 0.22f, 0.07f);
-        colors.pressedColor     = new Color(0.90f, 0.35f, 0.10f);
-        colors.disabledColor    = new Color(0.25f, 0.20f, 0.15f);
-        btn.colors = colors;
+        // ── Win Overlay ───────────────────────────────────────────────────────
+        var winGO = UiPanel("WinOverlay", canvasGO.transform,
+            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
+            new Vector2(0.5f,0.5f), new Color(0.02f,0.02f,0.04f,0.92f));
+        winGO.SetActive(false);
 
-        // Flammen-Akzentlinie oben am Button
-        Anchored(btnGO, "AccentTop", new Vector2(0, 33f), new Vector2(500f, 4f))
-            .gameObject.AddComponent<Image>().color = new Color(1f, 0.5f, 0f);
-        Anchored(btnGO, "AccentBot", new Vector2(0, -33f), new Vector2(500f, 4f))
-            .gameObject.AddComponent<Image>().color = new Color(1f, 0.5f, 0f);
+        var winTitleGO = new GameObject("WinTitle");
+        winTitleGO.transform.SetParent(winGO.transform, false);
+        var winTitleTMP = winTitleGO.AddComponent<TextMeshProUGUI>();
+        winTitleTMP.text      = "BIG YAHU IST FREI!";
+        winTitleTMP.fontSize  = 64f;
+        winTitleTMP.fontStyle = FontStyles.Bold;
+        winTitleTMP.color     = new Color(1f, 0.85f, 0.15f);
+        winTitleTMP.alignment = TextAlignmentOptions.Center;
+        var winTitleRT = winTitleGO.GetComponent<RectTransform>();
+        winTitleRT.anchorMin = new Vector2(0f,0.5f); winTitleRT.anchorMax = new Vector2(1f,0.5f);
+        winTitleRT.pivot = new Vector2(0.5f,0.5f);
+        winTitleRT.anchoredPosition = new Vector2(0f, 80f);
+        winTitleRT.sizeDelta = new Vector2(0f, 90f);
 
-        // Button-Label
-        var btnLbl = Anchored(btnGO, "Label", Vector2.zero, new Vector2(480f, 60f))
-            .gameObject.AddComponent<TextMeshProUGUI>();
-        btnLbl.text = "BUNSENBRENNER HALTEN";
-        btnLbl.fontSize = 26f;
-        btnLbl.alignment = TextAlignmentOptions.Center;
-        btnLbl.color = new Color(1f, 0.85f, 0.6f);
-        btnLbl.fontStyle = FontStyles.Bold;
+        var timerGO = new GameObject("TimerText");
+        timerGO.transform.SetParent(winGO.transform, false);
+        var timerTMP = timerGO.AddComponent<TextMeshProUGUI>();
+        timerTMP.text      = string.Empty;
+        timerTMP.fontSize  = 30f;
+        timerTMP.color     = new Color(1f, 0.92f, 0.5f);
+        timerTMP.fontStyle = FontStyles.Bold;
+        timerTMP.alignment = TextAlignmentOptions.Center;
+        var timerRT = timerGO.GetComponent<RectTransform>();
+        timerRT.anchorMin = new Vector2(0f,0.5f); timerRT.anchorMax = new Vector2(1f,0.5f);
+        timerRT.pivot = new Vector2(0.5f,0.5f);
+        timerRT.anchoredPosition = new Vector2(0f, -10f);
+        timerRT.sizeDelta = new Vector2(0f, 44f);
 
-        // Hinweis unter dem Button
-        var hintTxt = Anchored(controlBG, "HintText", new Vector2(0, -100f), new Vector2(600f, 30f))
-            .gameObject.AddComponent<TextMeshProUGUI>();
-        hintTxt.text = "Gedrückt halten → Temperatur steigt   |   Loslassen → kühlt ab";
-        hintTxt.fontSize = 14f;
-        hintTxt.alignment = TextAlignmentOptions.Center;
-        hintTxt.color = new Color(0.55f, 0.42f, 0.30f);
+        var restartBtnGO = UiButton("RestartButton", winGO.transform,
+            new Vector2(0.5f,0.5f), new Vector2(0.5f,0.5f),
+            new Vector2(0f, -90f), new Vector2(280f, 60f),
+            new Vector2(0.5f,0.5f), new Color(0.12f,0.45f,0.18f), "Nochmal spielen");
+        var restartLbl = restartBtnGO.GetComponentInChildren<TextMeshProUGUI>();
+        if (restartLbl) restartLbl.fontSize = 24f;
 
-        // Level6_FinalGate-Script aufsetzen
-        var scriptGO = new GameObject("Level6_FinalGate");
-        scriptGO.transform.SetParent(parent, false);
-        scriptGO.AddComponent<RectTransform>();
-        var script = scriptGO.AddComponent<Level6_FinalGate>();
+        // ── BigYahuDialogSystem ───────────────────────────────────────────────
+        var dsGO = new GameObject("BigYahuDialogSystem");
+        SceneManager.MoveGameObjectToScene(dsGO, scene);
+        var ds  = dsGO.AddComponent<BigYahuDialogSystem>();
+        var dso = new SerializedObject(ds);
+        dso.FindProperty("dialogPanel").objectReferenceValue    = dialogPanelGO;
+        dso.FindProperty("dialogText").objectReferenceValue     = dialogTMP;
+        dso.FindProperty("speakerLabel").objectReferenceValue   = speakerTMP;
+        dso.FindProperty("portraitImage").objectReferenceValue  = portraitGO.GetComponent<Image>();
+        dso.FindProperty("continueButton").objectReferenceValue = continueBtnGO.GetComponent<Button>();
+        dso.ApplyModifiedPropertiesWithoutUndo();
 
-        var so = new SerializedObject(script);
-        so.FindProperty("temperatureBar").objectReferenceValue   = slider;
-        so.FindProperty("temperatureLabel").objectReferenceValue = pctTxt;
-        so.FindProperty("statusText").objectReferenceValue       = statusTxt;
-        so.FindProperty("heatButton").objectReferenceValue       = btn;
-        so.FindProperty("lockImage").objectReferenceValue        = lockImg;
-        so.FindProperty("gateClosedVisual").objectReferenceValue = closedVis;
-        so.FindProperty("gateOpenVisual").objectReferenceValue   = openVis;
-        so.FindProperty("winOverlay").objectReferenceValue       = winOverlay;
-        so.FindProperty("restartButton").objectReferenceValue    = restartBtn;
-        so.FindProperty("timerText").objectReferenceValue        = timerTxt;
-        so.ApplyModifiedProperties();
+        // ── Level6_FinalGate ──────────────────────────────────────────────────
+        var l6GO = new GameObject("Level6_FinalGate");
+        SceneManager.MoveGameObjectToScene(l6GO, scene);
+        var l6   = l6GO.AddComponent<Level6_FinalGate>();
+        var l6so = new SerializedObject(l6);
+        l6so.FindProperty("gateSpot").objectReferenceValue          =
+            gateTrigger?.GetComponent<DustyWallSpot>();
+        l6so.FindProperty("interactionPrompt").objectReferenceValue = promptGO;
+        l6so.FindProperty("gateBarsGO").objectReferenceValue        = gateBarsGO;
+        l6so.FindProperty("heatPanel").objectReferenceValue         = heatPanelGO;
+        l6so.FindProperty("temperatureBar").objectReferenceValue    = slider;
+        l6so.FindProperty("temperatureLabel").objectReferenceValue  = tempLabelTMP;
+        l6so.FindProperty("statusText").objectReferenceValue        = statusTMP;
+        l6so.FindProperty("heatButton").objectReferenceValue        =
+            heatBtnGO.GetComponent<Button>();
+        l6so.FindProperty("winOverlay").objectReferenceValue        = winGO;
+        l6so.FindProperty("timerText").objectReferenceValue         = timerTMP;
+        l6so.FindProperty("restartButton").objectReferenceValue     =
+            restartBtnGO.GetComponent<Button>();
+        l6so.ApplyModifiedPropertiesWithoutUndo();
+
+        Debug.Log("[Level6] UI und GameLogic verdrahtet.");
     }
 
     // =========================================================================
-    // Win-Overlay
+    // Hilfs-Methoden
     // =========================================================================
 
-    RectTransform BuildWinOverlay(Transform parent, out Button restartBtn, out TextMeshProUGUI timerTxt)
+    void AddPromptText(Transform parent, string text)
     {
-        // Vollbild-Overlay (dunkel, zunächst inaktiv)
-        var overlay = MakePanel(parent, "WinOverlay", Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-        overlay.gameObject.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.88f);
-        overlay.gameObject.SetActive(false);
-
-        // Sterne / Partikel-Look
-        for (int i = 0; i < 40; i++)
-        {
-            float x = Random.Range(-800f, 800f);
-            float y = Random.Range(-400f, 400f);
-            float s = Random.Range(3f, 8f);
-            float h = Random.Range(0.8f, 1f);
-            Anchored(overlay, $"WinStar_{i}", new Vector2(x, y), new Vector2(s, s))
-                .gameObject.AddComponent<Image>().color = new Color(1f, h, 0.4f, h);
-        }
-
-        // Leuchtkranz
-        Anchored(overlay, "Halo", new Vector2(0, 60f), new Vector2(500f, 500f))
-            .gameObject.AddComponent<Image>().color = new Color(1f, 0.9f, 0.4f, 0.06f);
-        Anchored(overlay, "HaloInner", new Vector2(0, 60f), new Vector2(300f, 300f))
-            .gameObject.AddComponent<Image>().color = new Color(1f, 0.95f, 0.6f, 0.10f);
-
-        // Schloss-offen-Symbol (großes "🔓"-Ersatz via Text)
-        var lockSymGO  = Anchored(overlay, "LockSymbol", new Vector2(0, 220f), new Vector2(120f, 120f));
-        var lockSymTxt = lockSymGO.gameObject.AddComponent<TextMeshProUGUI>();
-        lockSymTxt.text = "FREI";
-        lockSymTxt.fontSize = 30f;
-        lockSymTxt.alignment = TextAlignmentOptions.Center;
-        lockSymTxt.color = new Color(1f, 0.9f, 0.3f);
-        lockSymTxt.fontStyle = FontStyles.Bold;
-
-        // Haupttitel
-        var titleGO  = Anchored(overlay, "Title", new Vector2(0, 110f), new Vector2(900f, 110f));
-        var titleTxt = titleGO.gameObject.AddComponent<TextMeshProUGUI>();
-        titleTxt.text = "WIR SIND FREI!";
-        titleTxt.fontSize = 80f;
-        titleTxt.alignment = TextAlignmentOptions.Center;
-        titleTxt.color = new Color(1f, 0.88f, 0.3f);
-        titleTxt.fontStyle = FontStyles.Bold;
-
-        // Untertitel
-        var subGO  = Anchored(overlay, "Subtitle", new Vector2(0, 20f), new Vector2(800f, 60f));
-        var subTxt = subGO.gameObject.AddComponent<TextMeshProUGUI>();
-        subTxt.text = "Big Yahu hat das Gefängnis verlassen!";
-        subTxt.fontSize = 32f;
-        subTxt.alignment = TextAlignmentOptions.Center;
-        subTxt.color = new Color(0.85f, 0.75f, 0.55f);
-
-        // Trennlinie
-        Anchored(overlay, "Divider", new Vector2(0, -40f), new Vector2(500f, 2f))
-            .gameObject.AddComponent<Image>().color = new Color(1f, 0.8f, 0.3f, 0.5f);
-
-        // Timer-Anzeige
-        var timerGO = Anchored(overlay, "TimerText", new Vector2(0, -85f), new Vector2(400f, 42f));
-        timerTxt = timerGO.gameObject.AddComponent<TextMeshProUGUI>();
-        timerTxt.text = "";
-        timerTxt.fontSize = 28f;
-        timerTxt.alignment = TextAlignmentOptions.Center;
-        timerTxt.color = new Color(1f, 0.92f, 0.5f);
-        timerTxt.fontStyle = FontStyles.Bold;
-
-        // Danke-Text
-        var thanksGO  = Anchored(overlay, "Thanks", new Vector2(0, -130f), new Vector2(700f, 40f));
-        var thanksTxt = thanksGO.gameObject.AddComponent<TextMeshProUGUI>();
-        thanksTxt.text = "Herzlichen Glückwunsch! Du hast alle 6 Level gemeistert.";
-        thanksTxt.fontSize = 20f;
-        thanksTxt.alignment = TextAlignmentOptions.Center;
-        thanksTxt.color = new Color(0.70f, 0.65f, 0.55f);
-
-        // Restart-Button
-        var restartGO  = Anchored(overlay, "RestartButton", new Vector2(0, -210f), new Vector2(360f, 60f));
-        var restartBG  = restartGO.gameObject.AddComponent<Image>();
-        restartBG.color = new Color(0.20f, 0.16f, 0.08f);
-        restartBtn = restartGO.gameObject.AddComponent<Button>();
-        restartBtn.targetGraphic = restartBG;
-
-        var rColors = restartBtn.colors;
-        rColors.normalColor      = new Color(0.20f, 0.16f, 0.08f);
-        rColors.highlightedColor = new Color(0.35f, 0.28f, 0.14f);
-        rColors.pressedColor     = new Color(0.50f, 0.40f, 0.20f);
-        restartBtn.colors = rColors;
-
-        // Rahmen
-        Anchored(restartGO, "BorderT", new Vector2(0,  28f), new Vector2(360f, 2f))
-            .gameObject.AddComponent<Image>().color = new Color(1f, 0.8f, 0.3f, 0.6f);
-        Anchored(restartGO, "BorderB", new Vector2(0, -28f), new Vector2(360f, 2f))
-            .gameObject.AddComponent<Image>().color = new Color(1f, 0.8f, 0.3f, 0.6f);
-
-        var restartLbl = Anchored(restartGO, "Label", Vector2.zero, new Vector2(340f, 50f))
-            .gameObject.AddComponent<TextMeshProUGUI>();
-        restartLbl.text = "NOCHMAL SPIELEN";
-        restartLbl.fontSize = 22f;
-        restartLbl.alignment = TextAlignmentOptions.Center;
-        restartLbl.color = new Color(1f, 0.88f, 0.4f);
-        restartLbl.fontStyle = FontStyles.Bold;
-
-        return overlay;
+        var go = new GameObject("Text");
+        go.transform.SetParent(parent, false);
+        var tmp = go.AddComponent<TextMeshProUGUI>();
+        tmp.text      = text;
+        tmp.fontSize  = 22f;
+        tmp.alignment = TextAlignmentOptions.Center;
+        tmp.color     = Color.white;
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+        rt.offsetMin = new Vector2(8f,4f); rt.offsetMax = new Vector2(-8f,-4f);
     }
 
-    // =========================================================================
-    // HUD
-    // =========================================================================
-
-    void BuildHUD(Transform parent)
+    Material M(Color c, float metal = 0f, float smooth = 0.35f)
     {
-        // Oben
-        var top = Anchored(parent, "TopHUD", new Vector2(0, 495f), new Vector2(1920f, 70f));
-        top.gameObject.AddComponent<Image>().color = new Color(0.04f, 0.03f, 0.02f, 0.92f);
-
-        Anchored(top, "AccentL", new Vector2(-200f, 0), new Vector2(2f, 50f))
-            .gameObject.AddComponent<Image>().color = new Color(1f, 0.5f, 0.1f, 0.8f);
-        Anchored(top, "AccentR", new Vector2( 200f, 0), new Vector2(2f, 50f))
-            .gameObject.AddComponent<Image>().color = new Color(1f, 0.5f, 0.1f, 0.8f);
-
-        var titleTxt = Anchored(top, "Title", Vector2.zero, new Vector2(550f, 50f))
-            .gameObject.AddComponent<TextMeshProUGUI>();
-        titleTxt.text = "GEFAENGNISAUSBRUCH — DAS FINALE TOR";
-        titleTxt.fontSize = 26f;
-        titleTxt.alignment = TextAlignmentOptions.Center;
-        titleTxt.color = new Color(1f, 0.75f, 0.35f);
-        titleTxt.fontStyle = FontStyles.Bold;
-
-        var levelLbl = Anchored(top, "LevelLbl", new Vector2(-700f, 0), new Vector2(200f, 40f))
-            .gameObject.AddComponent<TextMeshProUGUI>();
-        levelLbl.text = "LEVEL 06";
-        levelLbl.fontSize = 20f;
-        levelLbl.alignment = TextAlignmentOptions.Left;
-        levelLbl.color = new Color(1f, 0.5f, 0.2f, 0.8f);
-
-        BuildBadge(top, "FINAL", new Vector2(750f, 0), new Color(1f, 0.4f, 0.1f));
-        BuildBadge(top, "AUSBRUCH", new Vector2(870f, 0), new Color(0.9f, 0.8f, 0.2f));
-
-        // Unten
-        var bot = Anchored(parent, "BotHUD", new Vector2(0, -495f), new Vector2(1920f, 60f));
-        bot.gameObject.AddComponent<Image>().color = new Color(0.03f, 0.02f, 0.01f, 0.92f);
-
-        var hintTxt = Anchored(bot, "Hint", new Vector2(-200f, 0), new Vector2(800f, 40f))
-            .gameObject.AddComponent<TextMeshProUGUI>();
-        hintTxt.text = "Werkzeug: Bunsenbrenner  |  Ziel: Schloss schmelzen  |  Freiheit!";
-        hintTxt.fontSize = 16f;
-        hintTxt.alignment = TextAlignmentOptions.Center;
-        hintTxt.color = new Color(0.6f, 0.45f, 0.25f);
-
-        // Seitenleisten
-        BuildSidePanel(parent, -870f);
-        BuildSidePanel(parent,  870f);
+        var m = new Material(Shader.Find("Standard")) { color = c };
+        m.SetFloat("_Metallic",   metal);
+        m.SetFloat("_Glossiness", smooth);
+        return m;
     }
 
-    void BuildBadge(Transform parent, string label, Vector2 pos, Color col)
+    GameObject Box(string name, Vector3 pos, Vector3 scale, Material mat, Transform parent,
+                   Quaternion? rot = null, bool col = true)
     {
-        var badge = Anchored(parent, $"Badge_{label}", pos, new Vector2(130f, 30f));
-        badge.gameObject.AddComponent<Image>().color = new Color(col.r * 0.25f, col.g * 0.25f, col.b * 0.25f, 0.85f);
-        Anchored(badge, "BL", new Vector2(-63f, 0), new Vector2(2f, 30f)).gameObject.AddComponent<Image>().color = col;
-        Anchored(badge, "BR", new Vector2( 63f, 0), new Vector2(2f, 30f)).gameObject.AddComponent<Image>().color = col;
-        var txt = Anchored(badge, "Txt", Vector2.zero, new Vector2(126f, 26f)).gameObject.AddComponent<TextMeshProUGUI>();
-        txt.text = label; txt.fontSize = 13f;
-        txt.alignment = TextAlignmentOptions.Center;
-        txt.color = col; txt.fontStyle = FontStyles.Bold;
+        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        go.name = name;
+        go.transform.SetParent(parent);
+        go.transform.position   = pos;
+        go.transform.localScale = scale;
+        if (rot.HasValue) go.transform.rotation = rot.Value;
+        go.GetComponent<Renderer>().material = mat;
+        if (!col) Object.DestroyImmediate(go.GetComponent<Collider>());
+        return go;
     }
 
-    void BuildSidePanel(Transform parent, float x)
+    void AddLight(string name, Transform parent, Vector3 localPos,
+                  LightType type, Color color, float intensity, float range,
+                  LightShadows shadows = LightShadows.None, Quaternion? rotation = null)
     {
-        var panel = Anchored(parent, $"Side_{x}", new Vector2(x, 0), new Vector2(100f, 700f));
-        panel.gameObject.AddComponent<Image>().color = new Color(0.04f, 0.03f, 0.02f, 0.85f);
-
-        float sign = x < 0 ? 1f : -1f;
-        Anchored(panel, "Glow", new Vector2(sign * 48f, 0), new Vector2(2f, 700f))
-            .gameObject.AddComponent<Image>().color = new Color(1f, 0.4f, 0.1f, 0.3f);
-
-        var textGO = new GameObject("SideText");
-        var textRT = textGO.AddComponent<RectTransform>();
-        textRT.SetParent(panel, false);
-        textRT.sizeDelta = new Vector2(600f, 24f);
-        textRT.anchoredPosition = Vector2.zero;
-        textRT.localRotation = Quaternion.Euler(0, 0, 90f);
-        var txt = textGO.AddComponent<TextMeshProUGUI>();
-        txt.text = "DAS FINALE TOR  *  SICHERHEITSSTUFE MAXIMUM  *  DAS FINALE TOR";
-        txt.fontSize = 10f;
-        txt.alignment = TextAlignmentOptions.Center;
-        txt.color = new Color(0.35f, 0.25f, 0.12f);
-        txt.fontStyle = FontStyles.Bold;
+        var go = new GameObject(name);
+        go.transform.SetParent(parent);
+        go.transform.localPosition = localPos;
+        if (rotation.HasValue) go.transform.localRotation = rotation.Value;
+        var l = go.AddComponent<Light>();
+        l.type = type; l.color = color; l.intensity = intensity;
+        l.range = range; l.shadows = shadows;
+        if (type == LightType.Spot) l.spotAngle = 55f;
     }
 
-    // =========================================================================
-    // Hintergrundmusik
-    // =========================================================================
-
-    void AddBackgroundMusic(Scene scene)
-    {
-        var clip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Big Yahu/Untitled.mp3");
-        if (clip == null) return;
-        var go = new GameObject("BackgroundMusic");
-        var src = go.AddComponent<AudioSource>();
-        src.clip = clip; src.loop = true; src.playOnAwake = true; src.volume = 0.5f;
-        SceneManager.MoveGameObjectToScene(go, scene);
-    }
-
-    // =========================================================================
-    // UI-Helfer
-    // =========================================================================
-
-    RectTransform MakePanel(Transform parent, string name,
-        Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
+    GameObject UiPanel(string name, Transform parent,
+        Vector2 anchorMin, Vector2 anchorMax,
+        Vector2 anchoredPos, Vector2 sizeDelta, Vector2 pivot, Color color)
     {
         var go = new GameObject(name);
         go.transform.SetParent(parent, false);
-        var rt = go.AddComponent<RectTransform>();
+        go.AddComponent<Image>().color = color;
+        var rt = go.GetComponent<RectTransform>();
         rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
-        rt.offsetMin = offsetMin; rt.offsetMax  = offsetMax;
-        return rt;
+        rt.pivot = pivot; rt.anchoredPosition = anchoredPos; rt.sizeDelta = sizeDelta;
+        return go;
     }
 
-    RectTransform Anchored(Transform parent, string name, Vector2 pos, Vector2 size)
+    GameObject UiImage(string name, Transform parent,
+        Vector2 anchorMin, Vector2 anchorMax,
+        Vector2 anchoredPos, Vector2 sizeDelta, Color color)
     {
         var go = new GameObject(name);
         go.transform.SetParent(parent, false);
-        var rt = go.AddComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0.5f, 0.5f);
-        rt.anchorMax = new Vector2(0.5f, 0.5f);
-        rt.pivot     = new Vector2(0.5f, 0.5f);
-        rt.anchoredPosition = pos;
-        rt.sizeDelta        = size;
-        return rt;
+        go.AddComponent<Image>().color = color;
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
+        rt.anchoredPosition = anchoredPos; rt.sizeDelta = sizeDelta;
+        return go;
+    }
+
+    GameObject UiButton(string name, Transform parent,
+        Vector2 anchorMin, Vector2 anchorMax,
+        Vector2 anchoredPos, Vector2 sizeDelta,
+        Vector2 pivot, Color bgColor, string label)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        go.AddComponent<Image>().color = bgColor;
+        go.AddComponent<Button>();
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
+        rt.pivot = pivot; rt.anchoredPosition = anchoredPos; rt.sizeDelta = sizeDelta;
+        var txtGO = new GameObject("Label");
+        txtGO.transform.SetParent(go.transform, false);
+        var tmp = txtGO.AddComponent<TextMeshProUGUI>();
+        tmp.text = label; tmp.fontSize = 20f;
+        tmp.alignment = TextAlignmentOptions.Center;
+        tmp.color = Color.white;
+        var trt = txtGO.GetComponent<RectTransform>();
+        trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one;
+        trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
+        return go;
     }
 }
