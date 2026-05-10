@@ -4,12 +4,13 @@ using UnityEditor.SceneManagement;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 using TMPro;
-using System.Collections.Generic;
-using System.Reflection;
 
 /// <summary>
-/// Baut Level 5 – Breadboard-Puzzle.
+/// Baut Level 5 – Werkstatt (3D).
+/// Spieler betritt die Werkstatt, findet den Bunsenbrenner auf dem Werktisch
+/// und nimmt ihn auf → Level 6 wird geladen.
 /// Menü: Tools → Build Level 5 Breadboard
 /// </summary>
 public class BuildLevel5Breadboard : EditorWindow
@@ -19,11 +20,11 @@ public class BuildLevel5Breadboard : EditorWindow
 
     void OnGUI()
     {
-        GUILayout.Label("Level 5 – Werkstatt / Breadboard", EditorStyles.boldLabel);
+        GUILayout.Label("Level 5 – Werkstatt / Brenner-Pickup", EditorStyles.boldLabel);
         GUILayout.Space(8);
         EditorGUILayout.HelpBox(
-            "Kabel-Drag-&-Drop Puzzle: Drei Kabelpaare (A→A, B→B, C→C) richtig verbinden.\n" +
-            "Alle korrekt? → Stromkreis geschlossen → Level 6.",
+            "3D Werkstatt: Spieler findet den Bunsenbrenner auf dem Werktisch.\n" +
+            "[E] aufnehmen → Dialog → Level 6 lädt.",
             MessageType.Info);
         GUILayout.Space(12);
         if (GUILayout.Button("Level 5 bauen", GUILayout.Height(36)))
@@ -39,329 +40,407 @@ public class BuildLevel5Breadboard : EditorWindow
         Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
         EditorSceneManager.SaveScene(scene, "Assets/Scenes/Level5.unity");
 
-        // Kamera
+        // ── Kamera ────────────────────────────────────────────────────────────
         var camGO = new GameObject("Main Camera");
         var cam = camGO.AddComponent<Camera>();
         cam.clearFlags = CameraClearFlags.SolidColor;
-        cam.backgroundColor = new Color(0.04f, 0.06f, 0.03f);
+        cam.backgroundColor = new Color(0.04f, 0.03f, 0.02f);
+        cam.farClipPlane = 30f;
         cam.tag = "MainCamera";
         camGO.AddComponent<AudioListener>();
+        camGO.transform.position = new Vector3(0f, 6f, -3f);
+        camGO.transform.rotation = Quaternion.Euler(60f, 0f, 0f);
+        var follow = camGO.AddComponent<TopDownCameraFollow>();
+        follow.fixedWorldPosition = new Vector3(0f, 1.8f, -4.4f);
         SceneManager.MoveGameObjectToScene(camGO, scene);
 
+        // ── Umgebung ──────────────────────────────────────────────────────────
+        var root = new GameObject("Environment");
+        SceneManager.MoveGameObjectToScene(root, scene);
+        BuildRoom(root.transform);
+
+        // ── Spieler ───────────────────────────────────────────────────────────
+        var player = AddPlayer(scene);
+        if (player != null) follow.SetTarget(player.transform);
+
+        // ── Licht ─────────────────────────────────────────────────────────────
+        RenderSettings.ambientMode  = UnityEngine.Rendering.AmbientMode.Flat;
+        RenderSettings.ambientLight = new Color(0.15f, 0.12f, 0.08f);
+        AddLight("KeyLight", root.transform, new Vector3(0, 4f, 0.5f),
+            LightType.Point, new Color(1f, 0.85f, 0.55f), 2.5f, 10f, shadows: LightShadows.Soft);
+        AddLight("FillLight", root.transform, new Vector3(0, 4f, 0),
+            LightType.Directional, new Color(0.5f, 0.55f, 0.8f), 0.4f, 0f,
+            rotation: Quaternion.Euler(70f, 0f, 0f));
+
+        // ── Brenner-Spot ──────────────────────────────────────────────────────
+        var brennerSpotGO = BuildBrennerSpot(root.transform);
+
+        // ── GameManager ───────────────────────────────────────────────────────
+        var gmGO = new GameObject("GameManager");
+        SceneManager.MoveGameObjectToScene(gmGO, scene);
+        var gm = gmGO.AddComponent<GameManager>();
+        var gmso = new SerializedObject(gm);
+        var arr = gmso.FindProperty("levelSceneNames");
+        arr.arraySize = 6;
+        string[] names = { "Level1", "Level2", "Level3", "Level4", "Level5", "Level6" };
+        for (int i = 0; i < names.Length; i++)
+            arr.GetArrayElementAtIndex(i).stringValue = names[i];
+        gmso.ApplyModifiedPropertiesWithoutUndo();
+
+        // ── UI ────────────────────────────────────────────────────────────────
+        BuildUI(scene, brennerSpotGO);
+
+        EditorSceneManager.SaveScene(scene);
+        Debug.Log("[Level5] Werkstatt fertig gebaut.");
+    }
+
+    // =========================================================================
+    // 3D Raum
+    // =========================================================================
+
+    void BuildRoom(Transform root)
+    {
+        var wallMat    = M(new Color(0.28f, 0.24f, 0.18f), 0.02f, 0.06f);
+        var floorMat   = M(new Color(0.22f, 0.20f, 0.16f), 0.04f, 0.10f);
+        var metalMat   = M(new Color(0.30f, 0.27f, 0.22f), 0.35f, 0.20f);
+        var darkMetal  = M(new Color(0.18f, 0.16f, 0.12f), 0.50f, 0.25f);
+        var woodMat    = M(new Color(0.32f, 0.22f, 0.12f), 0.01f, 0.06f);
+
+        // Boden & Wände
+        Box("Floor",      new Vector3(0,     -0.08f,  0),    new Vector3(6f, 0.16f, 6f),   floorMat, root);
+        Box("BackWall",   new Vector3(0,      2.5f,   3.0f), new Vector3(6f, 5f, 0.22f),   wallMat,  root);
+        Box("LeftWall",   new Vector3(-3.0f,  2.5f,   0),    new Vector3(0.22f, 5f, 6f),   wallMat,  root);
+        Box("RightWall",  new Vector3( 3.0f,  2.5f,   0),    new Vector3(0.22f, 5f, 6f),   wallMat,  root);
+        Box("FrontWall_L",new Vector3(-2.0f,  2.5f,  -3.0f), new Vector3(2.0f, 5f, 0.22f), wallMat,  root);
+        Box("FrontWall_R",new Vector3( 2.0f,  2.5f,  -3.0f), new Vector3(2.0f, 5f, 0.22f), wallMat,  root);
+        Box("FrontWall_T",new Vector3( 0f,    3.8f,  -3.0f), new Vector3(6.0f, 2.4f, 0.22f), wallMat, root);
+
+        // Eingangs-Rahmen
+        Box("DoorFrame_L",  new Vector3(-1.0f, 1.3f, -2.92f), new Vector3(0.06f, 2.6f, 0.06f), darkMetal, root, col: false);
+        Box("DoorFrame_R",  new Vector3( 1.0f, 1.3f, -2.92f), new Vector3(0.06f, 2.6f, 0.06f), darkMetal, root, col: false);
+        Box("DoorFrame_Top",new Vector3( 0f,   2.62f,-2.92f), new Vector3(2.06f, 0.06f, 0.06f), darkMetal, root, col: false);
+
+        // Werktisch (hinten links)
+        Box("Bench_Top",  new Vector3(-1.6f, 0.88f, 1.8f), new Vector3(2.0f, 0.08f, 0.85f), woodMat,  root);
+        Box("Bench_Leg_FL",new Vector3(-0.72f,0.44f, 1.42f),new Vector3(0.08f, 0.88f, 0.08f), darkMetal, root);
+        Box("Bench_Leg_FR",new Vector3(-2.48f,0.44f, 1.42f),new Vector3(0.08f, 0.88f, 0.08f), darkMetal, root);
+        Box("Bench_Leg_BL",new Vector3(-0.72f,0.44f, 2.18f),new Vector3(0.08f, 0.88f, 0.08f), darkMetal, root);
+        Box("Bench_Leg_BR",new Vector3(-2.48f,0.44f, 2.18f),new Vector3(0.08f, 0.88f, 0.08f), darkMetal, root);
+        // Regal über Werktisch
+        Box("Shelf",      new Vector3(-1.6f, 1.85f, 2.22f), new Vector3(2.0f, 0.05f, 0.28f), woodMat,  root, col: false);
+
+        // Werkzeugwand rechts (dekorativ)
+        Box("ToolBoard",  new Vector3( 2.72f, 1.6f, 0.5f), new Vector3(0.04f, 1.4f, 2.0f), woodMat,  root, col: false);
+
+        // Metallfässer hinten rechts
+        Cyl("Barrel1", new Vector3(2.1f, 0.42f, 2.3f), new Vector3(0.36f, 0.84f, 0.36f), darkMetal, root);
+        Cyl("Barrel2", new Vector3(2.5f, 0.42f, 1.9f), new Vector3(0.36f, 0.84f, 0.36f), metalMat,  root);
+
+        // Kleine Kiste auf dem Boden
+        Box("Crate",    new Vector3(1.6f, 0.22f, 0.8f), new Vector3(0.55f, 0.44f, 0.55f),
+            M(new Color(0.22f, 0.15f, 0.08f)), root);
+    }
+
+    // =========================================================================
+    // Brenner-Objekt auf dem Werktisch
+    // =========================================================================
+
+    GameObject BuildBrennerSpot(Transform root)
+    {
+        var brennerMat = M(new Color(0.55f, 0.18f, 0.06f), 0.5f, 0.3f);  // orange-rot
+        var tubeMat    = M(new Color(0.25f, 0.22f, 0.18f), 0.6f, 0.4f);
+
+        var spotGO = new GameObject("BrennerSpot");
+        spotGO.transform.SetParent(root);
+
+        // Brenner-Koerper (auf dem Werktisch)
+        Box("Brenner_Body", new Vector3(-1.6f, 0.98f, 1.8f),
+            new Vector3(0.12f, 0.18f, 0.32f), brennerMat, spotGO.transform, col: false);
+        // Schlauch
+        Cyl("Brenner_Hose", new Vector3(-1.6f, 0.96f, 2.02f),
+            new Vector3(0.04f, 0.10f, 0.04f), tubeMat, spotGO.transform);
+        // Düse
+        Box("Brenner_Tip", new Vector3(-1.6f, 1.06f, 1.65f),
+            new Vector3(0.04f, 0.04f, 0.08f), tubeMat, spotGO.transform, col: false);
+
+        // Glüh-Schein (emissiv)
+        var glowMat = Emit(new Color(0.8f, 0.3f, 0.05f), new Color(1f, 0.45f, 0.05f), 2.0f);
+        Box("Brenner_Glow", new Vector3(-1.6f, 1.08f, 1.60f),
+            new Vector3(0.03f, 0.03f, 0.03f), glowMat, spotGO.transform, col: false);
+
+        // Trigger-Zone um den Brenner
+        var trigGO = new GameObject("BrennerTrigger");
+        trigGO.transform.SetParent(spotGO.transform);
+        trigGO.transform.position = new Vector3(-1.6f, 0.95f, 1.8f);
+        var bc = trigGO.AddComponent<BoxCollider>();
+        bc.size      = new Vector3(1.4f, 1.6f, 1.2f);
+        bc.isTrigger = true;
+        trigGO.AddComponent<DustyWallSpot>();
+
+        return trigGO;
+    }
+
+    // =========================================================================
+    // Spieler
+    // =========================================================================
+
+    GameObject AddPlayer(Scene scene)
+    {
+        var playerGO = new GameObject("Player");
+        playerGO.transform.position = new Vector3(0f, 0f, -2.0f);
+        playerGO.tag = "Player";
+
+        var rb = playerGO.AddComponent<Rigidbody>();
+        rb.freezeRotation = true;
+        rb.constraints = RigidbodyConstraints.FreezeRotation;
+
+        var col = playerGO.AddComponent<CapsuleCollider>();
+        col.height = 1.8f;
+        col.radius = 0.28f;
+        col.center = new Vector3(0, 0.9f, 0);
+
+        playerGO.AddComponent<PlayerController>();
+        SceneManager.MoveGameObjectToScene(playerGO, scene);
+        return playerGO;
+    }
+
+    // =========================================================================
+    // UI
+    // =========================================================================
+
+    void BuildUI(Scene scene, GameObject brennerSpotGO)
+    {
+        // EventSystem
+        var esGO = new GameObject("EventSystem");
+        esGO.AddComponent<EventSystem>();
+        esGO.AddComponent<InputSystemUIInputModule>();
+        SceneManager.MoveGameObjectToScene(esGO, scene);
+
         // Canvas
-        var canvasGO = new GameObject("Level5Canvas");
+        var canvasGO = new GameObject("UICanvas");
+        SceneManager.MoveGameObjectToScene(canvasGO, scene);
         var canvas = canvasGO.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 0;
+        canvas.sortingOrder = 10;
         var scaler = canvasGO.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920, 1080);
         scaler.matchWidthOrHeight = 0.5f;
         canvasGO.AddComponent<GraphicRaycaster>();
-        SceneManager.MoveGameObjectToScene(canvasGO, scene);
 
-        // EventSystem
-        var evGO = new GameObject("EventSystem");
-        evGO.AddComponent<EventSystem>();
-        evGO.AddComponent<StandaloneInputModule>();
-        SceneManager.MoveGameObjectToScene(evGO, scene);
+        // Dialog-Panel
+        var dialogPanelGO = UiPanel("DialogPanel", canvasGO.transform,
+            new Vector2(0f, 0f), new Vector2(1f, 0f),
+            new Vector2(0f, 0f), new Vector2(0f, 260f),
+            new Vector2(0.5f, 0f), new Color(0.03f, 0.03f, 0.06f, 0.97f));
+        dialogPanelGO.SetActive(false);
 
-        BuildBackground(canvasGO.transform);
-        BuildPuzzleArea(canvasGO.transform);
-        BuildHUD(canvasGO.transform);
-        AddBackgroundMusic(scene);
+        // Goldener Rand oben
+        UiImage("TopBorder", dialogPanelGO.transform,
+            new Vector2(0f, 1f), new Vector2(1f, 1f),
+            Vector2.zero, new Vector2(0f, 3f),
+            new Color(0.55f, 0.45f, 0.20f));
 
-        EditorSceneManager.SaveScene(scene);
-        Debug.Log("[Level5] Breadboard-Werkstatt fertig gebaut.");
+        // Portrait
+        var portraitGO = UiImage("Portrait", dialogPanelGO.transform,
+            new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+            new Vector2(110f, 0f), new Vector2(190f, 190f),
+            new Color(0.30f, 0.28f, 0.38f, 1f));
+
+        // Speaker-Label
+        var speakerGO = new GameObject("SpeakerLabel");
+        speakerGO.transform.SetParent(dialogPanelGO.transform, false);
+        var speakerTMP = speakerGO.AddComponent<TextMeshProUGUI>();
+        speakerTMP.text      = "Joshi";
+        speakerTMP.fontSize  = 26f;
+        speakerTMP.fontStyle = FontStyles.Bold;
+        speakerTMP.color     = new Color(1f, 0.85f, 0.45f);
+        var speakerRT = speakerGO.GetComponent<RectTransform>();
+        speakerRT.anchorMin        = new Vector2(0f, 1f);
+        speakerRT.anchorMax        = new Vector2(1f, 1f);
+        speakerRT.pivot            = new Vector2(0f, 1f);
+        speakerRT.anchoredPosition = new Vector2(240f, -12f);
+        speakerRT.sizeDelta        = new Vector2(-370f, 36f);
+
+        // Dialog-Text
+        var dialogTextGO = new GameObject("DialogText");
+        dialogTextGO.transform.SetParent(dialogPanelGO.transform, false);
+        var dialogTMP = dialogTextGO.AddComponent<TextMeshProUGUI>();
+        dialogTMP.text     = "";
+        dialogTMP.fontSize = 24f;
+        dialogTMP.color    = Color.white;
+        var dialogRT = dialogTextGO.GetComponent<RectTransform>();
+        dialogRT.anchorMin = Vector2.zero;
+        dialogRT.anchorMax = Vector2.one;
+        dialogRT.offsetMin = new Vector2(240f, 48f);
+        dialogRT.offsetMax = new Vector2(-145f, -52f);
+
+        // Weiter-Button
+        var continueBtnGO = UiButton("ContinueButton", dialogPanelGO.transform,
+            new Vector2(1f, 0f), new Vector2(1f, 0f),
+            new Vector2(-14f, 14f), new Vector2(130f, 42f),
+            new Vector2(1f, 0f), new Color(0.12f, 0.52f, 0.22f), "Weiter ▶");
+
+        // Interaction Prompt
+        var promptGO = UiPanel("InteractionPrompt", canvasGO.transform,
+            new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+            new Vector2(0f, 80f), new Vector2(360f, 60f),
+            new Vector2(0.5f, 0f), new Color(0f, 0f, 0f, 0.72f));
+        promptGO.SetActive(false);
+        var promptTextGO = new GameObject("Text");
+        promptTextGO.transform.SetParent(promptGO.transform, false);
+        var promptTMP = promptTextGO.AddComponent<TextMeshProUGUI>();
+        promptTMP.text      = "[E] Brenner aufnehmen";
+        promptTMP.fontSize  = 22f;
+        promptTMP.alignment = TextAlignmentOptions.Center;
+        promptTMP.color     = Color.white;
+        var promptRT = promptTextGO.GetComponent<RectTransform>();
+        promptRT.anchorMin = Vector2.zero;
+        promptRT.anchorMax = Vector2.one;
+        promptRT.offsetMin = new Vector2(8f, 4f);
+        promptRT.offsetMax = new Vector2(-8f, -4f);
+
+        // Pickup-Flash (kurzes weißes Aufleuchten)
+        var flashGO = UiPanel("PickupFlash", canvasGO.transform,
+            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
+            new Vector2(0.5f, 0.5f), new Color(1f, 0.7f, 0.2f, 0.35f));
+        flashGO.SetActive(false);
+
+        // ── BigYahuDialogSystem ────────────────────────────────────────────────
+        var dsGO = new GameObject("BigYahuDialogSystem");
+        SceneManager.MoveGameObjectToScene(dsGO, scene);
+        var ds   = dsGO.AddComponent<BigYahuDialogSystem>();
+        var dso  = new SerializedObject(ds);
+        dso.FindProperty("dialogPanel").objectReferenceValue    = dialogPanelGO;
+        dso.FindProperty("dialogText").objectReferenceValue     = dialogTMP;
+        dso.FindProperty("speakerLabel").objectReferenceValue   = speakerTMP;
+        dso.FindProperty("portraitImage").objectReferenceValue  = portraitGO.GetComponent<Image>();
+        dso.FindProperty("continueButton").objectReferenceValue = continueBtnGO.GetComponent<Button>();
+        dso.ApplyModifiedPropertiesWithoutUndo();
+
+        // ── Level5_Werkstatt ───────────────────────────────────────────────────
+        var l5GO = new GameObject("Level5_Werkstatt");
+        SceneManager.MoveGameObjectToScene(l5GO, scene);
+        var l5   = l5GO.AddComponent<Level5_Werkstatt>();
+        var l5so = new SerializedObject(l5);
+        l5so.FindProperty("brennerSpot").objectReferenceValue       =
+            brennerSpotGO != null ? brennerSpotGO.GetComponent<DustyWallSpot>() : null;
+        l5so.FindProperty("interactionPrompt").objectReferenceValue = promptGO;
+        l5so.FindProperty("pickupFlash").objectReferenceValue       = flashGO;
+        l5so.ApplyModifiedPropertiesWithoutUndo();
+
+        Debug.Log("[Level5] UI aufgebaut.");
     }
 
     // =========================================================================
-    // Hintergrund
+    // Hilfs-Methoden
     // =========================================================================
 
-    void BuildBackground(Transform parent)
+    Material M(Color c, float metal = 0f, float smooth = 0.35f)
     {
-        var bg = MakePanel(parent, "BG", Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-        bg.gameObject.AddComponent<Image>().color = new Color(0.04f, 0.06f, 0.03f);
-
-        // Werkstatt-Boden-Muster (horizontale Linien)
-        for (int i = 0; i < 12; i++)
-        {
-            float y = -500f + i * 90f;
-            var line = Anchored(bg, $"Line_{i}", new Vector2(0, y), new Vector2(1920f, 1f));
-            line.gameObject.AddComponent<Image>().color = new Color(0.06f, 0.09f, 0.05f, 0.5f);
-        }
-
-        // Vignette
-        Color vig = new Color(0f, 0f, 0f, 0.6f);
-        Anchored(bg, "VigT", new Vector2(0,  440f), new Vector2(1920f, 200f)).gameObject.AddComponent<Image>().color = vig;
-        Anchored(bg, "VigB", new Vector2(0, -440f), new Vector2(1920f, 200f)).gameObject.AddComponent<Image>().color = vig;
-        Anchored(bg, "VigL", new Vector2(-860f, 0),  new Vector2(200f, 1080f)).gameObject.AddComponent<Image>().color = vig;
-        Anchored(bg, "VigR", new Vector2( 860f, 0),  new Vector2(200f, 1080f)).gameObject.AddComponent<Image>().color = vig;
+        var m = new Material(Shader.Find("Standard")) { color = c };
+        m.SetFloat("_Metallic",   metal);
+        m.SetFloat("_Glossiness", smooth);
+        return m;
     }
 
-    // =========================================================================
-    // Puzzle-Bereich
-    // =========================================================================
-
-    void BuildPuzzleArea(Transform parent)
+    Material Emit(Color c, Color glow, float intensity = 1.5f)
     {
-        // Äußerer Rahmen
-        var frame = Anchored(parent, "Frame", Vector2.zero, new Vector2(960f, 720f));
-        frame.gameObject.AddComponent<Image>().color = new Color(0.12f, 0.15f, 0.08f);
-
-        // Innere Arbeitsfläche
-        var board = Anchored(frame, "Board", Vector2.zero, new Vector2(940f, 700f));
-        board.gameObject.AddComponent<Image>().color = new Color(0.08f, 0.10f, 0.05f);
-
-        // Titelzeile im Board
-        var titleRow = Anchored(board, "TitleRow", new Vector2(0, 300f), new Vector2(900f, 50f));
-        var titleImg = titleRow.gameObject.AddComponent<Image>();
-        titleImg.color = new Color(0.15f, 0.20f, 0.10f);
-        var titleTxt = Anchored(titleRow, "TitleTxt", Vector2.zero, new Vector2(880f, 40f))
-            .gameObject.AddComponent<TextMeshProUGUI>();
-        titleTxt.text = "SCHALTKREIS REPARIEREN — Verbinde die Kabel mit den passenden Pins";
-        titleTxt.fontSize = 18f;
-        titleTxt.alignment = TextAlignmentOptions.Center;
-        titleTxt.color = new Color(0.6f, 0.9f, 0.4f);
-        titleTxt.fontStyle = FontStyles.Bold;
-
-        // Breadboard-Visual (Lochstreifen-Optik)
-        var bbVisual = Anchored(board, "BBVisual", new Vector2(0, 50f), new Vector2(880f, 340f));
-        bbVisual.gameObject.AddComponent<Image>().color = new Color(0.10f, 0.14f, 0.07f);
-        BuildBreadboardHoles(bbVisual);
-
-        // Manager-Script
-        var managerGO = new GameObject("BreadboardManager");
-        managerGO.transform.SetParent(board, false);
-        var rt = managerGO.AddComponent<RectTransform>();
-        rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
-        rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-        var manager = managerGO.AddComponent<Level5_Breadboard>();
-
-        // Feedback-Text
-        var feedbackGO = Anchored(board, "FeedbackText", new Vector2(0, -150f), new Vector2(800f, 40f));
-        var feedbackTxt = feedbackGO.gameObject.AddComponent<TextMeshProUGUI>();
-        feedbackTxt.text = string.Empty;
-        feedbackTxt.fontSize = 20f;
-        feedbackTxt.alignment = TextAlignmentOptions.Center;
-        feedbackTxt.color = new Color(0.7f, 1f, 0.5f);
-
-        // Drag-Icon (kleines schwebendes Kabel-Ende)
-        var dragIconGO = new GameObject("DragIcon");
-        dragIconGO.transform.SetParent(board, false);
-        var dragRT = dragIconGO.AddComponent<RectTransform>();
-        dragRT.anchorMin = new Vector2(0.5f, 0.5f);
-        dragRT.anchorMax = new Vector2(0.5f, 0.5f);
-        dragRT.sizeDelta = new Vector2(20f, 20f);
-        var dragImg = dragIconGO.AddComponent<Image>();
-        dragImg.color = new Color(1f, 0.8f, 0f);
-        dragIconGO.SetActive(false);
-
-        // Source- und Target-Pins aufbauen
-        string[] ids = { "A", "B", "C" };
-        Color[] colors =
-        {
-            new Color(1.0f, 0.25f, 0.25f),   // A = Rot
-            new Color(0.25f, 0.55f, 1.0f),   // B = Blau
-            new Color(0.25f, 0.85f, 0.25f),  // C = Grün
-        };
-
-        var sourcePins = new List<BreadboardPin>();
-        var targetPins = new List<BreadboardPin>();
-        var pairs      = new List<Level5_Breadboard.CablePair>();
-
-        for (int i = 0; i < ids.Length; i++)
-        {
-            float yPos = 80f - i * 100f;  // A oben, B mitte, C unten (relativ zu bbVisual)
-            Color col = colors[i];
-
-            // Source-Pin (links)
-            var srcPin = BuildPin(bbVisual, $"SrcPin_{ids[i]}", new Vector2(-280f, yPos),
-                ids[i], true, col, manager);
-            sourcePins.Add(srcPin);
-
-            // Target-Pin (rechts)
-            var tgtPin = BuildPin(bbVisual, $"TgtPin_{ids[i]}", new Vector2(280f, yPos),
-                ids[i], false, col, manager);
-            targetPins.Add(tgtPin);
-
-            // Verbindungsindikator (Linie zwischen den Pins, wird grün bei Verbindung)
-            var indicator = Anchored(bbVisual, $"Indicator_{ids[i]}", new Vector2(0, yPos),
-                new Vector2(440f, 6f));
-            var indicatorImg = indicator.gameObject.AddComponent<Image>();
-            indicatorImg.color = new Color(col.r, col.g, col.b, 0.15f);
-
-            // CablePair konfigurieren
-            var pair = new Level5_Breadboard.CablePair
-            {
-                startId             = ids[i],
-                endId               = ids[i],
-                connectionIndicator = indicatorImg
-            };
-            pairs.Add(pair);
-        }
-
-        // Manager-Felder per Serialisierung setzen
-        var so = new SerializedObject(manager);
-        so.FindProperty("feedbackText").objectReferenceValue = feedbackTxt;
-        so.FindProperty("dragIcon").objectReferenceValue = dragRT;
-
-        var pairsProp = so.FindProperty("requiredPairs");
-        pairsProp.arraySize = pairs.Count;
-        for (int i = 0; i < pairs.Count; i++)
-        {
-            var elem = pairsProp.GetArrayElementAtIndex(i);
-            elem.FindPropertyRelative("startId").stringValue = pairs[i].startId;
-            elem.FindPropertyRelative("endId").stringValue   = pairs[i].endId;
-            elem.FindPropertyRelative("connectionIndicator").objectReferenceValue =
-                pairs[i].connectionIndicator;
-        }
-        so.ApplyModifiedProperties();
+        var m = M(c, 0f, 0.05f);
+        m.EnableKeyword("_EMISSION");
+        m.SetColor("_EmissionColor", glow * intensity);
+        return m;
     }
 
-    BreadboardPin BuildPin(RectTransform parent, string name, Vector2 pos,
-                           string pinId, bool isSource, Color col,
-                           Level5_Breadboard manager)
+    GameObject Box(string name, Vector3 pos, Vector3 scale, Material mat, Transform parent,
+                   Quaternion? rot = null, bool col = true)
     {
-        // Äußerer Leuchtring
-        var glow = Anchored(parent, $"{name}_Glow", pos, new Vector2(60f, 60f));
-        glow.gameObject.AddComponent<Image>().color = new Color(col.r, col.g, col.b, 0.18f);
-
-        // Pin-Körper
-        var pinGO = Anchored(parent, name, pos, new Vector2(44f, 44f));
-        pinGO.gameObject.AddComponent<Image>().color = col;
-
-        // Pin-Label
-        var lbl = Anchored(pinGO, "Label", Vector2.zero, new Vector2(40f, 40f))
-            .gameObject.AddComponent<TextMeshProUGUI>();
-        lbl.text = pinId;
-        lbl.fontSize = 18f;
-        lbl.alignment = TextAlignmentOptions.Center;
-        lbl.color = Color.white;
-        lbl.fontStyle = FontStyles.Bold;
-
-        // Richtungspfeil
-        float arrowX = isSource ? -35f : 35f;
-        string arrowChar = isSource ? "→" : "←";
-        var arrow = Anchored(parent, $"{name}_Arrow", new Vector2(pos.x + arrowX, pos.y),
-            new Vector2(28f, 28f)).gameObject.AddComponent<TextMeshProUGUI>();
-        arrow.text = arrowChar;
-        arrow.fontSize = 18f;
-        arrow.alignment = TextAlignmentOptions.Center;
-        arrow.color = new Color(col.r, col.g, col.b, 0.7f);
-
-        // BreadboardPin-Komponente
-        var pin = pinGO.gameObject.AddComponent<BreadboardPin>();
-        var pso = new SerializedObject(pin);
-        pso.FindProperty("pinId").stringValue = pinId;
-        pso.FindProperty("isDragSource").boolValue = isSource;
-        pso.FindProperty("manager").objectReferenceValue = manager;
-        pso.ApplyModifiedProperties();
-
-        return pin;
+        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        go.name = name;
+        go.transform.SetParent(parent);
+        go.transform.position   = pos;
+        go.transform.localScale = scale;
+        if (rot.HasValue) go.transform.rotation = rot.Value;
+        go.GetComponent<Renderer>().material = mat;
+        if (!col) Object.DestroyImmediate(go.GetComponent<Collider>());
+        return go;
     }
 
-    void BuildBreadboardHoles(RectTransform parent)
+    void Cyl(string name, Vector3 pos, Vector3 scale, Material mat, Transform parent)
     {
-        // Lochstreifen-Muster – zwei Reihen mit je 20 Löchern
-        Color holeCol = new Color(0.04f, 0.06f, 0.03f);
-        for (int row = 0; row < 2; row++)
-        {
-            float yOff = row == 0 ? 50f : -50f;
-            for (int i = 0; i < 20; i++)
-            {
-                float x = -380f + i * 40f;
-                Anchored(parent, $"Hole_{row}_{i}", new Vector2(x, yOff), new Vector2(8f, 8f))
-                    .gameObject.AddComponent<Image>().color = holeCol;
-            }
-        }
+        var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        go.name = name;
+        go.transform.SetParent(parent);
+        go.transform.position   = pos;
+        go.transform.localScale = scale;
+        go.GetComponent<Renderer>().material = mat;
+        Object.DestroyImmediate(go.GetComponent<Collider>());
     }
 
-    // =========================================================================
-    // HUD
-    // =========================================================================
-
-    void BuildHUD(Transform parent)
-    {
-        // Oben
-        var top = Anchored(parent, "TopHUD", new Vector2(0, 495f), new Vector2(1920f, 70f));
-        top.gameObject.AddComponent<Image>().color = new Color(0.05f, 0.08f, 0.03f, 0.92f);
-        MakeAccent(top, -200f, new Color(0.3f, 0.9f, 0.3f));
-        MakeAccent(top,  200f, new Color(0.3f, 0.9f, 0.3f));
-
-        var titleTxt = Anchored(top, "Title", Vector2.zero, new Vector2(500f, 50f))
-            .gameObject.AddComponent<TextMeshProUGUI>();
-        titleTxt.text = "GEFÄNGNISAUSBRUCH — PHASE 5";
-        titleTxt.fontSize = 26f;
-        titleTxt.alignment = TextAlignmentOptions.Center;
-        titleTxt.color = new Color(0.8f, 1f, 0.6f);
-        titleTxt.fontStyle = FontStyles.Bold;
-
-        var levelLbl = Anchored(top, "LevelLbl", new Vector2(-700f, 0), new Vector2(200f, 40f))
-            .gameObject.AddComponent<TextMeshProUGUI>();
-        levelLbl.text = "LEVEL 05";
-        levelLbl.fontSize = 20f;
-        levelLbl.alignment = TextAlignmentOptions.Left;
-        levelLbl.color = new Color(0.4f, 0.8f, 0.4f, 0.8f);
-
-        // Unten
-        var bot = Anchored(parent, "BotHUD", new Vector2(0, -495f), new Vector2(1920f, 60f));
-        bot.gameObject.AddComponent<Image>().color = new Color(0.04f, 0.06f, 0.03f, 0.92f);
-
-        var hint = Anchored(bot, "Hint", Vector2.zero, new Vector2(900f, 40f))
-            .gameObject.AddComponent<TextMeshProUGUI>();
-        hint.text = "Ziehe die Kabel vom Quell-Pin (links) auf den passenden Ziel-Pin (rechts)";
-        hint.fontSize = 16f;
-        hint.alignment = TextAlignmentOptions.Center;
-        hint.color = new Color(0.5f, 0.7f, 0.4f);
-    }
-
-    // =========================================================================
-    // Hintergrundmusik
-    // =========================================================================
-
-    void AddBackgroundMusic(Scene scene)
-    {
-        var clip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Big Yahu/Untitled.mp3");
-        if (clip == null) return;
-        var go = new GameObject("BackgroundMusic");
-        var src = go.AddComponent<AudioSource>();
-        src.clip = clip; src.loop = true; src.playOnAwake = true; src.volume = 0.5f;
-        SceneManager.MoveGameObjectToScene(go, scene);
-    }
-
-    // =========================================================================
-    // UI-Helfer
-    // =========================================================================
-
-    void MakeAccent(RectTransform parent, float x, Color col)
-    {
-        Anchored(parent, $"Accent_{x}", new Vector2(x, 0), new Vector2(2f, 50f))
-            .gameObject.AddComponent<Image>().color = col;
-    }
-
-    RectTransform MakePanel(Transform parent, string name,
-        Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
+    void AddLight(string name, Transform parent, Vector3 localPos,
+                  LightType type, Color color, float intensity, float range,
+                  float spotAngle = 60f, LightShadows shadows = LightShadows.None,
+                  Quaternion? rotation = null)
     {
         var go = new GameObject(name);
+        go.transform.SetParent(parent);
+        go.transform.localPosition = localPos;
+        if (rotation.HasValue) go.transform.localRotation = rotation.Value;
+        var l = go.AddComponent<Light>();
+        l.type = type; l.color = color; l.intensity = intensity;
+        l.range = range; l.spotAngle = spotAngle; l.shadows = shadows;
+    }
+
+    GameObject UiPanel(string name, Transform parent,
+        Vector2 anchorMin, Vector2 anchorMax,
+        Vector2 anchoredPos, Vector2 sizeDelta,
+        Vector2 pivot, Color color)
+    {
+        var go  = new GameObject(name);
         go.transform.SetParent(parent, false);
-        var rt = go.AddComponent<RectTransform>();
+        go.AddComponent<Image>().color = color;
+        var rt = go.GetComponent<RectTransform>();
         rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
-        rt.offsetMin = offsetMin; rt.offsetMax  = offsetMax;
-        return rt;
+        rt.pivot = pivot; rt.anchoredPosition = anchoredPos; rt.sizeDelta = sizeDelta;
+        return go;
     }
 
-    RectTransform Anchored(Transform parent, string name, Vector2 pos, Vector2 size)
+    GameObject UiImage(string name, Transform parent,
+        Vector2 anchorMin, Vector2 anchorMax,
+        Vector2 anchoredPos, Vector2 sizeDelta, Color color)
     {
         var go = new GameObject(name);
         go.transform.SetParent(parent, false);
-        var rt = go.AddComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0.5f, 0.5f);
-        rt.anchorMax = new Vector2(0.5f, 0.5f);
-        rt.pivot     = new Vector2(0.5f, 0.5f);
-        rt.anchoredPosition = pos;
-        rt.sizeDelta        = size;
-        return rt;
+        go.AddComponent<Image>().color = color;
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
+        rt.anchoredPosition = anchoredPos; rt.sizeDelta = sizeDelta;
+        return go;
+    }
+
+    GameObject UiButton(string name, Transform parent,
+        Vector2 anchorMin, Vector2 anchorMax,
+        Vector2 anchoredPos, Vector2 sizeDelta,
+        Vector2 pivot, Color bgColor, string label)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        var img = go.AddComponent<Image>();
+        img.color = bgColor;
+        go.AddComponent<Button>();
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
+        rt.pivot = pivot; rt.anchoredPosition = anchoredPos; rt.sizeDelta = sizeDelta;
+
+        var txtGO = new GameObject("Label");
+        txtGO.transform.SetParent(go.transform, false);
+        var tmp = txtGO.AddComponent<TextMeshProUGUI>();
+        tmp.text = label; tmp.fontSize = 20f;
+        tmp.alignment = TextAlignmentOptions.Center;
+        tmp.color = Color.white;
+        var trt = txtGO.GetComponent<RectTransform>();
+        trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one;
+        trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
+        return go;
     }
 }
