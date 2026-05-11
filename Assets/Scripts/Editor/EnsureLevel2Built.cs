@@ -27,17 +27,27 @@ public static class EnsureLevel2Built
 
     private static void OnPlayModeChanged(PlayModeStateChange state)
     {
-        // Nur warnen wenn Level2 leer ist und der Spieler ihn betreten könnte.
-        // Play NICHT abbrechen – sonst sperren wir auch Level1 aus, wenn der
-        // Rebuild aus irgendeinem Grund nicht funktioniert.
-        if (state != PlayModeStateChange.EnteredPlayMode) return;
+        if (state != PlayModeStateChange.ExitingEditMode) return;
         if (!File.Exists(ScenePath)) return;
         if (new FileInfo(ScenePath).Length >= MinPopulatedSize) return;
 
-        Debug.LogWarning(
-            "[EnsureLevel2Built] WARNUNG: Level2.unity ist leer (< 5 KB). " +
-            "Der Übergang von Level 1 nach Level 2 wird crashen. " +
-            "Fix: Tools → Level 2 → Rebuild Now (1-Klick) ausführen, dann Play neu starten.");
+        // Level2 ist leer → Play stoppen, neu bauen, Play danach wieder starten.
+        EditorApplication.isPlaying = false;
+        Debug.LogWarning("[EnsureLevel2Built] Level2.unity war leer – baue jetzt neu, bitte erneut Play drücken.");
+
+        try
+        {
+            BuildLevel2MaintenanceRoom.BuildSilent();
+            AssetDatabase.SaveAssets();
+            Debug.Log("[EnsureLevel2Built] Level2.unity neu gebaut – Play erneut drücken.");
+            EditorUtility.DisplayDialog("Level 2 neu gebaut",
+                "Level2.unity war leer und wurde automatisch neu gebaut.\nBitte erneut Play drücken.", "OK");
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"[EnsureLevel2Built] Auto-Build fehlgeschlagen: {ex.Message}\n" +
+                           "Bitte manuell über Tools → Level 2 → Rebuild Now ausführen.");
+        }
     }
 
     private static void CheckAndBuild()
