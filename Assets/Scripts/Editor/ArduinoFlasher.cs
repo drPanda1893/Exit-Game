@@ -35,11 +35,14 @@ public static class ArduinoFlasher
     private static string Cli       => EditorPrefs.GetString(PrefCli,  DefaultCli);
     private static bool   AutoFlash => EditorPrefs.GetBool(PrefAutoFlash, true);
 
-    // Szenenname → Sketch-Ordner (relativ zu <project>/Arduino)
+    // Szenenname → Sketch-Ordner (relativ zu <project>/Arduino).
+    // Es gibt nur noch EINEN kombinierten Sketch für alle Level – das verhindert
+    // Re-Flashes beim Szenenwechsel und gemischte Sensorabfragen zwischen Levels.
+    private const string UnifiedSketch = "BigYahu_AllLevels";
     private static readonly Dictionary<string, string> SceneToSketch = new()
     {
-        { "Level1", "Level1_Keypad" },
-        { "Level2", "Level2_Humidity" },
+        { "Level1", UnifiedSketch },
+        { "Level2", UnifiedSketch },
     };
 
     // Async-Flash-Zustand
@@ -85,11 +88,8 @@ public static class ArduinoFlasher
     // Menüs
     // ─────────────────────────────────────────────────────────────────────────
 
-    [MenuItem("Tools/Arduino/Flash Level 1 (Keypad)", priority = 100)]
-    public static void FlashLevel1() => FlashSync("Level1_Keypad");
-
-    [MenuItem("Tools/Arduino/Flash Level 2 (Humidity)", priority = 101)]
-    public static void FlashLevel2() => FlashSync("Level2_Humidity");
+    [MenuItem("Tools/Arduino/Flash Combined Sketch (alle Level)", priority = 100)]
+    public static void FlashCombined() => FlashSync(UnifiedSketch);
 
     [MenuItem("Tools/Arduino/Settings…", priority = 200)]
     public static void OpenSettings() => ArduinoFlasherSettings.ShowWindow();
