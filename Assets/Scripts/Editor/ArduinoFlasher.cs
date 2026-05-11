@@ -17,8 +17,8 @@ public static class ArduinoFlasher
     private const string PrefCli  = "ArduinoFlasher.CliPath";
 
     private const string DefaultPort = "COM3";
-    private const string DefaultFqbn = "arduino:avr:uno";
-    private const string DefaultCli  = "arduino-cli";
+    private const string DefaultFqbn = "arduino:renesas_uno:unor4wifi";
+    private const string DefaultCli  = @"C:\Program Files\Arduino CLI\arduino-cli.exe";
 
     private static string Port => EditorPrefs.GetString(PrefPort, DefaultPort);
     private static string Fqbn => EditorPrefs.GetString(PrefFqbn, DefaultFqbn);
@@ -106,7 +106,8 @@ public static class ArduinoFlasher
             EditorGUILayout.Space(8);
             EditorGUILayout.HelpBox(
                 "Port: typisch COM3 (Windows).\n" +
-                "FQBN: Freenove FNK0059 = arduino:avr:uno.\n" +
+                "FQBN für UNO R4 WiFi: arduino:renesas_uno:unor4wifi\n" +
+                "FQBN für UNO R3:      arduino:avr:uno\n" +
                 "CLI: 'arduino-cli' wenn im PATH, sonst voller Pfad.",
                 MessageType.Info);
         }
