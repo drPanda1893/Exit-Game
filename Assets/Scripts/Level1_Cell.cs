@@ -23,13 +23,13 @@ public class Level1_Cell : MonoBehaviour
     void OnEnable()
     {
         if (ArduinoBridge.Instance != null)
-            ArduinoBridge.Instance.OnKeypadKey += HandleArduinoKey;
+            ArduinoBridge.Instance.RegisterHandler(0x05, HandleArduinoKey);
     }
 
     void OnDisable()
     {
         if (ArduinoBridge.Instance != null)
-            ArduinoBridge.Instance.OnKeypadKey -= HandleArduinoKey;
+            ArduinoBridge.Instance.UnregisterHandler(0x05, HandleArduinoKey);
     }
 
     void Start()
