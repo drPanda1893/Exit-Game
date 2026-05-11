@@ -160,7 +160,7 @@ Dialog is routed through `BigYahuDialogSystem`. For non-Big-Yahu NPCs, set `spea
 
 | # | GDD Requirement | Current State | Priority |
 |---|---|---|---|
-| G-01 | L1: Hex code `66A` visible on blanket → decode to `1642` | Code correct (1642), but no in-world blanket hint object | HIGH |
+| G-01 | L1: Hex code `662` visible on blanket → decode to `1634` | Code correct (1634), but no in-world blanket hint object | HIGH |
 | G-02 | L2: Joshi NPC audio narration, not Big Yahu | `Level2_DustWall.cs` uses `BigYahuDialogSystem` | HIGH |
 | G-03 | L2: Arrow combo `↑↑↓↓` via joystick opens door | Current code reveals a hidden number; no directional puzzle | HIGH |
 | G-04 | L3: Helios NPC + book selection (must pick Bible) | No book selection mechanic; Big Yahu speaks instead | MEDIUM |

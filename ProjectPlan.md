@@ -24,15 +24,15 @@ das entweder durch Logik, Beobachtung oder physische Arduino-Hardware gelöst wi
 | Element | Detail |
 |---|---|
 | Einstieg | Spieler startet eingesperrt in der Zelle |
-| Hinweis | Auf der **Bettdecke** steht `66A` (Hex-Code) |
-| Dekodierung | `66A` hex = `1642` dezimal → Lösung des Numpad-Rätsels |
+| Hinweis | Auf der **Bettdecke** steht `662` (Hex-Code) |
+| Dekodierung | `662` hex = `1634` dezimal → Lösung des Numpad-Rätsels |
 | Interaktion | Spieler nähert sich der **Toilette** → Hint-Text erscheint unten: `"Drücke [E] um das Numpad zu öffnen"` |
-| Puzzle | Numpad öffnet sich (E-Taste), Eingabe `1642` → Tür öffnet sich |
+| Puzzle | Numpad öffnet sich (E-Taste), Eingabe `1634` → Tür öffnet sich |
 | Ausgang | Rechte Wand öffnet sich → Übergang zu Level 2 |
 | NPC | Big Yahu: Hinweis-Dialog beim Betreten |
 
 **Offene Aufgaben:**
-- [ ] G-01: In-World Bettdecke mit Hex-Text `66A` als 3D-Objekt / Decal platzieren
+- [ ] G-01: In-World Bettdecke mit Hex-Text `662` als 3D-Objekt / Decal platzieren
 - [ ] `CellPuzzleHandler.cs` mit `NumpadController.cs` verbinden (Lösung validieren)
 
 ---
@@ -189,7 +189,7 @@ ArduinoBridge.cs (Singleton, Background Thread)
 
 ## Critical Path (Next Steps)
 
-1. **G-01** — Hex-Decal `66A` auf Bettdecke in Level1.unity platzieren
+1. **G-01** — Hex-Decal `662` auf Bettdecke in Level1.unity platzieren
 2. **G-02/G-03** — Joshi NPC Dialog + Arrow-Combo Puzzle (`Level2_ArrowCombo.cs`)
 3. **ArduinoBridge.cs** — Grundgerüst mit thread-safe dispatch
 4. **G-04** — Helios + Bücherauswahl in Level 3
