@@ -27,6 +27,8 @@ public class NumpadController : MonoBehaviour
         else if (currentCode.Length < maxDigits)
         {
             currentCode += value;
+            if (currentCode.Length == maxDigits)
+                OnCodeEntered?.Invoke(currentCode);
         }
 
         UpdateDisplay();
