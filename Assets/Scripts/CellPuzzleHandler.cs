@@ -3,7 +3,7 @@ using System.Collections;
 
 /// <summary>
 /// Hört auf NumpadController.OnCodeEntered.
-/// Korrekte Eingabe "1642" + ENT → Tür in der rechten Wand öffnet sich.
+/// Korrekte Eingabe "1634" + ENT → Tür in der rechten Wand öffnet sich.
 /// </summary>
 [RequireComponent(typeof(NumpadController))]
 public class CellPuzzleHandler : MonoBehaviour
@@ -11,7 +11,7 @@ public class CellPuzzleHandler : MonoBehaviour
     public DoorController exitDoor;
 
     private NumpadController numpad;
-    private const string SOLUTION = "1642";
+    private const string SOLUTION = "1634";
 
     void Start()
     {

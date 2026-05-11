@@ -45,7 +45,7 @@ public class BuildLevel1PrisonCell : LevelBuilderBase
         var (numpadPanel, hintText) = BuildUI(scene);
         GameObject exitDoor = BuildCellEnvironment(environmentRoot.transform, numpadPanel, hintText);
 
-        // Puzzle-Handler auf NumpadPanel: prüft Code 1642 und öffnet Tür
+        // Puzzle-Handler auf NumpadPanel: prüft Code 1634 und öffnet Tür
         CellPuzzleHandler handler = numpadPanel.AddComponent<CellPuzzleHandler>();
         if (exitDoor != null)
             handler.exitDoor = exitDoor.GetComponent<DoorController>();
@@ -679,13 +679,13 @@ public class BuildLevel1PrisonCell : LevelBuilderBase
         blanket.transform.localScale    = new Vector3(1.04f, 0.09f, 1.72f);
         blanket.GetComponent<Renderer>().material = blanketCodeMat;
 
-        // "66A" — Häftlingsnummer groß auf der Decke aufgedruckt (Top-Down sichtbar)
-        GameObject codeGO = new GameObject("BlanketCode_66A");
+        // "662" — Häftlingsnummer groß auf der Decke aufgedruckt (Top-Down sichtbar)
+        GameObject codeGO = new GameObject("BlanketCode_662");
         codeGO.transform.SetParent(g.transform);
         codeGO.transform.localPosition = new Vector3(0f, 0.572f, -0.08f); // knapp über Decke
         codeGO.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);  // nach oben zeigend, korrekt ausgerichtet
         TextMeshPro tmp = codeGO.AddComponent<TextMeshPro>();
-        tmp.text             = "66A";
+        tmp.text             = "662";
         tmp.fontStyle        = FontStyles.Bold;
         tmp.alignment        = TextAlignmentOptions.Center;
         tmp.color            = new Color(0.68f, 0.60f, 0.45f); // verblasstes Aufdruckbeige
@@ -1048,7 +1048,7 @@ public class BuildLevel1PrisonCell : LevelBuilderBase
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // Hex note (cryptic hint that 66A is hexadecimal)
+    // Hex note (cryptic hint that the blanket code is hexadecimal)
     // ═══════════════════════════════════════════════════════════════════════
 
     private void CreateHexNote(Vector3 pos, Transform root)

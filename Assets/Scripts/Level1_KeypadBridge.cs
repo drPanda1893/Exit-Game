@@ -9,6 +9,7 @@ public class Level1_KeypadBridge : MonoBehaviour
     [SerializeField] private NumpadController numpadController;
 
     private bool _wasActive = false;
+    private bool _registered = false;
 
     void Start()
     {
@@ -18,12 +19,29 @@ public class Level1_KeypadBridge : MonoBehaviour
             return;
         }
         ArduinoBridge.Instance.RegisterHandler(0x05, HandleKey);
+        _registered = true;
+    }
+
+    void OnDisable()
+    {
+        ReleaseKeypad();
     }
 
     void OnDestroy()
     {
-        if (ArduinoBridge.Instance != null)
-            ArduinoBridge.Instance.UnregisterHandler(0x05, HandleKey);
+        ReleaseKeypad();
+    }
+
+    void ReleaseKeypad()
+    {
+        if (ArduinoBridge.Instance == null) return;
+
+        ArduinoBridge.Instance.Send(0xFF, "STOP");
+
+        if (!_registered) return;
+        ArduinoBridge.Instance.UnregisterHandler(0x05, HandleKey);
+        _registered = false;
+        _wasActive = false;
     }
 
     void Update()

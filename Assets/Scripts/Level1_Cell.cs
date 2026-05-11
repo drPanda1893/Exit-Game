@@ -6,7 +6,7 @@ using System.Collections;
 /// <summary>
 /// Level 1 – Die Zelle.
 /// Spieler klickt auf den Stein → Numpad öffnet sich.
-/// Korrekte Eingabe "1642" → Level 2 wird geladen.
+/// Korrekte Eingabe "1634" → Level 2 wird geladen.
 /// </summary>
 public class Level1_Cell : MonoBehaviour
 {
@@ -17,7 +17,7 @@ public class Level1_Cell : MonoBehaviour
     [SerializeField] private GameObject numpadPanel;
     [SerializeField] private TextMeshProUGUI codeDisplay;
 
-    private const string SOLUTION = "1642";
+    private const string SOLUTION = "1634";
     private string input = string.Empty;
 
     void OnEnable()
@@ -29,7 +29,10 @@ public class Level1_Cell : MonoBehaviour
     void OnDisable()
     {
         if (ArduinoBridge.Instance != null)
+        {
+            ArduinoBridge.Instance.Send(0xFF, "STOP");
             ArduinoBridge.Instance.UnregisterHandler(0x05, HandleArduinoKey);
+        }
     }
 
     void Start()
