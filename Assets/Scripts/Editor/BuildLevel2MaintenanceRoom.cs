@@ -17,6 +17,16 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
     [MenuItem("Tools/Build Level 2 Maintenance Room")]
     public static void ShowWindow() => GetWindow<BuildLevel2MaintenanceRoom>("Level 2 Builder");
 
+    [MenuItem("Tools/Level 2/Rebuild Now (1-Klick)")]
+    public static void BuildOneClick()
+    {
+        var win = ScriptableObject.CreateInstance<BuildLevel2MaintenanceRoom>();
+        win.Build();
+        Object.DestroyImmediate(win);
+        UnityEditor.EditorUtility.DisplayDialog("Level 2",
+            "Wartungsraum gebaut + gespeichert.\nLevel2.unity ist jetzt komplett.", "OK");
+    }
+
     void OnGUI()
     {
         GUILayout.Label("Level 2 – Geheimer Wartungsraum", EditorStyles.boldLabel);
