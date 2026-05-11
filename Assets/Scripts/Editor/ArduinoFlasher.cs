@@ -157,9 +157,7 @@ public static class ArduinoFlasher
         }
         else
         {
-            EditorApplication.isPlaying = false;
-            Debug.LogError("[ArduinoFlasher] Auto-Flash fehlgeschlagen → Play abgebrochen. " +
-                           "Siehe Zeile darüber für arduino-cli Exit-Code/stderr.");
+            Debug.LogWarning("[ArduinoFlasher] Auto-Flash fehlgeschlagen – spiele ohne Arduino (Keyboard-Fallback aktiv).");
         }
     }
 
@@ -261,7 +259,7 @@ public static class ArduinoFlasher
         }
         else
         {
-            Debug.LogError($"[ArduinoFlasher] ✗ Hintergrund Exit {exit}\n{_bgStderr}");
+            Debug.LogWarning($"[ArduinoFlasher] ✗ Hintergrund Exit {exit} – Keyboard-Fallback aktiv.\n{_bgStderr}");
         }
 
         _bgProc.Dispose();
@@ -357,8 +355,7 @@ public static class ArduinoFlasher
         }
         catch (System.Exception ex)
         {
-            Debug.LogError($"[ArduinoFlasher] arduino-cli nicht gefunden ({Cli}): {ex.Message}\n" +
-                           "Installiere mit: winget install ArduinoSA.CLI");
+            Debug.LogWarning($"[ArduinoFlasher] arduino-cli nicht gefunden ({Cli}): {ex.Message} – Keyboard-Fallback wird verwendet.");
             return false;
         }
         finally
