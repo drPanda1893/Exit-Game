@@ -160,17 +160,30 @@ public static class ArduinoFlasher
         string sceneName = EditorSceneManager.GetActiveScene().name;
         if (!SceneToSketch.TryGetValue(sceneName, out string sketchFolder)) return;
 
-        if (!NeedsFlash(sketchFolder, out long inoMtime, out string prefKey, out _)) return;
+        // Skip wenn der korrekte Sketch schon auf dem Board ist UND .ino unverändert
+        string current = EditorPrefs.GetString(PrefCurrentSketch, "");
+        bool needsFlash = NeedsFlash(sketchFolder, out long inoMtime, out string prefKey, out _);
+        if (current == sketchFolder && !needsFlash)
+        {
+            Debug.Log($"[ArduinoFlasher] {sketchFolder} ist bereits auf dem Board → kein Flash.");
+            return;
+        }
+
+        // Falls eine alte Bridge noch existiert (Stop→Play ohne Domain Reload), Port freigeben
+        var bridge = ArduinoBridge.Instance;
+        if (bridge != null) bridge.Disconnect();
 
         Debug.Log($"[ArduinoFlasher] Auto-Flash {sketchFolder} vor Play…");
         if (FlashSync(sketchFolder, withProgress: true))
         {
             EditorPrefs.SetString(prefKey, inoMtime.ToString());
+            EditorPrefs.SetString(PrefCurrentSketch, sketchFolder);
         }
         else
         {
             EditorApplication.isPlaying = false;
-            Debug.LogError("[ArduinoFlasher] Auto-Flash fehlgeschlagen → Play abgebrochen.");
+            Debug.LogError("[ArduinoFlasher] Auto-Flash fehlgeschlagen → Play abgebrochen. " +
+                           "Siehe Zeile darüber für arduino-cli Exit-Code/stderr.");
         }
     }
 
