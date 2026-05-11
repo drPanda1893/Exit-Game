@@ -305,7 +305,7 @@ public class BuildLevel6FinalGate : LevelBuilderBase
         // Slider (Temperatur-Bar)
         var sliderGO = new GameObject("TemperatureBar");
         sliderGO.transform.SetParent(heatPanelGO.transform, false);
-        var sliderRT = sliderGO.GetComponent<RectTransform>() ?? sliderGO.AddComponent<RectTransform>();
+        var sliderRT = sliderGO.transform is RectTransform sRT ? sRT : sliderGO.AddComponent<RectTransform>();
         sliderRT.anchorMin = new Vector2(0.5f,0.5f); sliderRT.anchorMax = new Vector2(0.5f,0.5f);
         sliderRT.pivot = new Vector2(0.5f,0.5f);
         sliderRT.anchoredPosition = new Vector2(0f, -40f);
@@ -318,7 +318,7 @@ public class BuildLevel6FinalGate : LevelBuilderBase
             new Color(0.15f,0.15f,0.15f));
         var fillAreaGO = new GameObject("Fill Area");
         fillAreaGO.transform.SetParent(sliderGO.transform, false);
-        var faRT = fillAreaGO.GetComponent<RectTransform>() ?? fillAreaGO.AddComponent<RectTransform>();
+        var faRT = fillAreaGO.transform is RectTransform faExRT ? faExRT : fillAreaGO.AddComponent<RectTransform>();
         faRT.anchorMin = Vector2.zero; faRT.anchorMax = Vector2.one;
         faRT.offsetMin = Vector2.zero; faRT.offsetMax = Vector2.zero;
         var fillGO = UiImage("Fill", fillAreaGO.transform,
