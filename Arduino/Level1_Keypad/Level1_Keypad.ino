@@ -1,98 +1,186 @@
 /*
- * Big Yahu - Level 2 Humidity Sensor (DHT22 Version)
- * Pin: Signal -> A5 (wird hier als digitaler Pin genutzt)
+ * Big Yahu – Level 1 Keypad (Freenove Projects Kit FNK0059 / Control Board V4)
+ *
+ * Pin-Belegung laut Freenove FNK0059-Dokumentation:
+ *   D2=Row1  D3=Row2  D4=Row3  D5=Row4
+ *   D6=Col1  D7=Col2  D8=Col3  D9=Col4
+ *
+ * Board-Konflikte (Onboard-Komponenten):
+ *   D4 = Relay  (aktiv HIGH) liegt auf Row3
+ *   D8 = Buzzer (aktiv HIGH) liegt auf Col3
+ *
+ * Lösung – Custom-Scanner ohne Keypad-Library:
+ *   Alle Spalten werden als OUTPUT LOW gehalten.
+ *   Zum Scannen einer Spalte: kurz OUTPUT HIGH (~5 µs), dann sofort zurück LOW.
+ *   D8 ist also nur während des Col3-Scans für ~5 µs HIGH → kein hörbares Piepen.
+ *   Zeilen werden vor jedem Lesen auf 0 V entladen → Relay bleibt inaktiv.
+ *   Einheitlicher 80 ms-Piepton nur bei erkannter Taste.
+ *
+ * Protokoll eingehend  (Unity → Arduino):
+ *   "FF:START\n"  → Scan starten (Numpad geöffnet)
+ *   "FF:STOP\n"   → Scan stoppen (Numpad geschlossen)
+ *
+ * Protokoll ausgehend  (Arduino → Unity):
+ *   "05:0"…"05:9"  Ziffer
+ *   "05:DEL"        * gedrückt
+ *   "05:ENT"        # gedrückt
+ *   "RDY"           Board bereit
  */
 
-#include "DHT.h"
+#define BUZZER_PIN  8    // D8 – aktiver Buzzer (= Col3, wird per Custom-Scan kurz gehalten)
+#define RELAY_PIN   4    // D4 – Relay          (= Row3, wird entladen vor jedem Lesen)
+#define BEEP_MS     80   // Einheitliche Piepton-Länge in ms
+#define DEBOUNCE_MS 30   // Entprellzeit in ms
 
-#define DHTPIN A5     
-#define DHTTYPE DHT22 
+const byte ROWS = 4;
+const byte COLS = 4;
 
-DHT dht(DHTPIN, DHTTYPE);
+char keys[ROWS][COLS] = {
+  { '1', '2', '3', 'A' },
+  { '4', '5', '6', 'B' },
+  { '7', '8', '9', 'C' },
+  { '*', '0', '#', 'D' }
+};
 
-const unsigned long SAMPLE_INTERVAL_MS = 2000; // DHT22 braucht Zeit zwischen den Messungen
-const float HUMIDITY_THRESHOLD = 5.0;          // Anstieg um 5% Feuchtigkeit löst "Blow" aus
+byte rowPins[ROWS] = { 2, 3, RELAY_PIN,  5 };
+byte colPins[COLS] = { 6, 7, BUZZER_PIN, 9 };
 
-bool sensing = false;
-bool successPrinted = false;
-String serialBuffer = "";
+bool   scanning  = false;
+String serialBuf = "";
 
-float baseline = 0;
-unsigned long lastSampleAt = 0;
+// Debounce-Zustand
+static char          _lastRaw   = 0;
+static char          _stableKey = 0;
+static unsigned long _firstSeen = 0;
 
-void setup() {
-  Serial.begin(115200);
-  dht.begin();
-  
-  // Erste Messung als Baseline
-  delay(2000); 
-  baseline = dht.readHumidity();
-  
-  Serial.println("FF:ready");
+// ── D8 + D4 sicher auf OUTPUT LOW ────────────────────────────────────────────
+void silenceBoard()
+{
+  pinMode(BUZZER_PIN, OUTPUT); digitalWrite(BUZZER_PIN, LOW);
+  pinMode(RELAY_PIN,  OUTPUT); digitalWrite(RELAY_PIN,  LOW);
 }
 
-void loop() {
+// ── Einheitlicher Piepton ────────────────────────────────────────────────────
+void beep()
+{
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(BEEP_MS);
+  digitalWrite(BUZZER_PIN, LOW);
+}
+
+// ── Low-level Scan ───────────────────────────────────────────────────────────
+// Keine INPUT_PULLUP-Restore → D8 bleibt fast immer LOW.
+// Zeilen werden vor dem Lesen auf 0 V entladen (OUTPUT LOW → INPUT) damit
+// D4 (Relay) nicht durch schwebende Spannung anzieht.
+char rawScan()
+{
+  // Alle Spalten auf OUTPUT LOW (D8 = LOW = Buzzer aus)
+  for (byte c = 0; c < COLS; c++) {
+    pinMode(colPins[c], OUTPUT);
+    digitalWrite(colPins[c], LOW);
+  }
+
+  for (byte c = 0; c < COLS; c++) {
+    digitalWrite(colPins[c], HIGH);  // Spalte kurz anwählen
+    delayMicroseconds(5);            // Einschwingen
+
+    for (byte r = 0; r < ROWS; r++) {
+      // Zeile auf 0 V entladen → definierter Startzustand
+      pinMode(rowPins[r], OUTPUT);
+      digitalWrite(rowPins[r], LOW);
+      delayMicroseconds(2);
+      // Jetzt als Eingang: Taste gedrückt → Spalte (HIGH) zieht Zeile hoch
+      pinMode(rowPins[r], INPUT);
+      delayMicroseconds(5);
+
+      if (digitalRead(rowPins[r]) == HIGH) {
+        digitalWrite(colPins[c], LOW);  // Spalte sofort wieder LOW
+        silenceBoard();
+        return keys[r][c];
+      }
+    }
+
+    digitalWrite(colPins[c], LOW);  // Spalte abwählen
+  }
+
+  silenceBoard();
+  return 0;
+}
+
+// ── Entprellter Tastendruck ──────────────────────────────────────────────────
+// Meldet jede Taste genau einmal beim ersten stabilen Erkennen nach DEBOUNCE_MS.
+char getKey()
+{
+  char raw = rawScan();
+  unsigned long now = millis();
+
+  if (raw != _lastRaw) {
+    _lastRaw   = raw;
+    _firstSeen = now;
+    _stableKey = 0;
+    return 0;
+  }
+
+  if (raw && !_stableKey && (now - _firstSeen >= DEBOUNCE_MS)) {
+    _stableKey = raw;
+    return raw;
+  }
+
+  if (!raw) _stableKey = 0;
+
+  return 0;
+}
+
+// ── Setup ────────────────────────────────────────────────────────────────────
+void setup()
+{
+  silenceBoard();
+  Serial.begin(115200);
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(1500);
+  silenceBoard();
+  Serial.println("RDY");
+}
+
+// ── Unity-Befehle lesen ──────────────────────────────────────────────────────
+void handleSerial()
+{
+  while (Serial.available()) {
+    char c = Serial.read();
+    if (c == '\n') {
+      serialBuf.trim();
+      if (serialBuf == "FF:START") { scanning = true;  }
+      if (serialBuf == "FF:STOP")  { scanning = false; silenceBoard(); }
+      serialBuf = "";
+    } else if (serialBuf.length() < 32) {
+      serialBuf += c;
+    }
+  }
+}
+
+// ── Loop ─────────────────────────────────────────────────────────────────────
+void loop()
+{
   handleSerial();
 
-  unsigned long now = millis();
-  if (now - lastSampleAt < SAMPLE_INTERVAL_MS) return;
-  lastSampleAt = now;
-
-  float h = dht.readHumidity();
-
-  // Fehlerprüfung (falls der Sensor nicht richtig steckt)
-  if (isnan(h)) {
-    Serial.println("10:ERR:Sensor_Read_Failed");
+  if (!scanning) {
+    silenceBoard();
     return;
   }
 
-  Serial.print("10:HUM:");
-  Serial.println(h);
+  char key = getKey();
+  if (!key) return;
 
-  // Wenn wir nicht aktiv "suchen", aktualisieren wir die Baseline langsam
-  if (!sensing) {
-    baseline = (baseline * 0.9) + (h * 0.1);
-  } else {
-    // Blow-Erkennung: Aktuelle Feuchtigkeit > Baseline + Schwellenwert
-    if (h > (baseline + HUMIDITY_THRESHOLD)) {
-      if (!successPrinted) {
-        Serial.println("success");
-        successPrinted = true;
-      }
-      Serial.print("10:BLOW:");
-      Serial.println(h);
-    }
-  }
-}
+  // Einheitlicher Piepton + LED-Feedback bei jeder Taste
+  beep();
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(30);
+  digitalWrite(LED_BUILTIN, LOW);
 
-void handleSerial() {
-  while (Serial.available() > 0) {
-    char c = (char)Serial.read();
-    if (c == '\n' || c == '\r') {
-      if (serialBuffer.length() > 0) {
-        handleCommand(serialBuffer);
-        serialBuffer = "";
-      }
-    } else if (serialBuffer.length() < 32) {
-      serialBuffer += c;
-    }
-  }
-}
-
-void handleCommand(String command) {
-  command.trim();
-  command.toUpperCase();
-
-  if (command == "10:START") {
-    sensing = true;
-    successPrinted = false;
-    // Wir nehmen den letzten Wert vor dem Start als frische Baseline
-    baseline = dht.readHumidity(); 
-    Serial.println("10:ready");
-  } else if (command == "10:STOP") {
-    sensing = false;
-    Serial.println("10:stopped");
-  } else if (command == "FF:PING") {
-    Serial.println("FF:pong");
-  }
+  // Senden
+  if (key >= '0' && key <= '9') {
+    Serial.print("05:"); Serial.println(key);
+  } else if (key == '*') { Serial.println("05:DEL"); }
+  else if (key == '#')   { Serial.println("05:ENT"); }
 }
