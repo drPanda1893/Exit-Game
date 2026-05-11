@@ -31,6 +31,11 @@ public static class EnsureLevel2Built
         if (!File.Exists(ScenePath)) return;
         if (new FileInfo(ScenePath).Length >= MinPopulatedSize) return;
 
+        // Save active scene path BEFORE cancelling play and rebuilding,
+        // because BuildSilent() internally opens a new empty scene (making Level2 active).
+        var activeScene = EditorSceneManager.GetActiveScene();
+        string returnPath = activeScene.path;
+
         // Level2 ist leer → Play stoppen, neu bauen, Play danach wieder starten.
         EditorApplication.isPlaying = false;
         Debug.LogWarning("[EnsureLevel2Built] Level2.unity war leer – baue jetzt neu, bitte erneut Play drücken.");
@@ -47,6 +52,13 @@ public static class EnsureLevel2Built
         {
             Debug.LogError($"[EnsureLevel2Built] Auto-Build fehlgeschlagen: {ex.Message}\n" +
                            "Bitte manuell über Tools → Level 2 → Rebuild Now ausführen.");
+        }
+
+        // Restore the previously active scene so the user presses Play from the right scene.
+        if (!string.IsNullOrEmpty(returnPath) && returnPath != ScenePath && File.Exists(returnPath))
+        {
+            EditorSceneManager.OpenScene(returnPath, OpenSceneMode.Single);
+            Debug.Log($"[EnsureLevel2Built] Zurück zu {returnPath} – erneut Play drücken.");
         }
     }
 
