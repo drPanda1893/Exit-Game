@@ -66,7 +66,9 @@ public class BuildLevel6FinalGate : LevelBuilderBase
 
         // ── Beleuchtung ───────────────────────────────────────────────────────
         RenderSettings.ambientMode  = UnityEngine.Rendering.AmbientMode.Flat;
-        RenderSettings.ambientLight = new Color(0.06f, 0.05f, 0.04f);
+        RenderSettings.ambientLight = new Color(0.14f, 0.12f, 0.09f);
+        AddLight("SpawnLight", root.transform, new Vector3(0f, 3.5f, -4.5f),
+            LightType.Point, new Color(0.82f, 0.72f, 0.52f), 1.2f, 8f, LightShadows.None);
         AddLight("CorridorLight", root.transform, new Vector3(0f, 4f, -2f),
             LightType.Point, new Color(0.85f, 0.75f, 0.55f), 1.4f, 10f, LightShadows.Soft);
         AddLight("GateSpot_L", root.transform, new Vector3(-2f, 5f, 3.5f),

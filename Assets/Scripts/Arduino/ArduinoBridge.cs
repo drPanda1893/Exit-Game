@@ -12,11 +12,12 @@ using System.Threading;
 /// Singleton – verwaltet Serial- oder TCP-Kommunikation mit dem Arduino.
 /// Liest auf einem Hintergrund-Thread; dispatcht Events auf den Main Thread.
 ///
-/// Protokoll:  "XX:payload\n"  (XX = 2-stelliger Hex-Befehlscode)
+/// Protokoll:  Text ("KEY:x" | "HUMIDITY:x" | "COLOR:x" | "TEMP:x")
+///             oder Hex  "XX:payload\n"  (XX = 2-stelliger Hex-Befehlscode)
 ///
-/// Verwendung:
-///   ArduinoBridge.Instance.RegisterHandler(0x05, payload => { ... });
-///   ArduinoBridge.Instance.Send(0xFF, "START");
+/// Zwei komplementäre APIs:
+///   1) Events  – OnKeypadKey, OnHumidity, OnColor (Level1/2/3)
+///   2) Handler-Registry – RegisterHandler(byte, Action<string>) (Level6+)
 ///
 /// TCP-Emulator-Modus:
 ///   "Use Tcp Emulator" im Inspector aktivieren, dann Arduino/emulator.py starten.
@@ -42,8 +43,15 @@ public class ArduinoBridge : MonoBehaviour
     [SerializeField] private bool logIncoming = true;
     [SerializeField] private bool logOutgoing = false;
 
-    // ── Interne Zustand ───────────────────────────────────────────────────────
+    // ── Events (auf Main Thread ausgelöst) ────────────────────────────────────
+    /// <summary>L1 Keypad – Werte: "0"–"9", "DEL", "ENT".</summary>
+    public event Action<string> OnKeypadKey;
+    /// <summary>L2 Humidity – Wert: 0–100.</summary>
+    public event Action<int>    OnHumidity;
+    /// <summary>L3 Color – Wert: Hex-String oder Farbname.</summary>
+    public event Action<string> OnColor;
 
+    // ── Interne Zustände ──────────────────────────────────────────────────────
     private SerialPort   _port;
     private TcpListener  _tcpListener;
     private TcpClient    _tcpClient;
@@ -53,12 +61,15 @@ public class ArduinoBridge : MonoBehaviour
     private volatile bool _running;
     private float         _retryTimer;
 
-    private readonly ConcurrentQueue<(byte cmd, string payload)> _incoming = new();
-    private readonly Dictionary<byte, List<Action<string>>>      _handlers = new();
+    private readonly ConcurrentQueue<Action>                _incoming = new();
+    private readonly Dictionary<byte, List<Action<string>>> _handlers = new();
 
     public bool   IsConnected => useTcpEmulator
         ? (_tcpClient != null && _tcpClient.Connected && (_thread?.IsAlive ?? false))
         : (_port != null && _port.IsOpen && (_thread?.IsAlive ?? false));
+
+    /// <summary>Alias für Skripte die .Connected direkt nutzen.</summary>
+    public bool   Connected => IsConnected;
 
     public string PortName => portName;
 
@@ -80,11 +91,8 @@ public class ArduinoBridge : MonoBehaviour
 
     void Update()
     {
-        while (_incoming.TryDequeue(out var msg))
-        {
-            if (_handlers.TryGetValue(msg.cmd, out var list))
-                foreach (var h in list) h?.Invoke(msg.payload);
-        }
+        while (_incoming.TryDequeue(out var action))
+            action?.Invoke();
 
         if (!IsConnected)
         {
@@ -189,7 +197,7 @@ public class ArduinoBridge : MonoBehaviour
                 break;
             }
         }
-        if (_running) { _running = false; _incoming.Enqueue((0xFE, "disconnected")); }
+        if (_running) _incoming.Enqueue(() => OnConnectionChanged?.Invoke(false));
     }
 
     void TcpAcceptLoop()
@@ -198,7 +206,7 @@ public class ArduinoBridge : MonoBehaviour
         {
             _tcpClient = _tcpListener.AcceptTcpClient();
             _tcpReader = new StreamReader(_tcpClient.GetStream());
-            _incoming.Enqueue((0xFD, "tcp-connected"));
+            _incoming.Enqueue(() => Debug.Log("[ArduinoBridge] TCP verbunden."));
 
             while (_running && _tcpClient.Connected)
             {
@@ -210,38 +218,14 @@ public class ArduinoBridge : MonoBehaviour
                 }
                 catch (Exception ex)
                 {
-                    if (_running) _incoming.Enqueue((0xFE, $"tcp-error:{ex.Message}"));
+                    if (_running) _incoming.Enqueue(() => Debug.LogWarning($"[ArduinoBridge] TCP-Lesefehler: {ex.Message}"));
                     break;
                 }
             }
         }
         catch (Exception ex)
         {
-            if (_running) _incoming.Enqueue((0xFE, $"tcp-accept:{ex.Message}"));
-        }
-    }
-
-    // ── Protokoll-Parser ──────────────────────────────────────────────────────
-
-    void ParseAndEnqueue(string line)
-    {
-        int colon = line.IndexOf(':');
-        if (colon < 1) return;
-
-        string hexPart = line[..colon];
-        string payload = line[(colon + 1)..];
-
-        if (byte.TryParse(hexPart,
-                System.Globalization.NumberStyles.HexNumber,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out byte cmd))
-        {
-            if (logIncoming) Debug.Log($"[ArduinoBridge] ← {line}");
-            _incoming.Enqueue((cmd, payload));
-        }
-        else
-        {
-            Debug.LogWarning($"[ArduinoBridge] Unbekanntes Format: '{line}'");
+            if (_running) _incoming.Enqueue(() => Debug.LogWarning($"[ArduinoBridge] TCP-Accept-Fehler: {ex.Message}"));
         }
     }
 
@@ -255,9 +239,11 @@ public class ArduinoBridge : MonoBehaviour
             _handlers[cmdId].Add(handler);
     }
 
-    public void UnregisterHandler(byte cmdId, Action<string> handler)
+    public void UnregisterHandler(byte cmdId, Action<string> handler = null)
     {
-        if (_handlers.TryGetValue(cmdId, out var list))
+        if (handler == null)
+            _handlers.Remove(cmdId);
+        else if (_handlers.TryGetValue(cmdId, out var list))
             list.Remove(handler);
     }
 
@@ -297,6 +283,64 @@ public class ArduinoBridge : MonoBehaviour
         catch (Exception ex) { Debug.LogWarning($"[ArduinoBridge] Sende-Fehler: {ex.Message}"); }
     }
 
+    // ── Protokoll-Parser ──────────────────────────────────────────────────────
+
+    void ParseAndEnqueue(string line)
+    {
+        if (logIncoming) Debug.Log($"[ArduinoBridge] ← {line}");
+
+        // Format 1: Text-Kommandos (Level1/2/3)
+        if (line.StartsWith("KEY:", StringComparison.Ordinal))
+        {
+            string key = line.Substring(4);
+            _incoming.Enqueue(() => { OnKeypadKey?.Invoke(key); DispatchHandlers(0x01, key); });
+            return;
+        }
+        if (line.StartsWith("HUMIDITY:", StringComparison.Ordinal))
+        {
+            string val = line.Substring(9);
+            _incoming.Enqueue(() => { if (int.TryParse(val, out int h)) OnHumidity?.Invoke(h); DispatchHandlers(0x10, val); });
+            return;
+        }
+        if (line.StartsWith("COLOR:", StringComparison.Ordinal))
+        {
+            string col = line.Substring(6);
+            _incoming.Enqueue(() => { OnColor?.Invoke(col); DispatchHandlers(0x20, col); });
+            return;
+        }
+        if (line.StartsWith("TEMP:", StringComparison.Ordinal))
+        {
+            string val = line.Substring(5);
+            _incoming.Enqueue(() => DispatchHandlers(0x60, "TEMP:" + val));
+            return;
+        }
+
+        // Format 2: Hex "XX:payload"
+        int colon = line.IndexOf(':');
+        if (colon < 1) { Debug.LogWarning($"[ArduinoBridge] Unbekanntes Format: '{line}'"); return; }
+
+        string hexPart = line[..colon];
+        string payload = line[(colon + 1)..];
+
+        if (byte.TryParse(hexPart,
+                System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out byte cmd))
+        {
+            _incoming.Enqueue(() => DispatchHandlers(cmd, payload));
+        }
+        else
+        {
+            Debug.LogWarning($"[ArduinoBridge] Unbekanntes Format: '{line}'");
+        }
+    }
+
+    void DispatchHandlers(byte cmd, string payload)
+    {
+        if (_handlers.TryGetValue(cmd, out var list))
+            foreach (var h in list) h?.Invoke(payload);
+    }
+
     // ── Hilfsmethoden ─────────────────────────────────────────────────────────
 
     System.Collections.IEnumerator AutoPingRoutine()
@@ -312,7 +356,7 @@ public class ArduinoBridge : MonoBehaviour
         return true;
     }
 
-    [ContextMenu("Ping senden")] void PingFromInspector()       => Ping();
-    [ContextMenu("Trennen")]     void DisconnectFromInspector() => CloseConnections();
-    [ContextMenu("Neu verbinden")] void ReconnectFromInspector() => TryConnect();
+    [ContextMenu("Ping senden")]    void PingFromInspector()       => Ping();
+    [ContextMenu("Trennen")]        void DisconnectFromInspector() => CloseConnections();
+    [ContextMenu("Neu verbinden")]  void ReconnectFromInspector()  => TryConnect();
 }

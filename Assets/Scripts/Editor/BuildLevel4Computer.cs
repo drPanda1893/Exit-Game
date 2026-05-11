@@ -3,6 +3,8 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 using TMPro;
 using System.Collections.Generic;
 
@@ -81,6 +83,15 @@ public class BuildLevel4Computer : EditorWindow
 
         // HUD über dem Spielfeld
         BuildHUD(canvasGO.transform, stealth);
+
+        // EventSystem (nötig für Button-Clicks in BigYahuDialogSystem)
+        var esGO = new GameObject("EventSystem");
+        esGO.AddComponent<EventSystem>();
+        esGO.AddComponent<InputSystemUIInputModule>();
+        SceneManager.MoveGameObjectToScene(esGO, scene);
+
+        // BigYahuDialogSystem (Intro-Dialog + Caught-Feedback)
+        BuildBigYahuDialog(canvasGO.transform, scene);
 
         // Hintergrundmusik
         AddBackgroundMusic(scene);
@@ -221,13 +232,21 @@ public class BuildLevel4Computer : EditorWindow
         scriptRT.anchorMin = Vector2.zero; scriptRT.anchorMax = Vector2.one;
         scriptRT.offsetMin = Vector2.zero; scriptRT.offsetMax  = Vector2.zero;
 
-        var stealth = scriptGO.gameObject.AddComponent<Level4_StealthMinigame>();
-        stealth.GetType().GetField("player",     System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(stealth, playerRT);
-        stealth.GetType().GetField("goal",       System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(stealth, goalRT);
-        stealth.GetType().GetField("statusText", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(stealth, statusTxt);
-        stealth.GetType().GetField("playArea",   System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(stealth, floor);
-        stealth.GetType().GetField("guards",     System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(stealth, guards);
-        stealth.GetType().GetField("walls",      System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(stealth, wallRTs);
+        var stealth   = scriptGO.gameObject.AddComponent<Level4_StealthMinigame>();
+        var stealthSo = new SerializedObject(stealth);
+        stealthSo.FindProperty("player").objectReferenceValue     = playerRT;
+        stealthSo.FindProperty("goal").objectReferenceValue       = goalRT;
+        stealthSo.FindProperty("statusText").objectReferenceValue = statusTxt;
+        stealthSo.FindProperty("playArea").objectReferenceValue   = floor;
+        var guardsProp = stealthSo.FindProperty("guards");
+        guardsProp.arraySize = guards.Count;
+        for (int gi = 0; gi < guards.Count; gi++)
+            guardsProp.GetArrayElementAtIndex(gi).objectReferenceValue = guards[gi];
+        var wallsProp = stealthSo.FindProperty("walls");
+        wallsProp.arraySize = wallRTs.Count;
+        for (int wi = 0; wi < wallRTs.Count; wi++)
+            wallsProp.GetArrayElementAtIndex(wi).objectReferenceValue = wallRTs[wi];
+        stealthSo.ApplyModifiedPropertiesWithoutUndo();
 
         return (floor, stealth);
     }
@@ -721,6 +740,96 @@ public class BuildLevel4Computer : EditorWindow
         txt.alignment = TextAlignmentOptions.Center;
         txt.color     = new Color(0.25f, 0.35f, 0.55f);
         txt.fontStyle = FontStyles.Bold;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BigYahu Dialog
+    // ═══════════════════════════════════════════════════════════════════════
+
+    void BuildBigYahuDialog(Transform canvasParent, Scene scene)
+    {
+        // ── Dialog-Panel (volle Breite, 260 px hoch, unten) ──────────────────
+        var dlgPanel = MakePanel(canvasParent, "DialogPanel",
+            new Vector2(0f, 0f), new Vector2(1f, 0f),
+            new Vector2(0f, 0f), new Vector2(0f, 260f));
+        dlgPanel.gameObject.AddComponent<Image>().color = new Color(0.03f, 0.03f, 0.06f, 0.97f);
+        dlgPanel.gameObject.SetActive(false);
+
+        // Obere Akzentlinie
+        var border = new GameObject("TopBorder");
+        border.transform.SetParent(dlgPanel, false);
+        border.AddComponent<Image>().color = new Color(0.55f, 0.45f, 0.20f);
+        var bRT = border.GetComponent<RectTransform>();
+        bRT.anchorMin = new Vector2(0f, 1f); bRT.anchorMax = new Vector2(1f, 1f);
+        bRT.pivot = new Vector2(0.5f, 1f);
+        bRT.anchoredPosition = Vector2.zero;
+        bRT.sizeDelta = new Vector2(0f, 3f);
+
+        // Portrait
+        var portraitGO = new GameObject("Portrait");
+        portraitGO.transform.SetParent(dlgPanel, false);
+        var portraitImg = portraitGO.AddComponent<Image>();
+        portraitImg.color = new Color(0.30f, 0.28f, 0.38f);
+        var pRT = portraitGO.GetComponent<RectTransform>();
+        pRT.anchorMin = new Vector2(0f, 0.5f); pRT.anchorMax = new Vector2(0f, 0.5f);
+        pRT.pivot = new Vector2(0.5f, 0.5f);
+        pRT.anchoredPosition = new Vector2(110f, 0f);
+        pRT.sizeDelta = new Vector2(190f, 190f);
+
+        // Speaker label
+        var speakerGO = new GameObject("SpeakerLabel");
+        speakerGO.transform.SetParent(dlgPanel, false);
+        var speakerTMP = speakerGO.AddComponent<TextMeshProUGUI>();
+        speakerTMP.text = "Big Yahu"; speakerTMP.fontSize = 26f;
+        speakerTMP.fontStyle = FontStyles.Bold;
+        speakerTMP.color = new Color(1f, 0.85f, 0.45f);
+        var sRT = speakerGO.GetComponent<RectTransform>();
+        sRT.anchorMin = new Vector2(0f, 1f); sRT.anchorMax = new Vector2(1f, 1f);
+        sRT.pivot = new Vector2(0f, 1f);
+        sRT.anchoredPosition = new Vector2(240f, -12f);
+        sRT.sizeDelta = new Vector2(-370f, 36f);
+
+        // Dialog text
+        var dialogTextGO = new GameObject("DialogText");
+        dialogTextGO.transform.SetParent(dlgPanel, false);
+        var dialogTMP = dialogTextGO.AddComponent<TextMeshProUGUI>();
+        dialogTMP.text = ""; dialogTMP.fontSize = 24f; dialogTMP.color = Color.white;
+        var dRT = dialogTextGO.GetComponent<RectTransform>();
+        dRT.anchorMin = Vector2.zero; dRT.anchorMax = Vector2.one;
+        dRT.offsetMin = new Vector2(240f, 48f);
+        dRT.offsetMax = new Vector2(-145f, -52f);
+
+        // Continue button
+        var btnGO = new GameObject("ContinueButton");
+        btnGO.transform.SetParent(dlgPanel, false);
+        btnGO.AddComponent<Image>().color = new Color(0.12f, 0.52f, 0.22f);
+        btnGO.AddComponent<Button>();
+        var btnRT = btnGO.GetComponent<RectTransform>();
+        btnRT.anchorMin = new Vector2(1f, 0f); btnRT.anchorMax = new Vector2(1f, 0f);
+        btnRT.pivot = new Vector2(1f, 0f);
+        btnRT.anchoredPosition = new Vector2(-14f, 14f);
+        btnRT.sizeDelta = new Vector2(130f, 42f);
+        var btnLblGO = new GameObject("Label");
+        btnLblGO.transform.SetParent(btnGO.transform, false);
+        var btnLbl = btnLblGO.AddComponent<TextMeshProUGUI>();
+        btnLbl.text = "Weiter ►"; btnLbl.fontSize = 20f;
+        btnLbl.alignment = TextAlignmentOptions.Center;
+        btnLbl.color = Color.white;
+        var btnLblRT = btnLblGO.GetComponent<RectTransform>();
+        btnLblRT.anchorMin = Vector2.zero; btnLblRT.anchorMax = Vector2.one;
+        btnLblRT.offsetMin = Vector2.zero; btnLblRT.offsetMax = Vector2.zero;
+
+        // ── BigYahuDialogSystem GO ────────────────────────────────────────────
+        var dsGO = new GameObject("BigYahuDialogSystem");
+        SceneManager.MoveGameObjectToScene(dsGO, scene);
+        var ds  = dsGO.AddComponent<BigYahuDialogSystem>();
+        var dso = new SerializedObject(ds);
+        dso.FindProperty("dialogPanel").objectReferenceValue    = dlgPanel.gameObject;
+        dso.FindProperty("dialogText").objectReferenceValue     = dialogTMP;
+        dso.FindProperty("speakerLabel").objectReferenceValue   = speakerTMP;
+        dso.FindProperty("portraitImage").objectReferenceValue  = portraitImg;
+        dso.FindProperty("continueButton").objectReferenceValue = btnGO.GetComponent<Button>();
+        dso.ApplyModifiedPropertiesWithoutUndo();
     }
 
     // ═══════════════════════════════════════════════════════════════════════

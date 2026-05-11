@@ -54,10 +54,11 @@ public class BuildLevel5Breadboard : EditorWindow
         cam.farClipPlane    = 35f;
         cam.tag             = "MainCamera";
         camGO.AddComponent<AudioListener>();
-        camGO.transform.position = new Vector3(0f, 8f, -3f);
-        camGO.transform.rotation = Quaternion.Euler(60f, 0f, 0f);
+        camGO.transform.position = new Vector3(0f, 10f, 2f);
+        camGO.transform.rotation = Quaternion.Euler(75f, 0f, 0f);
         var follow = camGO.AddComponent<TopDownCameraFollow>();
-        follow.fixedWorldPosition = new Vector3(0f, 1.8f, -4.4f);
+        follow.height     = 10f;
+        follow.pitchAngle = 75f;
         SceneManager.MoveGameObjectToScene(camGO, scene);
 
         // ── Umgebung ─────────────────────────────────────────────────────────
