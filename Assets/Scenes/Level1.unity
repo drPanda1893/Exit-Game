@@ -13328,7 +13328,7 @@ GameObject:
   - component: {fileID: 1085448047}
   - component: {fileID: 1085448046}
   m_Layer: 0
-  m_Name: Cube
+  m_Name: BackWall
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -15165,7 +15165,7 @@ Material:
     - _UVSec: 0
     - _ZWrite: 1
     m_Colors:
-    - _Color: {r: 0.78, g: 0.75, b: 0.62, a: 1}
+    - _Color: {r: 0.8, g: 0.78, b: 0.7, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
@@ -15743,7 +15743,7 @@ GameObject:
   - component: {fileID: 1223459017}
   - component: {fileID: 1223459016}
   m_Layer: 0
-  m_Name: Pipe_H
+  m_Name: M_Back
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -15757,9 +15757,9 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1223459014}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: 0.7071068, w: 0.7071068}
-  m_LocalPosition: {x: 1.1, y: 4.7, z: 2.28}
-  m_LocalScale: {x: 0.09600001, y: 1.2, z: 0.096}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 3.12, z: 2.34}
+  m_LocalScale: {x: 4.85, y: 0.035, z: 0.015}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1383255420}
@@ -17451,7 +17451,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: DEL
+  m_text: 5
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 0}
   m_sharedMaterial: {fileID: 0}
@@ -18524,7 +18524,7 @@ GameObject:
   - component: {fileID: 1412284208}
   - component: {fileID: 1412284207}
   m_Layer: 0
-  m_Name: Cylinder
+  m_Name: Pipe_H
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -26478,8 +26478,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1592409397242049177}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.62210864, y: -0.3835047, z: 0.5518222, w: 0.4017428}
-  m_LocalPosition: {x: -0.037382834, y: 0.060264405, z: 0.000025200769}
+  m_LocalRotation: {x: 0.7136994, y: 0.008933804, z: -0.111968435, w: 0.6913873}
+  m_LocalPosition: {x: -0.00014670976, y: 0.020245895, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -27514,7 +27514,7 @@ Animator:
   m_Controller: {fileID: 9100000, guid: 1f1c987fc6bd45d42b0f74e8ac791aea, type: 2}
   m_CullingMode: 1
   m_UpdateMode: 0
-  m_ApplyRootMotion: 0
+  m_ApplyRootMotion: 1
   m_LinearVelocityBlending: 0
   m_StabilizeFeet: 0
   m_AnimatePhysics: 0
@@ -27740,8 +27740,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2907330327864832763}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.09387441, y: -0.02191877, z: 0.16689113, w: 0.98125154}
-  m_LocalPosition: {x: -0.02288437, y: 0.07159027, z: 0.0009936378}
+  m_LocalRotation: {x: -0.09852583, y: 0.021423744, z: -0.1701084, w: 0.98025346}
+  m_LocalPosition: {x: 0.023353709, y: 0.07234892, z: 0.0012687863}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -27870,7 +27870,7 @@ GameObject:
   m_Component:
   - component: {fileID: 4174986239609640680}
   m_Layer: 0
-  m_Name: mixamorig:RightFoot
+  m_Name: mixamorig:LeftHandThumb1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -28108,7 +28108,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2390875541639385232}
   m_Layer: 0
-  m_Name: mixamorig:Spine1
+  m_Name: mixamorig:RightHandIndex1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

@@ -1,133 +1,327 @@
 using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine.EventSystems;
 using TMPro;
+using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
+using System.Collections;
 using System.Collections.Generic;
 
 /// <summary>
-/// Level 5 – Breadboard Puzzle.
-/// Spieler zieht Kabel-Enden (BreadboardPin) per Drag &amp; Drop auf die richtigen Ziel-Pins.
-/// Alle korrekten Verbindungen → Level abgeschlossen.
-///
-/// Setup in Unity:
-/// - Jeder Kabel-Start-Pin bekommt BreadboardPin (isDragSource = true) + diese Manager-Referenz.
-/// - Jeder Kabel-Ziel-Pin bekommt BreadboardPin (isDragSource = false) + diese Manager-Referenz.
-/// - requiredPairs: z.B. "A" → "A", "B" → "B" (Start-ID muss zu End-ID passen).
+/// Level 5 – Werkstatt: Schaltkreis-Rotations-Puzzle.
+/// Drehe die Kabel-Segmente so, dass Strom von der Quelle (links)
+/// zum Bunsenbrenner (rechts) fließt.
+/// WASD / Pfeiltasten → Tile auswählen, ENTER / LEERTASTE → 90° drehen.
 /// </summary>
 public class Level5_Breadboard : MonoBehaviour
 {
-    [System.Serializable]
-    public class CablePair
-    {
-        public string startId;
-        public string endId;
-        [HideInInspector] public bool connected;
-        public Image connectionIndicator; // Optional: Bild das grün wird bei Verbindung
-    }
-
-    [Header("Erforderliche Verbindungen")]
-    [SerializeField] private List<CablePair> requiredPairs;
+    // ── Serialized (Builder setzt diese Felder via Reflection) ───────────
+    [Header("Grid")]
+    [SerializeField] private RectTransform[] tileRoots;   // 25 Entries, row-major (row 0 = oben)
 
     [Header("UI")]
-    [SerializeField] private TextMeshProUGUI feedbackText;
-    [SerializeField] private RectTransform dragIcon; // Kleines Kabel-Icon das der Maus folgt
+    [SerializeField] private TextMeshProUGUI statusText;
+    [SerializeField] private Image           burnerFlame; // Bunsenbrenner-Flamme (dunkel→orange)
 
-    private string currentDragId;
+    // ── Puzzle-Definition ─────────────────────────────────────────────────
+    // TileType: 0=Leer  1=Gerade  2=Ecke  3=Quelle(fix)  4=Ziel(fix)
+    // Connections-Base: Gerade=[N,S], Ecke=[N,E]
+    // Rotation: 0..3 × 90° CW; [N,E,S,W] dreht zu [W,N,E,S]
+
+    private const int ROWS = 5, COLS = 5;
+
+    // Tile-Typen (row 0 = oben)
+    private static readonly int[] TILE_TYPES =
+    {
+        0, 0, 2, 1, 2,   // Zeile 0
+        0, 0, 1, 0, 1,   // Zeile 1
+        3, 1, 2, 0, 4,   // Zeile 2  (3=Quelle links, 4=Ziel rechts)
+        0, 0, 0, 0, 0,   // Zeile 3
+        0, 0, 0, 0, 0,   // Zeile 4
+    };
+
+    // Gelöste Rotationen:
+    // (0,2)→Ecke rot1=ES  (0,3)→Gerade rot1=EW  (0,4)→Ecke rot2=SW
+    // (1,2)→Gerade rot0=NS  (1,4)→Gerade rot0=NS
+    // (2,1)→Gerade rot1=EW  (2,2)→Ecke rot3=NW
+    private static readonly int[] SOLVED_ROT =
+    {
+        0, 0, 1, 1, 2,
+        0, 0, 0, 0, 0,
+        0, 1, 3, 0, 0,
+        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0,
+    };
+
+    // Startrotationen (absichtlich falsch, damit Puzzle lösbar aber nicht trivial)
+    private static readonly int[] START_ROT =
+    {
+        0, 0, 2, 0, 1,
+        0, 0, 1, 0, 1,
+        0, 0, 1, 0, 0,
+        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0,
+    };
+
+    // ── Laufzeit ──────────────────────────────────────────────────────────
+    private int[] curRot;
+    private int   selRow = 2, selCol = 1;
+    private bool  solved;
+    private bool  active;
+
+    private static readonly Color ColOn  = new Color(0.18f, 0.92f, 0.38f);
+    private static readonly Color ColOff = new Color(0.22f, 0.26f, 0.32f);
+    private static readonly Color ColSrc = new Color(0.95f, 0.65f, 0.05f);
+    private static readonly Color ColSel = new Color(0.95f, 0.92f, 0.15f);
+
+    // ═════════════════════════════════════════════════════════════════════
 
     void OnEnable()
     {
-        foreach (var pair in requiredPairs) pair.connected = false;
-        if (dragIcon) dragIcon.gameObject.SetActive(false);
+        solved = false;
+        active = false;
+        if (statusText) statusText.text = string.Empty;
 
-        BigYahuDialogSystem.Instance.ShowDialog(new[]
-        {
-            "Big Yahu: Das Breadboard braucht die richtigen Verbindungen!",
-            "Big Yahu: Ziehe die Kabel-Enden auf die passenden Pins!"
-        });
-    }
-
-    public void BeginCableDrag(string startId)
-    {
-        currentDragId = startId;
-        if (dragIcon) dragIcon.gameObject.SetActive(true);
-    }
-
-    public void UpdateDragPosition(Vector2 screenPos)
-    {
-        if (!dragIcon || !dragIcon.gameObject.activeSelf) return;
-        Canvas canvas = dragIcon.GetComponentInParent<Canvas>();
-        Camera cam = canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : Camera.main;
-        RectTransformUtility.ScreenPointToLocalPointInRectangle(
-            canvas.transform as RectTransform, screenPos, cam, out Vector2 local);
-        dragIcon.anchoredPosition = local;
-    }
-
-    public void EndCableDrag()
-    {
-        currentDragId = null;
-        if (dragIcon) dragIcon.gameObject.SetActive(false);
-    }
-
-    public void TryConnect(string endId)
-    {
-        if (string.IsNullOrEmpty(currentDragId)) return;
-
-        CablePair match = requiredPairs.Find(p => p.startId == currentDragId && p.endId == endId);
-        if (match != null && !match.connected)
-        {
-            match.connected = true;
-            if (match.connectionIndicator) match.connectionIndicator.color = Color.green;
-            feedbackText.text = $"✓ Verbindung {match.startId}→{match.endId} korrekt!";
-            CheckAllConnected();
-        }
+        if (BigYahuDialogSystem.Instance != null)
+            BigYahuDialogSystem.Instance.ShowDialog(new[]
+            {
+                "Big Yahu: Die Werkstatt! Das Kabel-Netz ist durcheinander geraten.",
+                "Big Yahu: Verbinde Strom-Quelle mit dem Bunsenbrenner!",
+                "Big Yahu: WASD zum Auswählen, ENTER oder LEERTASTE zum Drehen."
+            }, StartPuzzle);
         else
+            StartPuzzle();
+    }
+
+    void Start()
+    {
+        if (curRot == null) StartPuzzle();
+    }
+
+    void StartPuzzle()
+    {
+        curRot = (int[])START_ROT.Clone();
+        ApplyAllRotations();
+        RefreshColors(GetConnectedSet());
+        UpdateSelectionFrame();
+        active = true;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Eingabe
+    // ─────────────────────────────────────────────────────────────────────
+
+    void Update()
+    {
+        if (!active || solved) return;
+        var kb = Keyboard.current;
+        if (kb == null) return;
+
+        int dr = 0, dc = 0;
+        if (kb.wKey.wasPressedThisFrame || kb.upArrowKey.wasPressedThisFrame)    dr = -1;
+        if (kb.sKey.wasPressedThisFrame || kb.downArrowKey.wasPressedThisFrame)  dr =  1;
+        if (kb.aKey.wasPressedThisFrame || kb.leftArrowKey.wasPressedThisFrame)  dc = -1;
+        if (kb.dKey.wasPressedThisFrame || kb.rightArrowKey.wasPressedThisFrame) dc =  1;
+
+        if (dr != 0 || dc != 0)
         {
-            feedbackText.text = "✗ Falsche Verbindung!";
+            int nr = Mathf.Clamp(selRow + dr, 0, ROWS - 1);
+            int nc = Mathf.Clamp(selCol + dc, 0, COLS - 1);
+            // Überspringe leere Tiles
+            if (TILE_TYPES[nr * COLS + nc] != 0) { selRow = nr; selCol = nc; }
+            UpdateSelectionFrame();
         }
 
-        EndCableDrag();
+        if (kb.enterKey.wasPressedThisFrame || kb.spaceKey.wasPressedThisFrame)
+            RotateTile(selRow, selCol);
     }
 
-    void CheckAllConnected()
+    // ─────────────────────────────────────────────────────────────────────
+    // Drehen (auch via UI-Klick aufrufbar)
+    // ─────────────────────────────────────────────────────────────────────
+
+    public void RotateTile(int row, int col)
     {
-        foreach (var pair in requiredPairs)
-            if (!pair.connected) return;
+        int idx = row * COLS + col;
+        int t   = TILE_TYPES[idx];
+        if (t == 0 || t == 3 || t == 4) return;
 
-        feedbackText.text = "✓ Alle Verbindungen korrekt! Stromkreis geschlossen!";
-        BigYahuDialogSystem.Instance.ShowDialog(
-            "Big Yahu: Perfekt verdrahtet! Der Stromkreis ist geschlossen!",
-            () => GameManager.Instance.CompleteCurrentLevel());
-    }
-}
+        curRot[idx] = (curRot[idx] + 1) % 4;
+        ApplyRotation(idx);
 
-/// <summary>
-/// Kommt auf jeden Drag-Source und Drop-Target Pin.
-/// isDragSource = true  → Kabel-Anfang (Drag von hier weg)
-/// isDragSource = false → Kabel-Ende   (hier fallen lassen)
-/// </summary>
-public class BreadboardPin : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler
-{
-    [SerializeField] private string pinId;
-    [SerializeField] private bool isDragSource = true;
-    [SerializeField] private Level5_Breadboard manager;
-
-    public void OnBeginDrag(PointerEventData e)
-    {
-        if (isDragSource) manager.BeginCableDrag(pinId);
+        var connected = GetConnectedSet();
+        RefreshColors(connected);
+        if (connected.Contains(2 * COLS + 4)) OnSolved();
     }
 
-    public void OnDrag(PointerEventData e)
+    // ─────────────────────────────────────────────────────────────────────
+    // Verbindungs-BFS
+    // ─────────────────────────────────────────────────────────────────────
+
+    static bool[] GetConn(int tileType, int rot)
     {
-        if (isDragSource) manager.UpdateDragPosition(e.position);
+        bool[] b = tileType switch
+        {
+            1 => new[] { true,  false, true,  false },  // Gerade N+S
+            2 => new[] { true,  true,  false, false },  // Ecke   N+E
+            3 => new[] { false, true,  false, false },  // Quelle →E
+            4 => new[] { true,  false, false, false },  // Ziel   ←N
+            _ => new[] { false, false, false, false },
+        };
+        // rot × 90° CW: [N,E,S,W] → CW → [W,N,E,S]
+        for (int r = 0; r < rot; r++)
+        {
+            bool w = b[3];
+            b[3] = b[2]; b[2] = b[1]; b[1] = b[0]; b[0] = w;
+        }
+        return b;
     }
 
-    public void OnEndDrag(PointerEventData e)
+    HashSet<int> GetConnectedSet()
     {
-        if (isDragSource) manager.EndCableDrag();
+        var vis   = new HashSet<int>();
+        var queue = new Queue<int>();
+        int src   = 2 * COLS + 0;
+        vis.Add(src); queue.Enqueue(src);
+
+        int[] DR = { -1, 0, 1, 0 };
+        int[] DC = {  0, 1, 0,-1 };
+        int[] OPP= {  2, 3, 0, 1 };
+
+        while (queue.Count > 0)
+        {
+            int cur = queue.Dequeue();
+            int cr = cur / COLS, cc = cur % COLS;
+            var myConn = GetConn(TILE_TYPES[cur], curRot[cur]);
+
+            for (int d = 0; d < 4; d++)
+            {
+                if (!myConn[d]) continue;
+                int nr = cr + DR[d], nc = cc + DC[d];
+                if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) continue;
+                int ni = nr * COLS + nc;
+                if (vis.Contains(ni)) continue;
+                if (!GetConn(TILE_TYPES[ni], curRot[ni])[OPP[d]]) continue;
+                vis.Add(ni); queue.Enqueue(ni);
+            }
+        }
+        return vis;
     }
 
-    public void OnDrop(PointerEventData e)
+    // ─────────────────────────────────────────────────────────────────────
+    // Visuals
+    // ─────────────────────────────────────────────────────────────────────
+
+    void ApplyAllRotations()
     {
-        if (!isDragSource) manager.TryConnect(pinId);
+        for (int i = 0; i < ROWS * COLS; i++) ApplyRotation(i);
+    }
+
+    void ApplyRotation(int idx)
+    {
+        if (tileRoots == null || idx >= tileRoots.Length || tileRoots[idx] == null) return;
+        var interior = tileRoots[idx].Find("Interior");
+        if (interior != null)
+            interior.localRotation = Quaternion.Euler(0, 0, -90f * curRot[idx]);
+    }
+
+    void RefreshColors(HashSet<int> connected)
+    {
+        if (tileRoots == null) return;
+        for (int i = 0; i < ROWS * COLS; i++)
+        {
+            if (tileRoots[i] == null) continue;
+            int t = TILE_TYPES[i];
+            if (t == 0) continue;
+            Color c = (t == 3 || t == 4) ? ColSrc
+                    : connected.Contains(i) ? ColOn
+                    : ColOff;
+            PaintInterior(tileRoots[i], c);
+        }
+    }
+
+    void UpdateSelectionFrame()
+    {
+        if (tileRoots == null) return;
+        for (int i = 0; i < ROWS * COLS; i++)
+        {
+            if (tileRoots[i] == null) continue;
+            var f = tileRoots[i].Find("SelFrame");
+            if (f) f.gameObject.SetActive(i == selRow * COLS + selCol);
+        }
+    }
+
+    static void PaintInterior(RectTransform root, Color col)
+    {
+        var interior = root.Find("Interior");
+        if (interior == null) return;
+        foreach (var img in interior.GetComponentsInChildren<Image>(true))
+            img.color = col;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Gewinn
+    // ─────────────────────────────────────────────────────────────────────
+
+    void OnSolved()
+    {
+        solved = true;
+        active = false;
+        if (statusText) statusText.text = "Schaltkreis geschlossen!  Bunsenbrenner aktiviert!";
+        StartCoroutine(SolveRoutine());
+    }
+
+    IEnumerator SolveRoutine()
+    {
+        // Alle Tiles leuchten grün
+        if (tileRoots != null)
+            foreach (var tr in tileRoots)
+                if (tr != null) PaintInterior(tr, ColOn);
+
+        // Bunsenbrenner-Flamme leuchtet auf
+        if (burnerFlame != null)
+        {
+            float t = 0f;
+            Color dark   = new Color(0.20f, 0.15f, 0.08f);
+            Color bright = new Color(1.00f, 0.48f, 0.02f);
+            while (t < 1f)
+            {
+                t += Time.deltaTime * 1.2f;
+                burnerFlame.color = Color.Lerp(dark, bright, Mathf.SmoothStep(0, 1, t));
+                yield return null;
+            }
+        }
+
+        yield return new WaitForSeconds(1f);
+
+        if (BigYahuDialogSystem.Instance != null)
+            BigYahuDialogSystem.Instance.ShowDialog(new[]
+            {
+                "Big Yahu: Ausgezeichnet! Der Bunsenbrenner brennt!",
+                "Big Yahu: Jetzt können wir das Schloss aufschmelzen – zum Tor!"
+            }, () => StartCoroutine(FadeOut()));
+        else
+            StartCoroutine(FadeOut());
+    }
+
+    IEnumerator FadeOut()
+    {
+        Canvas root = GetComponentInParent<Canvas>();
+        CanvasGroup cg = null;
+        if (root != null)
+        {
+            var go = new GameObject("Fade");
+            go.transform.SetParent(root.transform, false);
+            var rt = go.AddComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            go.AddComponent<Image>().color = Color.black;
+            cg = go.AddComponent<CanvasGroup>();
+            cg.alpha = 0f;
+        }
+        float t = 0f;
+        while (t < 1f) { t += Time.deltaTime * 0.65f; if (cg) cg.alpha = t; yield return null; }
+
+        if (GameManager.Instance != null) GameManager.Instance.CompleteCurrentLevel();
+        else SceneManager.LoadScene("Level6");
     }
 }
