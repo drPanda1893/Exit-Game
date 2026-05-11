@@ -19,6 +19,15 @@ public class BuildLevel1PrisonCell : LevelBuilderBase
     [MenuItem("Tools/Build Level 1 Prison Cell (Detailed)")]
     public static void ShowWindow() => GetWindow<BuildLevel1PrisonCell>("Cell Builder");
 
+    public static void BuildSilent()
+    {
+        var w = CreateInstance<BuildLevel1PrisonCell>();
+        typeof(BuildLevel1PrisonCell)
+            .GetMethod("BuildLevel1", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            ?.Invoke(w, null);
+        DestroyImmediate(w);
+    }
+
     void OnGUI()
     {
         GUILayout.Label("Level 1 Builder", EditorStyles.boldLabel);

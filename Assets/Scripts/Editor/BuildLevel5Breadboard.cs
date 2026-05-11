@@ -24,6 +24,15 @@ public class BuildLevel5Breadboard : EditorWindow
     [MenuItem("Tools/Build Level 5 Breadboard")]
     public static void ShowWindow() => GetWindow<BuildLevel5Breadboard>("Level 5 Builder");
 
+    public static void BuildSilent()
+    {
+        var w = CreateInstance<BuildLevel5Breadboard>();
+        typeof(BuildLevel5Breadboard)
+            .GetMethod("Build", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            ?.Invoke(w, null);
+        DestroyImmediate(w);
+    }
+
     void OnGUI()
     {
         GUILayout.Label("Level 5 – Schuppen + Werkstatt", EditorStyles.boldLabel);

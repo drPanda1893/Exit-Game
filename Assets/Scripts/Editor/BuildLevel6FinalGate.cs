@@ -20,6 +20,15 @@ public class BuildLevel6FinalGate : LevelBuilderBase
     [MenuItem("Tools/Build Level 6 Final Gate")]
     public static void ShowWindow() => GetWindow<BuildLevel6FinalGate>("Level 6 Builder");
 
+    public static void BuildSilent()
+    {
+        var w = CreateInstance<BuildLevel6FinalGate>();
+        typeof(BuildLevel6FinalGate)
+            .GetMethod("Build", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            ?.Invoke(w, null);
+        DestroyImmediate(w);
+    }
+
     void OnGUI()
     {
         GUILayout.Label("Level 6 – Finales Gefängnistor (3D)", EditorStyles.boldLabel);

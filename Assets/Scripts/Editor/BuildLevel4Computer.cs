@@ -17,6 +17,15 @@ public class BuildLevel4Computer : EditorWindow
     [MenuItem("Tools/Build Level 4 Computer")]
     public static void ShowWindow() => GetWindow<BuildLevel4Computer>("Level 4 Builder");
 
+    public static void BuildSilent()
+    {
+        var w = CreateInstance<BuildLevel4Computer>();
+        typeof(BuildLevel4Computer)
+            .GetMethod("Build", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            ?.Invoke(w, null);
+        DestroyImmediate(w);
+    }
+
     void OnGUI()
     {
         GUILayout.Label("Level 4 – Gefängnishof Stealth", EditorStyles.boldLabel);

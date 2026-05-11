@@ -4,99 +4,114 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 
 /// <summary>
-/// Prüft, ob Level2.unity leer ist und ruft ggf. den Builder automatisch auf.
-/// Triggert sowohl beim Editor-Start als auch beim Drücken von Play, damit
-/// der Spieler beim Übergang von Level 1 nach Level 2 niemals in einer leeren
-/// Szene landet ("No cameras rendering" / hängendes Spiel).
+/// Checks all level scenes on editor start and before Play. If any scene
+/// file is empty (git pull can blank them), the corresponding builder is
+/// invoked automatically and the previously active scene is restored.
 ///
-/// Heuristik: eine leere Unity-Szene (NewSceneSetup.EmptyScene + SaveScene)
-/// liegt bei ~3.5 KB / ~125 Zeilen. Die gebaute Szene ist um Größenordnungen
-/// größer (>50 KB). Schwelle: 5 KB.
+/// Empty heuristic: a scene saved with NewSceneSetup.EmptyScene is ~3.5 KB.
+/// Threshold: 5 KB.
 /// </summary>
 [InitializeOnLoad]
 public static class EnsureLevel2Built
 {
-    private const string ScenePath = "Assets/Scenes/Level2.unity";
-    private const long   MinPopulatedSize = 5000;
+    private const long MinPopulatedSize = 5000;
+
+    private static readonly (string path, System.Action buildFn)[] Levels =
+    {
+        ("Assets/Scenes/Level1.unity", BuildLevel1PrisonCell.BuildSilent),
+        ("Assets/Scenes/Level2.unity", BuildLevel2MaintenanceRoom.BuildSilent),
+        ("Assets/Scenes/Level3.unity", BuildLevel3Library.BuildSilent),
+        ("Assets/Scenes/Level4.unity", BuildLevel4Computer.BuildSilent),
+        ("Assets/Scenes/Level5.unity", BuildLevel5Breadboard.BuildSilent),
+        ("Assets/Scenes/Level6.unity", BuildLevel6FinalGate.BuildSilent),
+    };
 
     static EnsureLevel2Built()
     {
-        EditorApplication.delayCall            += CheckAndBuild;
+        EditorApplication.delayCall            += CheckAndBuildAll;
         EditorApplication.playModeStateChanged += OnPlayModeChanged;
     }
 
     private static void OnPlayModeChanged(PlayModeStateChange state)
     {
         if (state != PlayModeStateChange.ExitingEditMode) return;
-        if (!File.Exists(ScenePath)) return;
-        if (new FileInfo(ScenePath).Length >= MinPopulatedSize) return;
 
-        // Save active scene path BEFORE cancelling play and rebuilding,
-        // because BuildSilent() internally opens a new empty scene (making Level2 active).
+        var emptyLevels = FindEmptyLevels();
+        if (emptyLevels.Length == 0) return;
+
+        // Save active scene path before any BuildSilent() call changes it.
         var activeScene = EditorSceneManager.GetActiveScene();
         string returnPath = activeScene.path;
 
-        // Level2 ist leer → Play stoppen, neu bauen, Play danach wieder starten.
         EditorApplication.isPlaying = false;
-        Debug.LogWarning("[EnsureLevel2Built] Level2.unity war leer – baue jetzt neu, bitte erneut Play drücken.");
 
-        try
+        foreach (var (path, buildFn) in emptyLevels)
         {
-            BuildLevel2MaintenanceRoom.BuildSilent();
-            AssetDatabase.SaveAssets();
-            Debug.Log("[EnsureLevel2Built] Level2.unity neu gebaut – Play erneut drücken.");
-            EditorUtility.DisplayDialog("Level 2 neu gebaut",
-                "Level2.unity war leer und wurde automatisch neu gebaut.\nBitte erneut Play drücken.", "OK");
-        }
-        catch (System.Exception ex)
-        {
-            Debug.LogError($"[EnsureLevel2Built] Auto-Build fehlgeschlagen: {ex.Message}\n" +
-                           "Bitte manuell über Tools → Level 2 → Rebuild Now ausführen.");
+            Debug.LogWarning($"[EnsureAllLevelsBuilt] {path} war leer – baue jetzt neu.");
+            try
+            {
+                buildFn();
+                AssetDatabase.SaveAssets();
+                Debug.Log($"[EnsureAllLevelsBuilt] {path} neu gebaut.");
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"[EnsureAllLevelsBuilt] Auto-Build fehlgeschlagen für {path}: {ex.Message}");
+            }
         }
 
-        // Restore the previously active scene so the user presses Play from the right scene.
-        if (!string.IsNullOrEmpty(returnPath) && returnPath != ScenePath && File.Exists(returnPath))
-        {
+        EditorUtility.DisplayDialog("Level(s) neu gebaut",
+            "Leere Level-Szene(n) wurden automatisch neu gebaut.\nBitte erneut Play drücken.", "OK");
+
+        // Restore the previously active scene so Play starts from the right scene.
+        if (!string.IsNullOrEmpty(returnPath) && File.Exists(returnPath))
             EditorSceneManager.OpenScene(returnPath, OpenSceneMode.Single);
-            Debug.Log($"[EnsureLevel2Built] Zurück zu {returnPath} – erneut Play drücken.");
-        }
     }
 
-    private static void CheckAndBuild()
+    private static void CheckAndBuildAll()
     {
         if (Application.isPlaying) return;
-        if (!File.Exists(ScenePath)) return;
-        if (new FileInfo(ScenePath).Length >= MinPopulatedSize) return;
 
-        Debug.LogWarning("[EnsureLevel2Built] Level2.unity ist leer – baue Wartungsraum automatisch.");
+        var emptyLevels = FindEmptyLevels();
+        if (emptyLevels.Length == 0) return;
 
-        // Aktive Szene merken (und vorher speichern falls dirty), damit wir nach
-        // dem Build dorthin zurückkehren können.
         var activeScene  = EditorSceneManager.GetActiveScene();
         string returnPath = activeScene.path;
-        bool   savedReturn = false;
 
         if (activeScene.isDirty && !string.IsNullOrEmpty(returnPath))
-            savedReturn = EditorSceneManager.SaveScene(activeScene);
+            EditorSceneManager.SaveScene(activeScene);
         else if (string.IsNullOrEmpty(returnPath))
-            returnPath = null; // unbenannte Szene – nicht zurückkehren
+            returnPath = null;
 
-        try
+        foreach (var (path, buildFn) in emptyLevels)
         {
-            BuildLevel2MaintenanceRoom.BuildSilent();
-            AssetDatabase.SaveAssets();
-            Debug.Log("[EnsureLevel2Built] Level2.unity automatisch erstellt.");
-        }
-        catch (System.Exception ex)
-        {
-            Debug.LogError($"[EnsureLevel2Built] Auto-Build fehlgeschlagen: {ex.Message}\n" +
-                           "Bitte manuell über Tools → Level 2 → Rebuild Now (1-Klick) ausführen.");
+            Debug.LogWarning($"[EnsureAllLevelsBuilt] {path} ist leer – baue automatisch.");
+            try
+            {
+                buildFn();
+                AssetDatabase.SaveAssets();
+                Debug.Log($"[EnsureAllLevelsBuilt] {path} automatisch erstellt.");
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"[EnsureAllLevelsBuilt] Auto-Build fehlgeschlagen für {path}: {ex.Message}\n" +
+                               "Bitte manuell über Tools → Build Level X ausführen.");
+            }
         }
 
-        if (returnPath != null && returnPath != ScenePath && File.Exists(returnPath))
-        {
+        if (returnPath != null && File.Exists(returnPath))
             EditorSceneManager.OpenScene(returnPath, OpenSceneMode.Single);
-            if (savedReturn) Debug.Log($"[EnsureLevel2Built] Zurück zu {returnPath}.");
+    }
+
+    private static (string path, System.Action buildFn)[] FindEmptyLevels()
+    {
+        var result = new System.Collections.Generic.List<(string, System.Action)>();
+        foreach (var (path, buildFn) in Levels)
+        {
+            if (!File.Exists(path)) continue;
+            if (new FileInfo(path).Length < MinPopulatedSize)
+                result.Add((path, buildFn));
         }
+        return result.ToArray();
     }
 }

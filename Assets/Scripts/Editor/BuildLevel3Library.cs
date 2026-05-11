@@ -14,6 +14,15 @@ public class BuildLevel3Library : EditorWindow
     [MenuItem("Tools/Build Level 3 Library")]
     public static void ShowWindow() => GetWindow<BuildLevel3Library>("Level 3 Builder");
 
+    public static void BuildSilent()
+    {
+        var w = CreateInstance<BuildLevel3Library>();
+        typeof(BuildLevel3Library)
+            .GetMethod("Build", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            ?.Invoke(w, null);
+        DestroyImmediate(w);
+    }
+
     void OnGUI()
     {
         GUILayout.Label("Level 3 – Gefängnis-Bibliothek", EditorStyles.boldLabel);
