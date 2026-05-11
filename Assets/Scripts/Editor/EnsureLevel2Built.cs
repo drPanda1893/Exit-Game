@@ -4,9 +4,10 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 
 /// <summary>
-/// Beim Editor-Start prüfen, ob Level2.unity leer ist und ggf. den Builder
-/// einmalig automatisch ausführen. Ohne das landet der Spieler beim Übergang
-/// von Level 1 nach Level 2 in einer leeren Szene ("No cameras rendering").
+/// Prüft, ob Level2.unity leer ist und ruft ggf. den Builder automatisch auf.
+/// Triggert sowohl beim Editor-Start als auch beim Drücken von Play, damit
+/// der Spieler beim Übergang von Level 1 nach Level 2 niemals in einer leeren
+/// Szene landet ("No cameras rendering" / hängendes Spiel).
 ///
 /// Heuristik: eine leere Unity-Szene (NewSceneSetup.EmptyScene + SaveScene)
 /// liegt bei ~3.5 KB / ~125 Zeilen. Die gebaute Szene ist um Größenordnungen
@@ -20,7 +21,23 @@ public static class EnsureLevel2Built
 
     static EnsureLevel2Built()
     {
-        EditorApplication.delayCall += CheckAndBuild;
+        EditorApplication.delayCall            += CheckAndBuild;
+        EditorApplication.playModeStateChanged += OnPlayModeChanged;
+    }
+
+    private static void OnPlayModeChanged(PlayModeStateChange state)
+    {
+        // Nur warnen wenn Level2 leer ist und der Spieler ihn betreten könnte.
+        // Play NICHT abbrechen – sonst sperren wir auch Level1 aus, wenn der
+        // Rebuild aus irgendeinem Grund nicht funktioniert.
+        if (state != PlayModeStateChange.EnteredPlayMode) return;
+        if (!File.Exists(ScenePath)) return;
+        if (new FileInfo(ScenePath).Length >= MinPopulatedSize) return;
+
+        Debug.LogWarning(
+            "[EnsureLevel2Built] WARNUNG: Level2.unity ist leer (< 5 KB). " +
+            "Der Übergang von Level 1 nach Level 2 wird crashen. " +
+            "Fix: Tools → Level 2 → Rebuild Now (1-Klick) ausführen, dann Play neu starten.");
     }
 
     private static void CheckAndBuild()
