@@ -83,6 +83,10 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
             sceneNamesArr.GetArrayElementAtIndex(i).stringValue = names[i];
         gmso.ApplyModifiedPropertiesWithoutUndo();
 
+        var arduinoGO = new GameObject("ArduinoBridge");
+        arduinoGO.AddComponent<ArduinoBridge>();
+        SceneManager.MoveGameObjectToScene(arduinoGO, scene);
+
         // ── Staubfleck an der Wand + Trigger ──────────────────────────────────
         var wallSpot = BuildDustyWallSpot(root.transform, scene);
 
@@ -1319,7 +1323,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         var dustInstructGO  = new GameObject("InstructionText");
         dustInstructGO.transform.SetParent(dustPanelGO.transform, false);
         var dustInstructTMP = dustInstructGO.AddComponent<TextMeshProUGUI>();
-        dustInstructTMP.text      = "Reib den Staub mit der Maus weg!";
+        dustInstructTMP.text      = "Hauche den Sensor an oder reib den Staub mit der Maus weg!";
         dustInstructTMP.fontSize  = 26f;
         dustInstructTMP.alignment = TextAlignmentOptions.Center;
         dustInstructTMP.color     = new Color(1f, 0.9f, 0.7f);
@@ -1452,6 +1456,8 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         dwso.FindProperty("exitSpot").objectReferenceValue              =
             exitSpotGO != null ? exitSpotGO.GetComponent<DustyWallSpot>() : null;
         dwso.FindProperty("dustOverlay").objectReferenceValue           = dustOverlayImg;
+        dwso.FindProperty("useArduinoHumidity").boolValue               = true;
+        dwso.FindProperty("humidityClearThreshold").intValue            = 4;
         dwso.FindProperty("arrowHintText").objectReferenceValue         = arrowHintTMP;
         dwso.FindProperty("inputFeedbackText").objectReferenceValue     = feedbackTMP;
         dwso.FindProperty("instructionText").objectReferenceValue       = dustInstructTMP;

@@ -45,6 +45,10 @@ public class Level2_DustWall : MonoBehaviour
     [SerializeField] private int brushRadius = 28;
     [SerializeField][Range(0f, 1f)] private float revealThreshold = 0.65f;
 
+    [Header("Arduino Temperatur")]
+    [SerializeField] private bool useArduinoHumidity = true;
+    [SerializeField] private float temperatureClearThreshold = 28.5f;
+
     [Header("Pfeil-Combo")]
     [SerializeField] private TextMeshProUGUI arrowHintText;
     [SerializeField] private TextMeshProUGUI inputFeedbackText;
@@ -58,6 +62,9 @@ public class Level2_DustWall : MonoBehaviour
     private int clearedPixels;
     private int comboIndex;
     private bool dustClearing;
+    private bool humidityClearQueued;
+    private bool dustWasCleared;
+    private bool successLogged;
 
     private static readonly Key[] correctKeys =
         { Key.UpArrow, Key.UpArrow, Key.DownArrow, Key.DownArrow };
@@ -75,10 +82,15 @@ public class Level2_DustWall : MonoBehaviour
         clearedPixels = 0;
         comboIndex    = 0;
         dustTex       = null;
-        dustClearing  = false;
+        dustClearing  = dustWasCleared;
+        humidityClearQueued = false;
+
+        if (useArduinoHumidity && ArduinoBridge.Instance != null)
+            ArduinoBridge.Instance.RegisterHandler(0x10, HandleHumidity);
 
         if (joshiPrompt)           joshiPrompt.SetActive(false);
         if (dustWallPanel)         dustWallPanel.SetActive(false);
+        if (dustOverlay)           dustOverlay.gameObject.SetActive(!dustWasCleared);
         if (arrowPanel)            arrowPanel.SetActive(false);
         if (interactionPrompt)     interactionPrompt.SetActive(false);
         if (lockInteractionPrompt) lockInteractionPrompt.SetActive(false);
@@ -89,6 +101,12 @@ public class Level2_DustWall : MonoBehaviour
     void OnDisable()
     {
         state = State.Idle;
+        if (useArduinoHumidity && ArduinoBridge.Instance != null)
+        {
+            ArduinoBridge.Instance.Send(0x10, "STOP");
+            ArduinoBridge.Instance.UnregisterHandler(0x10, HandleHumidity);
+        }
+
         if (joshiPrompt)           joshiPrompt.SetActive(false);
         if (interactionPrompt)     interactionPrompt.SetActive(false);
         if (lockInteractionPrompt) lockInteractionPrompt.SetActive(false);
@@ -172,10 +190,23 @@ public class Level2_DustWall : MonoBehaviour
 
     void ActivateScratch()
     {
+        if (dustWasCleared)
+        {
+            state = State.WaitingLock;
+            if (instructionText) instructionText.gameObject.SetActive(false);
+            if (dustOverlay) dustOverlay.gameObject.SetActive(false);
+            if (dustWallPanel) dustWallPanel.SetActive(true);
+            return;
+        }
+
         state = State.Scratching;
         Cursor.visible   = true;
         Cursor.lockState = CursorLockMode.None;
         if (dustWallPanel) dustWallPanel.SetActive(true);
+        if (dustOverlay) dustOverlay.gameObject.SetActive(true);
+        if (instructionText) instructionText.gameObject.SetActive(true);
+        if (useArduinoHumidity && ArduinoBridge.Instance != null)
+            ArduinoBridge.Instance.Send(0x10, "START");
         StartCoroutine(BuildTexture());
     }
 
@@ -189,7 +220,7 @@ public class Level2_DustWall : MonoBehaviour
         int h = Mathf.Max(64, Mathf.RoundToInt(r.height));
 
         dustTex = new Texture2D(w, h, TextureFormat.RGBA32, false);
-        Color fill = new Color(0.55f, 0.45f, 0.28f, 1f);
+        Color fill = dustWasCleared ? Color.clear : new Color(0.55f, 0.45f, 0.28f, 1f);
         Color[] px = new Color[w * h];
         for (int i = 0; i < px.Length; i++) px[i] = fill;
         dustTex.SetPixels(px);
@@ -197,6 +228,13 @@ public class Level2_DustWall : MonoBehaviour
 
         dustOverlay.texture = dustTex;
         totalPixels = w * h;
+        clearedPixels = dustWasCleared ? totalPixels : 0;
+
+        if (humidityClearQueued)
+        {
+            humidityClearQueued = false;
+            ClearDustFromHumidity();
+        }
     }
 
     void HandleScratch()
@@ -243,17 +281,78 @@ public class Level2_DustWall : MonoBehaviour
 
         if ((float)clearedPixels / totalPixels >= revealThreshold)
         {
+            dustWasCleared = true;
             dustClearing = true;
             StartCoroutine(OnDustCleared());
         }
     }
 
+    void HandleHumidity(string payload)
+    {
+        if (!useArduinoHumidity || state != State.Scratching || dustClearing) return;
+        if (!IsTemperatureTrigger(payload)) return;
+
+        if (dustTex == null)
+        {
+            humidityClearQueued = true;
+            return;
+        }
+
+        ClearDustFromHumidity();
+    }
+
+    bool IsTemperatureTrigger(string payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload)) return false;
+
+        payload = payload.Trim();
+        if (payload.StartsWith("TEMP:", System.StringComparison.OrdinalIgnoreCase))
+            payload = payload[5..];
+        else if (payload.StartsWith("BLOW:", System.StringComparison.OrdinalIgnoreCase))
+            payload = payload[5..];
+        else if (payload.StartsWith("HUM:", System.StringComparison.OrdinalIgnoreCase))
+            payload = payload[4..];
+
+        return float.TryParse(payload,
+                              System.Globalization.NumberStyles.Float,
+                              System.Globalization.CultureInfo.InvariantCulture,
+                              out float value)
+               && value > temperatureClearThreshold;
+    }
+
+    void ClearDustFromHumidity()
+    {
+        if (dustTex == null || dustClearing) return;
+
+        Color[] clearPixels = new Color[dustTex.width * dustTex.height];
+        for (int i = 0; i < clearPixels.Length; i++)
+            clearPixels[i] = Color.clear;
+
+        dustTex.SetPixels(clearPixels);
+        dustTex.Apply();
+
+        clearedPixels = totalPixels;
+        dustWasCleared = true;
+        dustClearing = true;
+        StartCoroutine(OnDustCleared());
+    }
+
     IEnumerator OnDustCleared()
     {
         state = State.Idle;
+        if (!successLogged)
+        {
+            Debug.Log("success");
+            successLogged = true;
+        }
+
+        if (useArduinoHumidity && ArduinoBridge.Instance != null)
+            ArduinoBridge.Instance.Send(0x10, "STOP");
+
+        if (instructionText) instructionText.gameObject.SetActive(false);
+        if (dustOverlay) dustOverlay.gameObject.SetActive(false);
         yield return new WaitForSeconds(0.6f);
 
-        if (dustWallPanel) dustWallPanel.SetActive(false);
         Cursor.visible   = false;
         Cursor.lockState = CursorLockMode.Locked;
 
@@ -266,12 +365,15 @@ public class Level2_DustWall : MonoBehaviour
                 "Joshi: Merk dir die Sequenz. Das Schloss haengt am Eingang – geh hin und gib den Code ein!"
             }, () =>
             {
+                if (dustWallPanel) dustWallPanel.SetActive(false);
                 BigYahuDialogSystem.Instance.ResetSpeaker();
                 state = State.WaitingLock;
             });
         }
         else
         {
+            yield return new WaitForSeconds(1.5f);
+            if (dustWallPanel) dustWallPanel.SetActive(false);
             state = State.WaitingLock;
         }
     }
