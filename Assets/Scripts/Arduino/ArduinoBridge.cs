@@ -359,4 +359,8 @@ public class ArduinoBridge : MonoBehaviour
     [ContextMenu("Ping senden")]    void PingFromInspector()       => Ping();
     [ContextMenu("Trennen")]        void DisconnectFromInspector() => CloseConnections();
     [ContextMenu("Neu verbinden")]  void ReconnectFromInspector()  => TryConnect();
+
+    // Public API für Auto-Flash (Editor-Tool gibt den COM-Port frei und reconnectet)
+    public void Disconnect() => CloseConnections();
+    public void Reconnect()  => TryConnect();
 }

@@ -24,6 +24,7 @@ public static class ArduinoFlasher
     private const string PrefCli          = "ArduinoFlasher.CliPath";
     private const string PrefAutoFlash    = "ArduinoFlasher.AutoFlash";
     private const string PrefLastFlashFmt = "ArduinoFlasher.LastFlash.{0}";
+    private const string PrefCurrentSketch = "ArduinoFlasher.CurrentSketch"; // welcher Sketch liegt aktuell auf dem Board
 
     private const string DefaultPort = "COM3";
     private const string DefaultFqbn = "arduino:renesas_uno:unor4wifi";
@@ -53,6 +54,55 @@ public static class ArduinoFlasher
     {
         EditorApplication.playModeStateChanged += OnPlayModeChanged;
         EditorSceneManager.sceneOpened         += OnSceneOpened;
+        SceneManager.sceneLoaded               += OnRuntimeSceneLoaded;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Runtime: Szenenwechsel im Play-Mode → COM-Port freigeben → flash → reconnect
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static void OnRuntimeSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (!Application.isPlaying) return;
+        if (!AutoFlash) return;
+        if (!SceneToSketch.TryGetValue(scene.name, out string sketchFolder)) return;
+
+        // Skip wenn der korrekte Sketch schon auf dem Board ist UND .ino unverändert
+        string current = EditorPrefs.GetString(PrefCurrentSketch, "");
+        bool needsFlash = NeedsFlash(sketchFolder, out long inoMtime, out string prefKey, out _);
+        if (current == sketchFolder && !needsFlash)
+        {
+            Debug.Log($"[ArduinoFlasher] {sketchFolder} ist bereits auf dem Board → kein Flash.");
+            return;
+        }
+
+        Debug.Log($"[ArduinoFlasher] Runtime-Szenenwechsel → '{scene.name}' → flashe {sketchFolder}.");
+
+        var bridge = ArduinoBridge.Instance;
+        if (bridge != null) bridge.Disconnect();
+
+        // Synchroner Flash mit Pause + Progress-Bar (Spielzeit eingefroren)
+        float prevTimeScale = Time.timeScale;
+        Time.timeScale = 0f;
+
+        bool ok = FlashSync(sketchFolder, withProgress: true);
+
+        Time.timeScale = prevTimeScale;
+
+        if (ok)
+        {
+            EditorPrefs.SetString(PrefCurrentSketch, sketchFolder);
+            EditorPrefs.SetString(prefKey, inoMtime.ToString());
+        }
+
+        // UNO R4 braucht ~1 Sek nach Reset bevor der Port wieder bereit ist
+        if (bridge != null)
+        {
+            EditorApplication.delayCall += () =>
+            {
+                if (bridge != null) bridge.Reconnect();
+            };
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -218,6 +268,7 @@ public static class ArduinoFlasher
         {
             Debug.Log($"[ArduinoFlasher] ✓ Hintergrund: {sketch} → {Port} geflasht.");
             EditorPrefs.SetString(_bgPrefKey, _bgMtime.ToString());
+            EditorPrefs.SetString(PrefCurrentSketch, sketch);
         }
         else
         {
@@ -281,13 +332,14 @@ public static class ArduinoFlasher
             {
                 Debug.Log($"[ArduinoFlasher] ✓ {sketchFolder} → {Port} geflasht.");
 
-                // mtime auch beim Menü-Flash cachen (vermeidet doppeltes Auto-Flash)
+                // mtime + aktuellen Sketch cachen (vermeidet doppeltes Auto-Flash)
                 string inoPath = Path.Combine(sketchPath, sketchFolder + ".ino");
                 if (File.Exists(inoPath))
                 {
                     string key = string.Format(PrefLastFlashFmt, sketchFolder);
                     EditorPrefs.SetString(key, File.GetLastWriteTimeUtc(inoPath).ToFileTimeUtc().ToString());
                 }
+                EditorPrefs.SetString(PrefCurrentSketch, sketchFolder);
                 return true;
             }
 
@@ -347,8 +399,12 @@ public static class ArduinoFlasher
             {
                 foreach (var kv in SceneToSketch)
                     EditorPrefs.DeleteKey(string.Format(PrefLastFlashFmt, kv.Value));
+                EditorPrefs.DeleteKey(PrefCurrentSketch);
                 Debug.Log("[ArduinoFlasher] Flash-Cache geleert.");
             }
+
+            string current = EditorPrefs.GetString(PrefCurrentSketch, "(unbekannt)");
+            EditorGUILayout.LabelField($"Aktuell auf Board: {current}");
         }
     }
 }
