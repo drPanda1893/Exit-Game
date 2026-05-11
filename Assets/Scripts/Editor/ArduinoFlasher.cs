@@ -58,7 +58,13 @@ public static class ArduinoFlasher
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Runtime: Szenenwechsel im Play-Mode → COM-Port freigeben → flash → reconnect
+    // Runtime: Szenenwechsel im Play-Mode
+    //
+    // FlashSync() verweigert grundsätzlich den Dienst in Play Mode (Unity hält
+    // den COM-Port). Wir dürfen die Bridge hier also NICHT synchron trennen –
+    // SerialPort.Close() auf dem Main Thread blockiert unter Windows mehrere
+    // Sekunden und kann den Szenenübergang einfrieren / Unity crashen lassen.
+    // Stattdessen nur einen Hinweis loggen.
     // ─────────────────────────────────────────────────────────────────────────
 
     private static void OnRuntimeSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -67,42 +73,12 @@ public static class ArduinoFlasher
         if (!AutoFlash) return;
         if (!SceneToSketch.TryGetValue(scene.name, out string sketchFolder)) return;
 
-        // Skip wenn der korrekte Sketch schon auf dem Board ist UND .ino unverändert
         string current = EditorPrefs.GetString(PrefCurrentSketch, "");
-        bool needsFlash = NeedsFlash(sketchFolder, out long inoMtime, out string prefKey, out _);
-        if (current == sketchFolder && !needsFlash)
-        {
-            Debug.Log($"[ArduinoFlasher] {sketchFolder} ist bereits auf dem Board → kein Flash.");
-            return;
-        }
+        if (current == sketchFolder) return;
 
-        Debug.Log($"[ArduinoFlasher] Runtime-Szenenwechsel → '{scene.name}' → flashe {sketchFolder}.");
-
-        var bridge = ArduinoBridge.Instance;
-        if (bridge != null) bridge.Disconnect();
-
-        // Synchroner Flash mit Pause + Progress-Bar (Spielzeit eingefroren)
-        float prevTimeScale = Time.timeScale;
-        Time.timeScale = 0f;
-
-        bool ok = FlashSync(sketchFolder, withProgress: true);
-
-        Time.timeScale = prevTimeScale;
-
-        if (ok)
-        {
-            EditorPrefs.SetString(PrefCurrentSketch, sketchFolder);
-            EditorPrefs.SetString(prefKey, inoMtime.ToString());
-        }
-
-        // UNO R4 braucht ~1 Sek nach Reset bevor der Port wieder bereit ist
-        if (bridge != null)
-        {
-            EditorApplication.delayCall += () =>
-            {
-                if (bridge != null) bridge.Reconnect();
-            };
-        }
+        Debug.LogWarning(
+            $"[ArduinoFlasher] Szenenwechsel zu '{scene.name}' – auf dem Board liegt '{current}', " +
+            $"benötigt wird '{sketchFolder}'. Play stoppen und neu starten, um automatisch zu flashen.");
     }
 
     // ─────────────────────────────────────────────────────────────────────────
