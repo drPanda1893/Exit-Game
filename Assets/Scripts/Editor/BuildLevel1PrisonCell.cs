@@ -82,6 +82,17 @@ public class BuildLevel1PrisonCell : LevelBuilderBase
 
         AddBackgroundMusic(scene);
 
+        // ── Arduino Integration ────────────────────────────────────────────
+        GameObject arduinoGO = new GameObject("ArduinoBridge");
+        arduinoGO.AddComponent<ArduinoBridge>();
+        SceneManager.MoveGameObjectToScene(arduinoGO, scene);
+
+        Level1_KeypadBridge bridge = numpadPanel.AddComponent<Level1_KeypadBridge>();
+        SerializedObject bridgeSO = new UnityEditor.SerializedObject(bridge);
+        bridgeSO.FindProperty("numpadController").objectReferenceValue =
+            numpadPanel.GetComponent<NumpadController>();
+        bridgeSO.ApplyModifiedProperties();
+
         EditorSceneManager.SaveScene(scene);
         Debug.Log("Level 1 fertig gebaut.");
     }
