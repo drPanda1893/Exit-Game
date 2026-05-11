@@ -20,11 +20,17 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
     [MenuItem("Tools/Level 2/Rebuild Now (1-Klick)")]
     public static void BuildOneClick()
     {
+        BuildSilent();
+        UnityEditor.EditorUtility.DisplayDialog("Level 2",
+            "Wartungsraum gebaut + gespeichert.\nLevel2.unity ist jetzt komplett.", "OK");
+    }
+
+    /// <summary>Baut Level2 ohne Bestätigungs-Dialog (für Auto-Build aus anderen Editor-Skripten).</summary>
+    public static void BuildSilent()
+    {
         var win = ScriptableObject.CreateInstance<BuildLevel2MaintenanceRoom>();
         win.Build();
         Object.DestroyImmediate(win);
-        UnityEditor.EditorUtility.DisplayDialog("Level 2",
-            "Wartungsraum gebaut + gespeichert.\nLevel2.unity ist jetzt komplett.", "OK");
     }
 
     void OnGUI()
