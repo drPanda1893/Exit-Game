@@ -332,16 +332,36 @@ public static class ArduinoFlasher
 
         try
         {
-            if (withProgress) EditorUtility.DisplayProgressBar(
-                "Arduino Flash", $"Flashe {sketchFolder} → {Port}…", 0.5f);
+            // Windows .NET SerialPort.Close() gibt den Port verzögert frei → kurz warten,
+            // damit arduino-cli ihn öffnen kann. Bei "Serial port busy" einmal wiederholen.
+            const int maxAttempts = 3;
+            int proc_exit = -1;
+            string stdout = "", stderr = "";
 
-            using var proc = Process.Start(psi);
-            string stdout = proc.StandardOutput.ReadToEnd();
-            string stderr = proc.StandardError.ReadToEnd();
-            proc.WaitForExit();
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                if (withProgress) EditorUtility.DisplayProgressBar(
+                    "Arduino Flash",
+                    attempt == 1
+                        ? $"Flashe {sketchFolder} → {Port}…"
+                        : $"Versuch {attempt}/{maxAttempts} – Port {Port} noch belegt…",
+                    0.5f);
+
+                System.Threading.Thread.Sleep(attempt == 1 ? 800 : 1500);
+
+                using var proc = Process.Start(psi);
+                stdout = proc.StandardOutput.ReadToEnd();
+                stderr = proc.StandardError.ReadToEnd();
+                proc.WaitForExit();
+                proc_exit = proc.ExitCode;
+
+                if (proc_exit == 0) break;
+                if (!stderr.Contains("Serial port busy") && !stderr.Contains("opening port")) break;
+                Debug.LogWarning($"[ArduinoFlasher] Port {Port} busy (Versuch {attempt}/{maxAttempts}) – warte…");
+            }
 
             if (!string.IsNullOrWhiteSpace(stdout)) Debug.Log(stdout);
-            if (proc.ExitCode == 0)
+            if (proc_exit == 0)
             {
                 Debug.Log($"[ArduinoFlasher] ✓ {sketchFolder} → {Port} geflasht.");
 
@@ -356,7 +376,7 @@ public static class ArduinoFlasher
                 return true;
             }
 
-            Debug.LogError($"[ArduinoFlasher] ✗ Exit {proc.ExitCode}\n{stderr}");
+            Debug.LogError($"[ArduinoFlasher] ✗ Exit {proc_exit}\n{stderr}");
             return false;
         }
         catch (System.Exception ex)
