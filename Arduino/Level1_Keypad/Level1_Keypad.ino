@@ -1,43 +1,30 @@
 /*
- * ============================================================
- *  Big Yahu – Level 1 Keypad Interface
- *  Freenove Control Board V4 (Arduino Uno kompatibel)
- * ============================================================
+ * Big Yahu – Level 1 Keypad (Freenove Control Board V4)
  *
- *  Keypad-Layout (4x4):
- *    [ 1 ][ 2 ][ 3 ][ A ]
- *    [ 4 ][ 5 ][ 6 ][ B ]
- *    [ 7 ][ 8 ][ 9 ][ C ]
- *    [ * ][ 0 ][ # ][ D ]
+ * Wiring (D2–D9, rechts nach links):
+ *   D2=Col4  D3=Col3  D4=Col2  D5=Col1
+ *   D6=Row4  D7=Row3  D8=Row2  D9=Row1
  *
- *  Wiring – Anschlüsse von RECHTS nach LINKS: D2 bis D9
- *    D2=Col4  D3=Col3  D4=Col2  D5=Col1
- *    D6=Row4  D7=Row3  D8=Row2  D9=Row1
+ * Protokoll eingehend  (Unity → Arduino):
+ *   "FF:START\n"  → Keypad-Scan starten (Numpad geöffnet)
+ *   "FF:STOP\n"   → Keypad-Scan stoppen (Numpad geschlossen)
  *
- *  Warum D8/D4 problematisch sind (Freenove V4):
- *    D8 = Buzzer (aktiv HIGH)
- *    D4 = Relais (aktiv HIGH)
- *    Die Keypad-Library setzt Row-Pins nach dem Scan auf INPUT_PULLUP
- *    → D8 geht kurz HIGH → Buzzer piept.
- *    D4 als Col-Pin wird auf INPUT_PULLUP gezogen → Relais aktiviert.
- *    Fix: silenceBoard() nach jedem getKey()-Aufruf.
+ * Protokoll ausgehend  (Arduino → Unity):
+ *   "05:0"…"05:9"  Ziffer
+ *   "05:DEL"        * gedrückt
+ *   "05:ENT"        # gedrückt
+ *   "RDY"           Board bereit (nach Reset)
  *
- *  Protokoll (115200 Baud):
- *    "05:0"..."05:9"  Ziffer
- *    "05:DEL"         * gedrückt
- *    "05:ENT"         # gedrückt
- *
- *  Library: "Keypad" by Mark Stanley & Alexander Brevig
- * ============================================================
+ * D8 = Buzzer (aktiv HIGH), D4 = Relais (aktiv HIGH).
+ * Im Idle-Modus werden beide LOW gehalten → kein Piepen.
+ * Library: "Keypad" by Mark Stanley & Alexander Brevig
  */
 
 #include <Keypad.h>
 
-// ── Onboard-Konflikt-Pins (Freenove V4) ──────────────────────────────────
-#define BUZZER_PIN 8   // aktiv HIGH → muss nach Scan auf LOW gehalten werden
-#define RELAY_PIN  4   // aktiv HIGH → muss nach Scan auf LOW gehalten werden
+#define BUZZER_PIN 8
+#define RELAY_PIN  4
 
-// ── Matrix ────────────────────────────────────────────────────────────────
 const byte ROWS = 4;
 const byte COLS = 4;
 
@@ -48,70 +35,85 @@ char keys[ROWS][COLS] = {
   { '*', '0', '#', 'D' }
 };
 
-//             Row1  Row2        Row3  Row4
-byte rowPins[ROWS] = { 9,  BUZZER_PIN,  7,    6 };
-
-//             Col1  Col2       Col3  Col4
-byte colPins[COLS] = { 5,  RELAY_PIN,   3,    2 };
+byte rowPins[ROWS] = { 9, BUZZER_PIN, 7, 6 };
+byte colPins[COLS] = { 5, RELAY_PIN,  3, 2 };
 
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
-const unsigned long COOLDOWN_MS = 300;
-unsigned long lastKeyTime       = 0;
+bool scanning = false;
+String serialBuf = "";
 
-// ── Onboard-Komponenten deaktivieren ─────────────────────────────────────
-// Die Keypad-Library lässt D8 und D4 zwischen Scans auf INPUT_PULLUP (HIGH).
-// Diese Funktion zwingt sie sofort wieder auf LOW.
+// ── Buzzer + Relais ausschalten ───────────────────────────────────────────
 void silenceBoard()
 {
-  pinMode(BUZZER_PIN, OUTPUT);
-  digitalWrite(BUZZER_PIN, LOW);
-  pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, LOW);
+  pinMode(BUZZER_PIN, OUTPUT); digitalWrite(BUZZER_PIN, LOW);
+  pinMode(RELAY_PIN,  OUTPUT); digitalWrite(RELAY_PIN,  LOW);
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────
 void setup()
 {
-  silenceBoard();           // sofort deaktivieren, noch vor allem anderen
+  silenceBoard();
   Serial.begin(115200);
-  keypad.setDebounceTime(50);
-  keypad.setHoldTime(1000);
+  keypad.setDebounceTime(30);
+  keypad.setHoldTime(500);
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
-  delay(1500);              // warten bis Pins nach DTR-Reset stabil sind
-  silenceBoard();           // nochmal sicherstellen
+  delay(1500);
+  silenceBoard();
   Serial.println("RDY");
+}
+
+// ── Eingehende Unity-Befehle lesen ────────────────────────────────────────
+void handleSerial()
+{
+  while (Serial.available())
+  {
+    char c = Serial.read();
+    if (c == '\n')
+    {
+      serialBuf.trim();
+      if (serialBuf == "FF:START") { scanning = true;  }
+      if (serialBuf == "FF:STOP")  { scanning = false; silenceBoard(); }
+      serialBuf = "";
+    }
+    else if (serialBuf.length() < 32)
+    {
+      serialBuf += c;
+    }
+  }
 }
 
 // ── Loop ──────────────────────────────────────────────────────────────────
 void loop()
 {
+  handleSerial();
+
+  if (!scanning)
+  {
+    silenceBoard();   // Im Idle kein Piepen
+    return;
+  }
+
+  // Keypad scannen
   char key = keypad.getKey();
-  silenceBoard();           // sofort nach Scan: Buzzer + Relais aus
+
+  // Sofort nach Scan D8+D4 wieder LOW – verhindert Buzzer-Pulse
+  silenceBoard();
 
   if (!key) return;
 
-  unsigned long now = millis();
-  if (now - lastKeyTime < COOLDOWN_MS) return;
-  lastKeyTime = now;
-
+  // LED kurz an
   digitalWrite(LED_BUILTIN, HIGH);
-  delay(40);
+  delay(30);
   digitalWrite(LED_BUILTIN, LOW);
-  silenceBoard();           // auch nach LED-Delay sicherstellen
+  silenceBoard();   // auch nach LED-Delay
 
+  // Senden
   if (key >= '0' && key <= '9')
   {
-    Serial.print("05:");
-    Serial.println(key);
+    Serial.print("05:"); Serial.println(key);
   }
-  else if (key == '*')
-  {
-    Serial.println("05:DEL");
-  }
-  else if (key == '#')
-  {
-    Serial.println("05:ENT");
-  }
+  else if (key == '*')  { Serial.println("05:DEL"); }
+  else if (key == '#')  { Serial.println("05:ENT"); }
 }
