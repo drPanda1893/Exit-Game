@@ -23,10 +23,14 @@ public class BuildLevel6FinalGate : LevelBuilderBase
     public static void BuildSilent()
     {
         var w = CreateInstance<BuildLevel6FinalGate>();
-        typeof(BuildLevel6FinalGate)
-            .GetMethod("Build", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-            ?.Invoke(w, null);
-        DestroyImmediate(w);
+        try
+        {
+            typeof(BuildLevel6FinalGate)
+                .GetMethod("Build", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                ?.Invoke(w, null);
+        }
+        catch (System.Reflection.TargetInvocationException ex) { throw ex.InnerException ?? ex; }
+        finally { DestroyImmediate(w); }
     }
 
     void OnGUI()

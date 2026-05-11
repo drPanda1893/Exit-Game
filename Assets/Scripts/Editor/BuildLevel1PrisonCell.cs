@@ -22,10 +22,14 @@ public class BuildLevel1PrisonCell : LevelBuilderBase
     public static void BuildSilent()
     {
         var w = CreateInstance<BuildLevel1PrisonCell>();
-        typeof(BuildLevel1PrisonCell)
-            .GetMethod("BuildLevel1", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-            ?.Invoke(w, null);
-        DestroyImmediate(w);
+        try
+        {
+            typeof(BuildLevel1PrisonCell)
+                .GetMethod("BuildLevel1", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                ?.Invoke(w, null);
+        }
+        catch (System.Reflection.TargetInvocationException ex) { throw ex.InnerException ?? ex; }
+        finally { DestroyImmediate(w); }
     }
 
     void OnGUI()

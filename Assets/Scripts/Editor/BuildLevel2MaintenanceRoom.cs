@@ -1473,7 +1473,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
             exitSpotGO != null ? exitSpotGO.GetComponent<DustyWallSpot>() : null;
         dwso.FindProperty("dustOverlay").objectReferenceValue           = dustOverlayImg;
         dwso.FindProperty("useArduinoHumidity").boolValue               = true;
-        dwso.FindProperty("humidityClearThreshold").intValue            = 4;
+        dwso.FindProperty("temperatureClearThreshold").floatValue       = 28.5f;
         dwso.FindProperty("arrowHintText").objectReferenceValue         = arrowHintTMP;
         dwso.FindProperty("inputFeedbackText").objectReferenceValue     = feedbackTMP;
         dwso.FindProperty("instructionText").objectReferenceValue       = dustInstructTMP;

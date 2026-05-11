@@ -107,7 +107,7 @@ public static class EnsureLevel2Built
             }
             catch (System.Exception ex)
             {
-                Debug.LogError($"[EnsureAllLevelsBuilt] Auto-Build fehlgeschlagen für {path}: {ex.Message}\n" +
+                Debug.LogError($"[EnsureAllLevelsBuilt] Auto-Build fehlgeschlagen für {path}:\n{ex}\n" +
                                "Bitte manuell über Tools → Build Level X ausführen.");
                 anyFailed = true;
             }

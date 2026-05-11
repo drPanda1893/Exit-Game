@@ -20,10 +20,14 @@ public class BuildLevel4Computer : EditorWindow
     public static void BuildSilent()
     {
         var w = CreateInstance<BuildLevel4Computer>();
-        typeof(BuildLevel4Computer)
-            .GetMethod("Build", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-            ?.Invoke(w, null);
-        DestroyImmediate(w);
+        try
+        {
+            typeof(BuildLevel4Computer)
+                .GetMethod("Build", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                ?.Invoke(w, null);
+        }
+        catch (System.Reflection.TargetInvocationException ex) { throw ex.InnerException ?? ex; }
+        finally { DestroyImmediate(w); }
     }
 
     void OnGUI()

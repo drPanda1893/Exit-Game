@@ -17,10 +17,14 @@ public class BuildLevel3Library : EditorWindow
     public static void BuildSilent()
     {
         var w = CreateInstance<BuildLevel3Library>();
-        typeof(BuildLevel3Library)
-            .GetMethod("Build", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-            ?.Invoke(w, null);
-        DestroyImmediate(w);
+        try
+        {
+            typeof(BuildLevel3Library)
+                .GetMethod("Build", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                ?.Invoke(w, null);
+        }
+        catch (System.Reflection.TargetInvocationException ex) { throw ex.InnerException ?? ex; }
+        finally { DestroyImmediate(w); }
     }
 
     void OnGUI()
