@@ -223,6 +223,7 @@ public class BuildLevel1PrisonCell : LevelBuilderBase
         CreateFoldedJumpsuit(new Vector3(-1.55f, 0.57f, 0.5f), root);
         CreateNewspaper(new Vector3(1.1f, 0.74f, -1.55f), root);
         CreateToothbrush(new Vector3(1.78f, 0.97f, 1.55f), root);
+        CreateHexNote(new Vector3(1.28f, 0.756f, -1.15f), root);
 
         // ── Pipes ─────────────────────────────────────────────────────────────
         Material pipeMat = CreateMaterial(new Color(0.30f, 0.26f, 0.22f), 0.62f, 0.28f);
@@ -671,7 +672,7 @@ public class BuildLevel1PrisonCell : LevelBuilderBase
         GameObject codeGO = new GameObject("BlanketCode_66A");
         codeGO.transform.SetParent(g.transform);
         codeGO.transform.localPosition = new Vector3(0f, 0.572f, -0.08f); // knapp über Decke
-        codeGO.transform.localRotation = Quaternion.Euler(-90f, 180f, 0f);  // nach oben zeigend, korrekt ausgerichtet
+        codeGO.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);  // nach oben zeigend, korrekt ausgerichtet
         TextMeshPro tmp = codeGO.AddComponent<TextMeshPro>();
         tmp.text             = "66A";
         tmp.fontStyle        = FontStyles.Bold;
@@ -1033,6 +1034,38 @@ public class BuildLevel1PrisonCell : LevelBuilderBase
         cup.transform.localScale    = new Vector3(0.048f, 0.05f, 0.048f);
         cup.GetComponent<Renderer>().material = metalMat;
         DestroyImmediate(cup.GetComponent<Collider>());
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Hex note (cryptic hint that 66A is hexadecimal)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private void CreateHexNote(Vector3 pos, Transform root)
+    {
+        Material paperMat = CreateMaterial(new Color(0.78f, 0.75f, 0.62f), 0f, 0.05f);
+        GameObject paper = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        paper.name = "HexNote";
+        paper.transform.position = pos;
+        paper.transform.rotation = Quaternion.Euler(0f, 22f, 0f);
+        paper.transform.localScale = new Vector3(0.24f, 0.003f, 0.18f);
+        paper.GetComponent<Renderer>().material = paperMat;
+        DestroyImmediate(paper.GetComponent<Collider>());
+        paper.transform.SetParent(root);
+
+        GameObject textGO = new GameObject("HexNoteText");
+        textGO.transform.SetParent(root);
+        textGO.transform.position = pos + new Vector3(0, 0.006f, 0);
+        textGO.transform.rotation = Quaternion.Euler(-90f, 22f, 0f);
+        TextMeshPro tmp = textGO.AddComponent<TextMeshPro>();
+        tmp.text = "0x... → Dez.\nA = 10";
+        tmp.fontStyle = FontStyles.Bold;
+        tmp.alignment = TextAlignmentOptions.Center;
+        tmp.color = new Color(0.18f, 0.18f, 0.18f);
+        tmp.enableAutoSizing = true;
+        tmp.fontSizeMin = 0.04f;
+        tmp.fontSizeMax = 0.10f;
+        RectTransform rt = textGO.GetComponent<RectTransform>();
+        rt.sizeDelta = new Vector2(0.22f, 0.16f);
     }
 
     // ═══════════════════════════════════════════════════════════════════════

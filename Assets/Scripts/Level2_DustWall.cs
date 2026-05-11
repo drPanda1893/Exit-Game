@@ -1,61 +1,194 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 using TMPro;
 using UnityEngine.InputSystem;
 using System.Collections;
 
 /// <summary>
 /// Level 2 – Staubige Wand.
-/// Big Yahu erklärt den Ausbruchsplan.
-/// Spieler reibt mit der Maus Staub weg → versteckte Zahl erscheint.
-/// Wenn genug enthüllt → Weiter-Button erscheint.
+///
+/// State-Machine:
+///   Idle → WaitingJoshi → WaitingInteraction → Scratching
+///        → WaitingLock → ArrowCombo → WaitingExit → Done
+///
+/// Spieler drückt [E] auf Joshi → Intro-Dialog.
+/// Dann: Staubwand kratzen (65 %) → Schloss am Eingang → Combo ↑↑↓↓
+/// → Tür öffnet sich → Spieler geht hindurch → Level 3.
 /// </summary>
 public class Level2_DustWall : MonoBehaviour
 {
+    public static Level2_DustWall Instance { get; private set; }
+
+    [Header("Joshi NPC")]
+    [SerializeField] private DustyWallSpot joshiSpot;
+    [SerializeField] private GameObject    joshiPrompt;
+
+    [Header("Panels")]
+    [SerializeField] private GameObject dustWallPanel;
+    [SerializeField] private GameObject arrowPanel;
+    [SerializeField] private GameObject interactionPrompt;
+
+    [Header("3D Wand-Trigger")]
+    [SerializeField] private DustyWallSpot dustyWallSpot;
+
+    [Header("3D Schloss-Trigger")]
+    [SerializeField] private DustyWallSpot lockSpot;
+    [SerializeField] private GameObject    lockInteractionPrompt;
+    [SerializeField] private GameObject    entranceBorderGO;
+
+    [Header("Ausgang-Trigger")]
+    [SerializeField] private DustyWallSpot exitSpot;
+
     [Header("Scratch-Bereich")]
     [SerializeField] private RawImage dustOverlay;
     [SerializeField] private int brushRadius = 28;
     [SerializeField][Range(0f, 1f)] private float revealThreshold = 0.65f;
 
-    [Header("Versteckter Inhalt")]
-    [SerializeField] private TextMeshProUGUI revealedNumberText;
-    [SerializeField] private string hiddenNumber = "7";
-    [SerializeField] private GameObject continueButtonObj;
+    [Header("Pfeil-Combo")]
+    [SerializeField] private TextMeshProUGUI arrowHintText;
+    [SerializeField] private TextMeshProUGUI inputFeedbackText;
+    [SerializeField] private TextMeshProUGUI instructionText;
+
+    private enum State { Idle, WaitingJoshi, WaitingInteraction, Scratching, WaitingLock, ArrowCombo, WaitingExit, Done }
+    private State state = State.Idle;
 
     private Texture2D dustTex;
     private int totalPixels;
     private int clearedPixels;
-    private bool done;
+    private int comboIndex;
+    private bool dustClearing;
+
+    private static readonly Key[] correctKeys =
+        { Key.UpArrow, Key.UpArrow, Key.DownArrow, Key.DownArrow };
+    private static readonly string[] arrowSymbols = { "hoch", "hoch", "runter", "runter" };
+
+    // =========================================================================
+    // Lifecycle
+    // =========================================================================
+
+    void Awake() => Instance = this;
 
     void OnEnable()
     {
-        done = false;
+        state         = State.Idle;
         clearedPixels = 0;
-        dustTex = null;
+        comboIndex    = 0;
+        dustTex       = null;
+        dustClearing  = false;
 
-        if (continueButtonObj) continueButtonObj.SetActive(false);
-        if (revealedNumberText) revealedNumberText.text = string.Empty;
+        if (joshiPrompt)           joshiPrompt.SetActive(false);
+        if (dustWallPanel)         dustWallPanel.SetActive(false);
+        if (arrowPanel)            arrowPanel.SetActive(false);
+        if (interactionPrompt)     interactionPrompt.SetActive(false);
+        if (lockInteractionPrompt) lockInteractionPrompt.SetActive(false);
+    }
 
+    void Start() => state = State.WaitingJoshi;
+
+    void OnDisable()
+    {
+        state = State.Idle;
+        if (joshiPrompt)           joshiPrompt.SetActive(false);
+        if (interactionPrompt)     interactionPrompt.SetActive(false);
+        if (lockInteractionPrompt) lockInteractionPrompt.SetActive(false);
+    }
+
+    void Update()
+    {
+        switch (state)
+        {
+            case State.WaitingJoshi:        HandleWaitingJoshi();  break;
+            case State.WaitingInteraction:  HandleWaiting();       break;
+            case State.Scratching:          HandleScratch();       break;
+            case State.WaitingLock:         HandleWaitingLock();   break;
+            case State.ArrowCombo:          HandleArrowInput();    break;
+            case State.WaitingExit:         HandleWaitingExit();   break;
+        }
+    }
+
+    // =========================================================================
+    // Phase 0 – Joshi ansprechen
+    // =========================================================================
+
+    void HandleWaitingJoshi()
+    {
+        bool near = joshiSpot != null && joshiSpot.PlayerNearby;
+        if (joshiPrompt) joshiPrompt.SetActive(near);
+
+        if (!near) return;
+        if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
+        {
+            if (joshiPrompt) joshiPrompt.SetActive(false);
+            StartJoshiDialog();
+        }
+    }
+
+    void StartJoshiDialog()
+    {
+        if (BigYahuDialogSystem.Instance == null) { state = State.WaitingInteraction; return; }
+
+        BigYahuDialogSystem.Instance.SetSpeaker("Joshi");
         BigYahuDialogSystem.Instance.ShowDialog(new[]
         {
-            "Big Yahu: Psst – ich hab den Ausbruchsplan!",
-            "Big Yahu: Hinter dieser staubigen Wand ist eine geheime Zahl.",
-            "Big Yahu: Reibe den Staub mit der Maus weg!"
-        }, () => StartCoroutine(BuildTexture()));
+            "Joshi: Oh – du bist wach! Gut. Ich warte schon eine Weile auf jemanden.",
+            "Joshi: Weißt du... ich war schon mal kurz davor, hier rauszukommen. Hatte alles vorbereitet.",
+            "Joshi: Die Antwort steckt noch in diesen Wänden. Buchstäblich.",
+            "Joshi: Such nach dem, was die Zeit vergessen hat. Wo der Staub am dicksten liegt."
+        }, () =>
+        {
+            BigYahuDialogSystem.Instance.ResetSpeaker();
+            state = State.WaitingInteraction;
+        });
+    }
+
+    // =========================================================================
+    // Phase 1 – Wand suchen
+    // =========================================================================
+
+    void HandleWaiting()
+    {
+        // Schloss-Prompt ist schon sichtbar, aber noch nicht interaktiv
+        if (lockSpot != null && lockInteractionPrompt)
+            lockInteractionPrompt.SetActive(lockSpot.PlayerNearby);
+
+        if (dustyWallSpot == null) return;
+
+        bool nearWall = dustyWallSpot.PlayerNearby;
+        if (interactionPrompt) interactionPrompt.SetActive(nearWall);
+
+        if (!nearWall) return;
+        if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
+        {
+            if (interactionPrompt)     interactionPrompt.SetActive(false);
+            if (lockInteractionPrompt) lockInteractionPrompt.SetActive(false);
+            ActivateScratch();
+        }
+    }
+
+    // =========================================================================
+    // Phase 2 – Scratch
+    // =========================================================================
+
+    void ActivateScratch()
+    {
+        state = State.Scratching;
+        Cursor.visible   = true;
+        Cursor.lockState = CursorLockMode.None;
+        if (dustWallPanel) dustWallPanel.SetActive(true);
+        StartCoroutine(BuildTexture());
     }
 
     IEnumerator BuildTexture()
     {
-        // Warte auf Canvas-Layout-Update um korrekte Rect-Größe zu erhalten
         yield return new WaitForEndOfFrame();
+        if (dustOverlay == null) yield break;
 
         Rect r = dustOverlay.rectTransform.rect;
         int w = Mathf.Max(64, Mathf.RoundToInt(r.width));
         int h = Mathf.Max(64, Mathf.RoundToInt(r.height));
 
         dustTex = new Texture2D(w, h, TextureFormat.RGBA32, false);
-
-        // Sand-/Staubfarbe
         Color fill = new Color(0.55f, 0.45f, 0.28f, 1f);
         Color[] px = new Color[w * h];
         for (int i = 0; i < px.Length; i++) px[i] = fill;
@@ -66,66 +199,202 @@ public class Level2_DustWall : MonoBehaviour
         totalPixels = w * h;
     }
 
-    void Update()
+    void HandleScratch()
     {
-        if (done || dustTex == null) return;
+        if (dustTex == null) return;
 
         var mouse = Mouse.current;
         if (mouse == null || !mouse.leftButton.isPressed) return;
 
         Vector2 screenPos = mouse.position.ReadValue();
-        RectTransform rt = dustOverlay.rectTransform;
+        RectTransform rt  = dustOverlay.rectTransform;
         Canvas canvas = rt.GetComponentInParent<Canvas>();
-        Camera cam = canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : Camera.main;
+        Camera cam = (canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay)
+            ? null : Camera.main;
 
         if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(rt, screenPos, cam, out Vector2 local)) return;
 
         float nx = (local.x - rt.rect.xMin) / rt.rect.width;
         float ny = (local.y - rt.rect.yMin) / rt.rect.height;
-        int cx = Mathf.RoundToInt(nx * dustTex.width);
-        int cy = Mathf.RoundToInt(ny * dustTex.height);
-
-        Erase(cx, cy);
+        Erase(Mathf.RoundToInt(nx * dustTex.width), Mathf.RoundToInt(ny * dustTex.height));
     }
 
     void Erase(int cx, int cy)
     {
+        if (dustClearing) return;
         bool changed = false;
         int r2 = brushRadius * brushRadius;
 
         for (int x = cx - brushRadius; x <= cx + brushRadius; x++)
+        for (int y = cy - brushRadius; y <= cy + brushRadius; y++)
         {
-            for (int y = cy - brushRadius; y <= cy + brushRadius; y++)
+            if (x < 0 || x >= dustTex.width || y < 0 || y >= dustTex.height) continue;
+            if ((x - cx) * (x - cx) + (y - cy) * (y - cy) > r2) continue;
+            if (dustTex.GetPixel(x, y).a > 0f)
             {
-                if (x < 0 || x >= dustTex.width || y < 0 || y >= dustTex.height) continue;
-                if ((x - cx) * (x - cx) + (y - cy) * (y - cy) > r2) continue;
-
-                if (dustTex.GetPixel(x, y).a > 0f)
-                {
-                    dustTex.SetPixel(x, y, Color.clear);
-                    clearedPixels++;
-                    changed = true;
-                }
+                dustTex.SetPixel(x, y, Color.clear);
+                clearedPixels++;
+                changed = true;
             }
         }
 
         if (!changed) return;
         dustTex.Apply();
 
-        if (!done && (float)clearedPixels / totalPixels >= revealThreshold)
-            StartCoroutine(OnRevealed());
+        if ((float)clearedPixels / totalPixels >= revealThreshold)
+        {
+            dustClearing = true;
+            StartCoroutine(OnDustCleared());
+        }
     }
 
-    IEnumerator OnRevealed()
+    IEnumerator OnDustCleared()
     {
-        done = true;
-        if (revealedNumberText) revealedNumberText.text = hiddenNumber;
-        yield return new WaitForSeconds(0.5f);
+        state = State.Idle;
+        yield return new WaitForSeconds(0.6f);
 
-        BigYahuDialogSystem.Instance.ShowDialog(
-            $"Big Yahu: Ja! Die Zahl ist '{hiddenNumber}'! Merke sie dir gut!",
-            () => { if (continueButtonObj) continueButtonObj.SetActive(true); });
+        if (dustWallPanel) dustWallPanel.SetActive(false);
+        Cursor.visible   = false;
+        Cursor.lockState = CursorLockMode.Locked;
+
+        if (BigYahuDialogSystem.Instance != null)
+        {
+            BigYahuDialogSystem.Instance.SetSpeaker("Joshi");
+            BigYahuDialogSystem.Instance.ShowDialog(new[]
+            {
+                "Joshi: Da! Siehst du die Pfeile? Das ist mein Code.",
+                "Joshi: Merk dir die Sequenz. Das Schloss haengt am Eingang – geh hin und gib den Code ein!"
+            }, () =>
+            {
+                BigYahuDialogSystem.Instance.ResetSpeaker();
+                state = State.WaitingLock;
+            });
+        }
+        else
+        {
+            state = State.WaitingLock;
+        }
     }
 
-    public void OnContinueClicked() => GameManager.Instance.CompleteCurrentLevel();
+    // =========================================================================
+    // Phase 3 – Schloss suchen
+    // =========================================================================
+
+    void HandleWaitingLock()
+    {
+        if (lockSpot == null) { OpenArrowPanel(); return; }
+
+        if (lockInteractionPrompt)
+            lockInteractionPrompt.SetActive(lockSpot.PlayerNearby);
+
+        if (!lockSpot.PlayerNearby) return;
+
+        if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
+        {
+            if (lockInteractionPrompt) lockInteractionPrompt.SetActive(false);
+            OpenArrowPanel();
+        }
+    }
+
+    void OpenArrowPanel()
+    {
+        if (EventSystem.current) EventSystem.current.SetSelectedGameObject(null);
+        if (arrowPanel) arrowPanel.SetActive(true);
+        comboIndex = 0;
+        state      = State.ArrowCombo;
+        RefreshFeedback();
+    }
+
+    // =========================================================================
+    // Phase 4 – Arrow Combo
+    // =========================================================================
+
+    void HandleArrowInput()
+    {
+        var kb = Keyboard.current;
+        if (kb == null) return;
+
+        Key[] candidates = { Key.UpArrow, Key.DownArrow, Key.LeftArrow, Key.RightArrow };
+        foreach (var key in candidates)
+        {
+            if (!kb[key].wasPressedThisFrame) continue;
+
+            if (key == correctKeys[comboIndex])
+            {
+                comboIndex++;
+                RefreshFeedback();
+                if (comboIndex >= correctKeys.Length)
+                    StartCoroutine(OnComboDone());
+            }
+            else
+            {
+                comboIndex = 0;
+                RefreshFeedback();
+            }
+            break;
+        }
+    }
+
+    void RefreshFeedback()
+    {
+        if (inputFeedbackText == null) return;
+        // Nur bereits eingegebene Symbole anzeigen, kein Vorweg-Hint
+        string s = "";
+        for (int i = 0; i < comboIndex; i++)
+            s += $"<color=#00FF88>{arrowSymbols[i]}</color>  ";
+        inputFeedbackText.text = s.TrimEnd();
+    }
+
+    IEnumerator OnComboDone()
+    {
+        state = State.Idle;
+        if (inputFeedbackText)
+            inputFeedbackText.text = "<color=#00FF88>hoch  hoch  runter  runter  ✓</color>";
+        yield return new WaitForSeconds(0.8f);
+
+        if (arrowPanel) arrowPanel.SetActive(false);
+
+        // Eingangs-Sperre entfernen – Tür öffnet sich
+        if (entranceBorderGO) entranceBorderGO.SetActive(false);
+
+        if (BigYahuDialogSystem.Instance != null)
+        {
+            BigYahuDialogSystem.Instance.SetSpeaker("Joshi");
+            BigYahuDialogSystem.Instance.ShowDialog(new[]
+            {
+                "Joshi: Gut gemacht. Die Tuer steht offen.",
+                "Joshi: Noch ein Rat fuer den naechsten Raum: Nicht jedes Buch wurde geschrieben, um gelesen zu werden.",
+                "Joshi: Manche wurden geschrieben, um gefunden zu werden. Greif nach dem, das die Menschen seit Jahrtausenden suchen."
+            }, () =>
+            {
+                BigYahuDialogSystem.Instance.ResetSpeaker();
+                state = State.WaitingExit;
+            });
+        }
+        else
+        {
+            state = State.WaitingExit;
+        }
+    }
+
+    // =========================================================================
+    // Phase 5 – Ausgang: Spieler geht durch die Tür
+    // =========================================================================
+
+    void HandleWaitingExit()
+    {
+        if (exitSpot == null)
+        {
+            // Kein Trigger konfiguriert – sofort laden
+            GameManager.Instance?.CompleteCurrentLevel();
+            state = State.Done;
+            return;
+        }
+
+        if (exitSpot.PlayerNearby)
+        {
+            state = State.Done;
+            GameManager.Instance?.CompleteCurrentLevel();
+        }
+    }
 }

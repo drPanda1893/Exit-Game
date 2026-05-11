@@ -46,9 +46,20 @@ public class BuildLevel4Computer : EditorWindow
         camGO.gameObject.AddComponent<AudioListener>();
         SceneManager.MoveGameObjectToScene(camGO, scene);
 
-        // GameManager und BigYahuDialogSystem werden NICHT in die Standalone-Szene eingefügt –
-        // sie kommen via DontDestroyOnLoad aus dem vorherigen Level oder fehlen beim direkten Test
-        // (Level4_StealthMinigame startet ohne Dialog-System trotzdem korrekt dank Null-Checks)
+        // GameManager – nötig wenn Level 4 direkt gestartet wird (kein DontDestroyOnLoad-Carry)
+        var gmGO = new GameObject("GameManager");
+        var gm   = gmGO.AddComponent<GameManager>();
+        var gmSo = new UnityEditor.SerializedObject(gm);
+        var levelNames = gmSo.FindProperty("levelSceneNames");
+        levelNames.arraySize = 6;
+        levelNames.GetArrayElementAtIndex(0).stringValue = "Level1";
+        levelNames.GetArrayElementAtIndex(1).stringValue = "Level2";
+        levelNames.GetArrayElementAtIndex(2).stringValue = "Level3";
+        levelNames.GetArrayElementAtIndex(3).stringValue = "Level4";
+        levelNames.GetArrayElementAtIndex(4).stringValue = "Level5";
+        levelNames.GetArrayElementAtIndex(5).stringValue = "Level6";
+        gmSo.ApplyModifiedPropertiesWithoutUndo();
+        SceneManager.MoveGameObjectToScene(gmGO, scene);
 
         // Canvas
         var canvasGO = new GameObject("Level4Canvas");

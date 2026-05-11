@@ -49,6 +49,21 @@ public class BuildLevel3Library : EditorWindow
         follow.fixedWorldPosition = new Vector3(0f, 1.8f, -4.4f);
         SceneManager.MoveGameObjectToScene(camGO, scene);
 
+        // GameManager – nötig wenn Level 3 direkt gestartet wird
+        var gmGO = new GameObject("GameManager");
+        var gm   = gmGO.AddComponent<GameManager>();
+        var gmSo = new UnityEditor.SerializedObject(gm);
+        var levelNames = gmSo.FindProperty("levelSceneNames");
+        levelNames.arraySize = 6;
+        levelNames.GetArrayElementAtIndex(0).stringValue = "Level1";
+        levelNames.GetArrayElementAtIndex(1).stringValue = "Level2";
+        levelNames.GetArrayElementAtIndex(2).stringValue = "Level3";
+        levelNames.GetArrayElementAtIndex(3).stringValue = "Level4";
+        levelNames.GetArrayElementAtIndex(4).stringValue = "Level5";
+        levelNames.GetArrayElementAtIndex(5).stringValue = "Level6";
+        gmSo.ApplyModifiedPropertiesWithoutUndo();
+        SceneManager.MoveGameObjectToScene(gmGO, scene);
+
         // Umgebung
         var root = new GameObject("Environment");
         SceneManager.MoveGameObjectToScene(root, scene);
