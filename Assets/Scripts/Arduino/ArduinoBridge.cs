@@ -1,105 +1,111 @@
+using UnityEngine;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.IO.Ports;
 using System.Net;
 using System.Net.Sockets;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
-using UnityEngine;
 
 /// <summary>
-/// Singleton – manages a background serial (or TCP emulator) thread for Arduino communication.
-/// Dispatches parsed events to the Unity main thread via a thread-safe queue.
-/// Per CLAUDE.md §4: reads on background thread only; no blocking in Update().
+/// Singleton – verwaltet Serial- oder TCP-Kommunikation mit dem Arduino.
+/// Liest auf einem Hintergrund-Thread; dispatcht Events auf den Main Thread.
 ///
-/// TCP Emulator Mode:
-///   Enable "Use Tcp Emulator" in Inspector, then run Arduino/emulator.py in VSCode.
-///   No virtual COM port or hardware required.
+/// Protokoll:  "XX:payload\n"  (XX = 2-stelliger Hex-Befehlscode)
+///
+/// Verwendung:
+///   ArduinoBridge.Instance.RegisterHandler(0x05, payload => { ... });
+///   ArduinoBridge.Instance.Send(0xFF, "START");
+///
+/// TCP-Emulator-Modus:
+///   "Use Tcp Emulator" im Inspector aktivieren, dann Arduino/emulator.py starten.
+///   Kein COM-Port oder Hardware nötig.
 /// </summary>
 public class ArduinoBridge : MonoBehaviour
 {
     public static ArduinoBridge Instance { get; private set; }
 
     [Header("Serial Port")]
-    [SerializeField] private string portName       = "COM3";
-    [SerializeField] private int    baudRate       = 9600;
-    [SerializeField] private float  reconnectDelay = 3f;
+    [SerializeField] private string portName    = "COM3";
+    [SerializeField] private int    baudRate    = 115200;
+    [SerializeField] private bool   autoConnect = true;
 
-    [Header("TCP Emulator (no hardware needed)")]
+    [Header("TCP Emulator (kein Hardware nötig)")]
     [SerializeField] private bool useTcpEmulator = false;
     [SerializeField] private int  tcpPort        = 12345;
 
-    [Header("Fallback")]
-    [SerializeField] private bool arduinoFallback = true;
+    [Header("Reconnect")]
+    [SerializeField] private float reconnectDelay = 3f;
 
-    // ── Events (fired on main thread) ─────────────────────────────────────
-    /// <summary>L1 Keypad – values: "0"–"9", "DEL", "ENT".</summary>
-    public event Action<string> OnKeypadKey;
+    [Header("Debug")]
+    [SerializeField] private bool logIncoming = true;
+    [SerializeField] private bool logOutgoing = false;
 
-    /// <summary>L2 Humidity – value: 0–100.</summary>
-    public event Action<int> OnHumidity;
+    // ── Interne Zustand ───────────────────────────────────────────────────────
 
-    /// <summary>L3 Color – value: hex string or color name.</summary>
-    public event Action<string> OnColor;
-
-    // ── Internal ──────────────────────────────────────────────────────────
-    private SerialPort  _port;
-    private TcpListener _tcpListener;
-    private TcpClient   _tcpClient;
+    private SerialPort   _port;
+    private TcpListener  _tcpListener;
+    private TcpClient    _tcpClient;
     private StreamReader _tcpReader;
 
     private Thread        _thread;
     private volatile bool _running;
     private float         _retryTimer;
 
-    private readonly Queue<Action> _dispatch     = new Queue<Action>();
-    private readonly object        _dispatchLock = new object();
+    private readonly ConcurrentQueue<(byte cmd, string payload)> _incoming = new();
+    private readonly Dictionary<byte, List<Action<string>>>      _handlers = new();
 
-    // ═════════════════════════════════════════════════════════════════════
+    public bool   IsConnected => useTcpEmulator
+        ? (_tcpClient != null && _tcpClient.Connected && (_thread?.IsAlive ?? false))
+        : (_port != null && _port.IsOpen && (_thread?.IsAlive ?? false));
+
+    public string PortName => portName;
+
+    public event Action<bool> OnConnectionChanged;
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     void Awake()
     {
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
         DontDestroyOnLoad(gameObject);
-        TryConnect();
+    }
+
+    void Start()
+    {
+        if (autoConnect) TryConnect();
     }
 
     void Update()
     {
-        FlushDispatch();
+        while (_incoming.TryDequeue(out var msg))
+        {
+            if (_handlers.TryGetValue(msg.cmd, out var list))
+                foreach (var h in list) h?.Invoke(msg.payload);
+        }
 
-        if (!IsConnected())
+        if (!IsConnected)
         {
             _retryTimer -= Time.deltaTime;
             if (_retryTimer <= 0f) TryConnect();
         }
     }
 
-    // ── Connection ────────────────────────────────────────────────────────
+    void OnApplicationQuit() => CloseConnections();
+    void OnDestroy()         => CloseConnections();
 
-    bool IsConnected()
-    {
-        if (useTcpEmulator)
-            return _tcpClient != null && _tcpClient.Connected && (_thread?.IsAlive ?? false);
-        return _port != null && _port.IsOpen && (_thread?.IsAlive ?? false);
-    }
-
-    /// <summary>Public accessor so Inspector buttons / other scripts can check.</summary>
-    public bool Connected => IsConnected();
+    // ── Verbindung ────────────────────────────────────────────────────────────
 
     void TryConnect()
     {
         _retryTimer = reconnectDelay;
         CloseConnections();
 
-        if (useTcpEmulator)
-            StartTcpListener();
-        else
-            OpenSerialPort();
+        if (useTcpEmulator) StartTcpListener();
+        else                OpenSerialPort();
     }
-
-    // ── Serial ────────────────────────────────────────────────────────────
 
     void OpenSerialPort()
     {
@@ -107,9 +113,11 @@ public class ArduinoBridge : MonoBehaviour
         {
             _port = new SerialPort(portName, baudRate)
             {
-                ReadTimeout  = 500,
+                ReadTimeout  = 1000,
                 WriteTimeout = 500,
-                NewLine      = "\n"
+                NewLine      = "\n",
+                DtrEnable    = true,
+                RtsEnable    = true
             };
             _port.Open();
 
@@ -117,34 +125,16 @@ public class ArduinoBridge : MonoBehaviour
             _thread  = new Thread(SerialReadLoop) { IsBackground = true, Name = "ArduinoSerial" };
             _thread.Start();
 
-            Debug.Log($"[ArduinoBridge] Serial connected → {portName} @ {baudRate}");
+            Debug.Log($"[ArduinoBridge] Verbunden: {portName} @ {baudRate} Baud");
+            OnConnectionChanged?.Invoke(true);
+            StartCoroutine(AutoPingRoutine());
         }
         catch (Exception ex)
         {
-            Debug.LogWarning($"[ArduinoBridge] Cannot open {portName}: {ex.Message}");
+            Debug.LogWarning($"[ArduinoBridge] Verbindungsfehler ({portName}): {ex.Message}");
+            _port = null;
         }
     }
-
-    void SerialReadLoop()
-    {
-        while (_running && _port != null && _port.IsOpen)
-        {
-            try
-            {
-                string line = _port.ReadLine();
-                if (!string.IsNullOrWhiteSpace(line))
-                    ParseLine(line.Trim());
-            }
-            catch (TimeoutException) { /* normal – keep looping */ }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"[ArduinoBridge] Serial read error: {ex.Message}");
-                break;
-            }
-        }
-    }
-
-    // ── TCP Emulator ──────────────────────────────────────────────────────
 
     void StartTcpListener()
     {
@@ -152,7 +142,7 @@ public class ArduinoBridge : MonoBehaviour
         {
             _tcpListener = new TcpListener(IPAddress.Loopback, tcpPort);
             _tcpListener.Start();
-            Debug.Log($"[ArduinoBridge] TCP emulator waiting on port {tcpPort} — run Arduino/emulator.py");
+            Debug.Log($"[ArduinoBridge] TCP-Emulator wartet auf Port {tcpPort} — starte Arduino/emulator.py");
 
             _running = true;
             _thread  = new Thread(TcpAcceptLoop) { IsBackground = true, Name = "ArduinoTCP" };
@@ -160,53 +150,19 @@ public class ArduinoBridge : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogWarning($"[ArduinoBridge] TCP listen failed on port {tcpPort}: {ex.Message}");
+            Debug.LogWarning($"[ArduinoBridge] TCP-Listener fehlgeschlagen (Port {tcpPort}): {ex.Message}");
         }
     }
-
-    void TcpAcceptLoop()
-    {
-        try
-        {
-            // Block until emulator.py connects
-            _tcpClient = _tcpListener.AcceptTcpClient();
-            _tcpReader = new StreamReader(_tcpClient.GetStream());
-            Enqueue(() => Debug.Log("[ArduinoBridge] Emulator connected via TCP"));
-
-            while (_running && _tcpClient.Connected)
-            {
-                try
-                {
-                    string line = _tcpReader.ReadLine();
-                    if (line == null) break; // connection closed
-                    if (!string.IsNullOrWhiteSpace(line))
-                        ParseLine(line.Trim());
-                }
-                catch (Exception ex)
-                {
-                    Enqueue(() => Debug.LogWarning($"[ArduinoBridge] TCP read error: {ex.Message}"));
-                    break;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            if (_running)
-                Enqueue(() => Debug.LogWarning($"[ArduinoBridge] TCP accept error: {ex.Message}"));
-        }
-    }
-
-    // ── Cleanup ───────────────────────────────────────────────────────────
 
     void CloseConnections()
     {
         _running = false;
-        try { _thread?.Join(300); } catch { /* ignored */ }
+        try { _thread?.Join(300); } catch { }
 
-        try { _tcpReader?.Close(); }   catch { /* ignored */ }
-        try { _tcpClient?.Close(); }   catch { /* ignored */ }
-        try { _tcpListener?.Stop(); }  catch { /* ignored */ }
-        try { if (_port?.IsOpen == true) _port.Close(); } catch { /* ignored */ }
+        try { _tcpReader?.Close(); }  catch { }
+        try { _tcpClient?.Close(); }  catch { }
+        try { _tcpListener?.Stop(); } catch { }
+        try { if (_port?.IsOpen == true) _port.Close(); _port?.Dispose(); } catch { }
 
         _port        = null;
         _tcpReader   = null;
@@ -215,49 +171,148 @@ public class ArduinoBridge : MonoBehaviour
         _thread      = null;
     }
 
-    void OnApplicationQuit() => CloseConnections();
-    void OnDestroy()         => CloseConnections();
+    // ── Read-Loops ────────────────────────────────────────────────────────────
 
-    // ── Protocol Parser ───────────────────────────────────────────────────
-    // Format:  KEY:<key>  |  HUMIDITY:<0-100>  |  COLOR:<name>
-
-    void ParseLine(string line)
+    void SerialReadLoop()
     {
-        if (line.StartsWith("KEY:", StringComparison.Ordinal))
+        while (_running && _port != null && _port.IsOpen)
         {
-            string key = line.Substring(4);
-            Enqueue(() => OnKeypadKey?.Invoke(key));
-            return;
+            try
+            {
+                string line = _port.ReadLine();
+                if (!string.IsNullOrWhiteSpace(line)) ParseAndEnqueue(line.Trim());
+            }
+            catch (TimeoutException) { }
+            catch (Exception ex)
+            {
+                if (_running) Debug.LogWarning($"[ArduinoBridge] Serial-Fehler: {ex.Message}");
+                break;
+            }
         }
+        if (_running) { _running = false; _incoming.Enqueue((0xFE, "disconnected")); }
+    }
 
-        if (line.StartsWith("HUMIDITY:", StringComparison.Ordinal))
+    void TcpAcceptLoop()
+    {
+        try
         {
-            if (int.TryParse(line.Substring(9), out int h))
-                Enqueue(() => OnHumidity?.Invoke(h));
-            return;
+            _tcpClient = _tcpListener.AcceptTcpClient();
+            _tcpReader = new StreamReader(_tcpClient.GetStream());
+            _incoming.Enqueue((0xFD, "tcp-connected"));
+
+            while (_running && _tcpClient.Connected)
+            {
+                try
+                {
+                    string line = _tcpReader.ReadLine();
+                    if (line == null) break;
+                    if (!string.IsNullOrWhiteSpace(line)) ParseAndEnqueue(line.Trim());
+                }
+                catch (Exception ex)
+                {
+                    if (_running) _incoming.Enqueue((0xFE, $"tcp-error:{ex.Message}"));
+                    break;
+                }
+            }
         }
-
-        if (line.StartsWith("COLOR:", StringComparison.Ordinal))
+        catch (Exception ex)
         {
-            string col = line.Substring(6);
-            Enqueue(() => OnColor?.Invoke(col));
-            return;
+            if (_running) _incoming.Enqueue((0xFE, $"tcp-accept:{ex.Message}"));
         }
     }
 
-    // ── Main-thread Dispatch ──────────────────────────────────────────────
+    // ── Protokoll-Parser ──────────────────────────────────────────────────────
 
-    void Enqueue(Action action)
+    void ParseAndEnqueue(string line)
     {
-        lock (_dispatchLock) _dispatch.Enqueue(action);
-    }
+        int colon = line.IndexOf(':');
+        if (colon < 1) return;
 
-    void FlushDispatch()
-    {
-        lock (_dispatchLock)
+        string hexPart = line[..colon];
+        string payload = line[(colon + 1)..];
+
+        if (byte.TryParse(hexPart,
+                System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out byte cmd))
         {
-            while (_dispatch.Count > 0)
-                _dispatch.Dequeue()?.Invoke();
+            if (logIncoming) Debug.Log($"[ArduinoBridge] ← {line}");
+            _incoming.Enqueue((cmd, payload));
+        }
+        else
+        {
+            Debug.LogWarning($"[ArduinoBridge] Unbekanntes Format: '{line}'");
         }
     }
+
+    // ── Handler-Registrierung ─────────────────────────────────────────────────
+
+    public void RegisterHandler(byte cmdId, Action<string> handler)
+    {
+        if (!_handlers.ContainsKey(cmdId))
+            _handlers[cmdId] = new List<Action<string>>();
+        if (!_handlers[cmdId].Contains(handler))
+            _handlers[cmdId].Add(handler);
+    }
+
+    public void UnregisterHandler(byte cmdId, Action<string> handler)
+    {
+        if (_handlers.TryGetValue(cmdId, out var list))
+            list.Remove(handler);
+    }
+
+    // ── Senden ────────────────────────────────────────────────────────────────
+
+    public void Send(byte cmdId, string data = "")
+    {
+        string line = $"{cmdId:X2}:{data}\n";
+
+        if (useTcpEmulator)
+        {
+            if (_tcpClient == null || !_tcpClient.Connected)
+            {
+                Debug.LogWarning("[ArduinoBridge] TCP-Emulator nicht verbunden.");
+                return;
+            }
+            try
+            {
+                byte[] bytes = System.Text.Encoding.UTF8.GetBytes(line);
+                _tcpClient.GetStream().Write(bytes, 0, bytes.Length);
+                if (logOutgoing) Debug.Log($"[ArduinoBridge] → {line.TrimEnd()}");
+            }
+            catch (Exception ex) { Debug.LogWarning($"[ArduinoBridge] TCP-Sende-Fehler: {ex.Message}"); }
+            return;
+        }
+
+        if (_port == null || !_port.IsOpen)
+        {
+            Debug.LogWarning("[ArduinoBridge] Senden fehlgeschlagen – nicht verbunden.");
+            return;
+        }
+        try
+        {
+            _port.Write(line);
+            if (logOutgoing) Debug.Log($"[ArduinoBridge] → {line.TrimEnd()}");
+        }
+        catch (Exception ex) { Debug.LogWarning($"[ArduinoBridge] Sende-Fehler: {ex.Message}"); }
+    }
+
+    // ── Hilfsmethoden ─────────────────────────────────────────────────────────
+
+    System.Collections.IEnumerator AutoPingRoutine()
+    {
+        yield return new WaitForSeconds(1.2f);
+        if (IsConnected) Send(0xFF, "ping");
+    }
+
+    public bool Ping()
+    {
+        if (!IsConnected) return false;
+        Send(0xFF, "ping");
+        return true;
+    }
+
+    [ContextMenu("Ping senden")] void PingFromInspector()       => Ping();
+    [ContextMenu("Trennen")]     void DisconnectFromInspector() => CloseConnections();
+    [ContextMenu("Neu verbinden")] void ReconnectFromInspector() => TryConnect();
 }
