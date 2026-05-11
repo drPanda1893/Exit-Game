@@ -20,6 +20,18 @@ public class Level1_Cell : MonoBehaviour
     private const string SOLUTION = "1642";
     private string input = string.Empty;
 
+    void OnEnable()
+    {
+        if (ArduinoBridge.Instance != null)
+            ArduinoBridge.Instance.OnKeypadKey += HandleArduinoKey;
+    }
+
+    void OnDisable()
+    {
+        if (ArduinoBridge.Instance != null)
+            ArduinoBridge.Instance.OnKeypadKey -= HandleArduinoKey;
+    }
+
     void Start()
     {
         // Dialog beim Betreten des Levels
@@ -28,6 +40,27 @@ public class Level1_Cell : MonoBehaviour
 
         numpadPanel.SetActive(false);
         stoneButton.onClick.AddListener(OpenNumpad);
+    }
+
+    // ── Arduino Keypad Input ──────────────────────────────────────────────
+
+    void HandleArduinoKey(string key)
+    {
+        if (!numpadPanel.activeSelf) return;
+
+        switch (key)
+        {
+            case "DEL":
+                PressDelete();
+                break;
+            case "ENT":
+                // Auto-evaluation already triggers at 4 digits – ENT reserved for future use
+                break;
+            default:
+                if (key.Length == 1 && key[0] >= '0' && key[0] <= '9')
+                    PressDigit(key);
+                break;
+        }
     }
 
     public void OpenNumpad()

@@ -150,7 +150,7 @@ public class BuildLevel4Computer : EditorWindow
         BuildWallBorder(floor.transform);
 
         // Hindernisse (Betonblöcke)
-        BuildObstacles(floor.transform);
+        var wallRTs = BuildObstacles(floor.transform);
 
         // === Spieler ===
         var playerGO = new GameObject("Player");
@@ -164,17 +164,18 @@ public class BuildLevel4Computer : EditorWindow
         var guards     = new List<RectTransform>();
         var guardData  = new (Vector2 pos, Vector2 dir)[]
         {
-            (new Vector2(  0f,  220f), Vector2.right),
-            (new Vector2(-180f,  20f), Vector2.up),
-            (new Vector2( 220f, -80f), Vector2.right),
-            (new Vector2( 50f, -180f), Vector2.up),
+            (new Vector2(  0f,   220f), Vector2.right),   // 0 H – oberer Korridor
+            (new Vector2(-180f,   20f), Vector2.up),      // 1 V – linker Flügel
+            (new Vector2( 220f,  -80f), Vector2.right),   // 2 Diag – rechte Mitte
+            (new Vector2( 240f, -215f), Vector2.up),      // 3 Ellipse – sperrt rechten Unterkorridor
+            (new Vector2( 310f,  185f), Vector2.right),   // 4 Chase – bewacht den Schuppen
         };
         for (int i = 0; i < guardData.Length; i++)
         {
             var gGO = new GameObject($"Guard_{i}");
             var gRT = gGO.gameObject.AddComponent<RectTransform>();
             gRT.SetParent(floor.transform, false);
-            gRT.sizeDelta        = new Vector2(32f, 32f);
+            gRT.sizeDelta        = new Vector2(40f, 40f);
             gRT.anchoredPosition = guardData[i].pos;
             BuildGuardIcon(gRT, i);
             guards.Add(gRT);
@@ -215,6 +216,7 @@ public class BuildLevel4Computer : EditorWindow
         stealth.GetType().GetField("statusText", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(stealth, statusTxt);
         stealth.GetType().GetField("playArea",   System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(stealth, floor);
         stealth.GetType().GetField("guards",     System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(stealth, guards);
+        stealth.GetType().GetField("walls",      System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(stealth, wallRTs);
 
         return (floor, stealth);
     }
@@ -263,7 +265,7 @@ public class BuildLevel4Computer : EditorWindow
         }
     }
 
-    void BuildObstacles(Transform parent)
+    List<RectTransform> BuildObstacles(Transform parent)
     {
         // Betonblöcke – bilden Gänge für das Stealth-Spiel
         Color blockColor  = new Color(0.22f, 0.24f, 0.30f);
@@ -272,25 +274,35 @@ public class BuildLevel4Computer : EditorWindow
 
         var blocks = new (Vector2 pos, Vector2 size, string name)[]
         {
-            // Horizontale Mauern
+            // Horizontale Mauern (Mitte)
             (new Vector2(-100f,  170f), new Vector2(220f, 30f), "BlockH1"),
             (new Vector2( 130f,  -30f), new Vector2(180f, 30f), "BlockH2"),
             (new Vector2(-220f, -100f), new Vector2(160f, 30f), "BlockH3"),
             (new Vector2(  60f, -200f), new Vector2(200f, 30f), "BlockH4"),
+            // Vertikale Mauern
             (new Vector2( 280f,  100f), new Vector2(30f,  170f), "BlockV1"),
             (new Vector2(-300f,   60f), new Vector2(30f,  160f), "BlockV2"),
             (new Vector2(  10f,   50f), new Vector2(30f,  180f), "BlockV3"),
+            // ── NEUE SPERREN: Unterer-Rechter-Pfad ──────────────────────
+            // Lange horizontale Sperre unten-rechts (sperrt einfachen Bodenpfad)
+            (new Vector2( 220f, -265f), new Vector2(220f,  24f), "BottomBarrier"),
+            // Vertikale Sperre rechte Seite (sperrt direkten Aufstieg)
+            (new Vector2( 340f, -115f), new Vector2(  24f, 175f), "RightBarrier"),
+            // Kleines Hindernis oben-rechts vor Schuppen (erzwingt Kurve)
+            (new Vector2( 390f,  130f), new Vector2(  60f,  24f), "GoalApproach"),
             // Einzelne Blöcke als Deckung
             (new Vector2(-180f,  240f), new Vector2(50f,  50f), "Cover1"),
-            (new Vector2( 200f, -240f), new Vector2(50f,  50f), "Cover2"),
+            (new Vector2( 130f, -285f), new Vector2(45f,  45f), "Cover2"),   // näher an Spieler-Start
             (new Vector2(-350f, -200f), new Vector2(50f,  50f), "Cover3"),
             (new Vector2( 350f,  -80f), new Vector2(50f,  50f), "Cover4"),
         };
 
+        var wallRTs = new List<RectTransform>();
         foreach (var (pos, size, name) in blocks)
         {
             var block = MakeAnchored(parent, name, pos, size);
             block.gameObject.AddComponent<Image>().color = blockColor;
+            wallRTs.Add(block);
 
             // Highlight oben und links (3D-Effekt)
             MakeAnchored(block, "Light", new Vector2(-size.x*0.5f + 2f, size.y*0.5f - 2f),
@@ -309,6 +321,7 @@ public class BuildLevel4Computer : EditorWindow
                 }
             }
         }
+        return wallRTs;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -339,36 +352,218 @@ public class BuildLevel4Computer : EditorWindow
 
     void BuildGuardIcon(RectTransform parent, int index)
     {
-        Color[] guardColors =
+        Color[] accentColors =
         {
-            new Color(0.95f, 0.20f, 0.15f),
-            new Color(0.95f, 0.45f, 0.10f),
-            new Color(0.85f, 0.15f, 0.30f),
-            new Color(0.75f, 0.10f, 0.50f),
+            new Color(0.90f, 0.78f, 0.08f),
+            new Color(0.95f, 0.48f, 0.04f),
+            new Color(0.15f, 0.80f, 0.30f),
+            new Color(0.45f, 0.75f, 1.00f),
+            new Color(1.00f, 0.10f, 0.08f),
         };
-        Color col = guardColors[index % guardColors.Length];
+        Color ac  = accentColors[index % accentColors.Length];
 
-        // Gefahren-Aura
-        var aura = MakeAnchored(parent, "Aura", Vector2.zero, new Vector2(52f, 52f));
-        aura.gameObject.AddComponent<Image>().color = new Color(col.r, col.g, col.b, 0.15f);
+        // ─ Farbpalette ───────────────────────────────────────────────────
+        Color uDark  = new Color(0.06f, 0.08f, 0.20f);
+        Color uMid   = new Color(0.09f, 0.12f, 0.27f);
+        Color uLight = new Color(0.13f, 0.17f, 0.34f);
+        Color pDark  = new Color(0.08f, 0.09f, 0.13f);
+        Color acDim  = new Color(ac.r * 0.5f, ac.g * 0.5f, ac.b * 0.5f);
+        Color capCol = new Color(0.04f, 0.05f, 0.11f);
+        Color capHi  = new Color(0.12f, 0.14f, 0.24f);
+        Color gold1  = new Color(0.88f, 0.72f, 0.10f);
+        Color gold2  = new Color(0.98f, 0.88f, 0.30f);
+        Color silver = new Color(0.68f, 0.70f, 0.76f);
+        Color skin   = new Color(0.84f, 0.70f, 0.56f);
+        Color beltC  = new Color(0.10f, 0.10f, 0.13f);
+        Color radioC = new Color(0.20f, 0.22f, 0.26f);
+        Color brown  = new Color(0.26f, 0.15f, 0.05f);
 
-        // Körper
-        var body = MakeAnchored(parent, "Body", Vector2.zero, new Vector2(30f, 30f));
-        body.gameObject.AddComponent<Image>().color = col;
+        // ─ 1. Weite Gefahren-Aura (hinter allem) ────────────────────────
+        MakeAnchored(parent, "DangerAura", new Vector2(0f, 4f), new Vector2(72f, 72f))
+            .gameObject.AddComponent<Image>().color = new Color(ac.r, ac.g, ac.b, 0.08f);
 
-        // Warnsymbol (!)
-        var bang = MakeAnchored(body, "Bang", new Vector2(0, 2f), new Vector2(6f, 14f));
-        bang.gameObject.AddComponent<Image>().color = new Color(1f, 1f, 0.2f);
-        var bangDot = MakeAnchored(body, "BangDot", new Vector2(0, -8f), new Vector2(6f, 6f));
-        bangDot.gameObject.AddComponent<Image>().color = new Color(1f, 1f, 0.2f);
+        // ─ 2. Boden-Schatten ─────────────────────────────────────────────
+        MakeAnchored(parent, "Shadow", new Vector2(3f, -3f), new Vector2(38f, 38f))
+            .gameObject.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.35f);
 
-        // Helm-Balken oben
-        var helm = MakeAnchored(parent, "Helm", new Vector2(0, 12f), new Vector2(32f, 8f));
-        helm.gameObject.AddComponent<Image>().color = new Color(col.r * 0.6f, col.g * 0.6f, col.b * 0.6f);
+        // ─ 3. Stiefel (ganz unten) ───────────────────────────────────────
+        var bootL = MakeAnchored(parent, "BootL", new Vector2(-6f, -20f), new Vector2(9f, 6f));
+        bootL.gameObject.AddComponent<Image>().color = new Color(0.06f, 0.06f, 0.07f);
+        MakeAnchored(bootL, "Shine", new Vector2(-2f, 1f), new Vector2(2f, 2f))
+            .gameObject.AddComponent<Image>().color = new Color(0.22f, 0.22f, 0.26f);
+        var bootR = MakeAnchored(parent, "BootR", new Vector2( 6f, -20f), new Vector2(9f, 6f));
+        bootR.gameObject.AddComponent<Image>().color = new Color(0.06f, 0.06f, 0.07f);
+        MakeAnchored(bootR, "Shine", new Vector2( 2f, 1f), new Vector2(2f, 2f))
+            .gameObject.AddComponent<Image>().color = new Color(0.22f, 0.22f, 0.26f);
 
-        // Sichtbereich-Indikator (kleiner Kegel-Simulator, vorwärts)
-        var vision = MakeAnchored(parent, "Vision", new Vector2(0, 28f), new Vector2(20f, 24f));
-        vision.gameObject.AddComponent<Image>().color = new Color(col.r, col.g, col.b, 0.20f);
+        // ─ 4. Hose mit Seitenstreifen ────────────────────────────────────
+        var pants = MakeAnchored(parent, "Pants", new Vector2(0f, -13f), new Vector2(20f, 16f));
+        pants.gameObject.AddComponent<Image>().color = pDark;
+        MakeAnchored(pants, "StripeL", new Vector2(-7f, 0f), new Vector2(2f, 16f))
+            .gameObject.AddComponent<Image>().color = acDim;
+        MakeAnchored(pants, "StripeR", new Vector2( 7f, 0f), new Vector2(2f, 16f))
+            .gameObject.AddComponent<Image>().color = acDim;
+
+        // ─ 5. Ausrüstungsgürtel ──────────────────────────────────────────
+        var belt = MakeAnchored(parent, "Belt", new Vector2(0f, -5f), new Vector2(26f, 5f));
+        belt.gameObject.AddComponent<Image>().color = beltC;
+        // Schnalle (Mitte)
+        var buckle = MakeAnchored(belt, "Buckle", new Vector2(0f, 0f), new Vector2(8f, 5f));
+        buckle.gameObject.AddComponent<Image>().color = silver;
+        MakeAnchored(buckle, "Inner", Vector2.zero, new Vector2(4f, 3f))
+            .gameObject.AddComponent<Image>().color = new Color(0.45f, 0.46f, 0.50f);
+        // Funkgerät links am Gürtel
+        var radio = MakeAnchored(parent, "Radio", new Vector2(-13f, -2f), new Vector2(5f, 9f));
+        radio.gameObject.AddComponent<Image>().color = radioC;
+        MakeAnchored(radio, "Btn",     new Vector2(0f,  2f), new Vector2(3f, 2f))
+            .gameObject.AddComponent<Image>().color = new Color(0.22f, 0.75f, 0.28f); // grüne LED
+        MakeAnchored(radio, "Antenna", new Vector2(1f,  5f), new Vector2(2f, 5f))
+            .gameObject.AddComponent<Image>().color = new Color(0.35f, 0.36f, 0.40f);
+        // Handschellen rechts am Gürtel
+        MakeAnchored(parent, "CuffL", new Vector2(9f, -5f), new Vector2(4f, 4f))
+            .gameObject.AddComponent<Image>().color = silver;
+        MakeAnchored(parent, "CuffR", new Vector2(13f, -5f), new Vector2(4f, 4f))
+            .gameObject.AddComponent<Image>().color = silver;
+
+        // ─ 6. Schlagstock (rechts außen) ─────────────────────────────────
+        var baton = MakeAnchored(parent, "Baton", new Vector2(21f, -5f), new Vector2(4f, 18f));
+        baton.gameObject.AddComponent<Image>().color = brown;
+        MakeAnchored(baton, "Grip",    new Vector2(0f, -6f), new Vector2(4f,  5f))
+            .gameObject.AddComponent<Image>().color = new Color(0.16f, 0.09f, 0.03f);
+        MakeAnchored(baton, "GripWrap",new Vector2(0f, -5f), new Vector2(5f,  2f))
+            .gameObject.AddComponent<Image>().color = new Color(0.08f, 0.05f, 0.02f);
+        MakeAnchored(baton, "Head",    new Vector2(0f,  8f), new Vector2(5f,  3f))
+            .gameObject.AddComponent<Image>().color = new Color(0.32f, 0.18f, 0.06f);
+
+        // ─ 7. Arme ───────────────────────────────────────────────────────
+        var armL = MakeAnchored(parent, "ArmL", new Vector2(-14f, 1f), new Vector2(5f, 16f));
+        armL.gameObject.AddComponent<Image>().color = uDark;
+        MakeAnchored(armL, "Cuff", new Vector2(0f, -6f), new Vector2(5f, 3f))
+            .gameObject.AddComponent<Image>().color = uLight;
+        var armR = MakeAnchored(parent, "ArmR", new Vector2( 14f, 1f), new Vector2(5f, 16f));
+        armR.gameObject.AddComponent<Image>().color = uDark;
+        MakeAnchored(armR, "Cuff", new Vector2(0f, -6f), new Vector2(5f, 3f))
+            .gameObject.AddComponent<Image>().color = uLight;
+
+        // ─ 8. Torso / Uniformjacke ───────────────────────────────────────
+        var torso = MakeAnchored(parent, "Torso", new Vector2(0f, 3f), new Vector2(22f, 20f));
+        torso.gameObject.AddComponent<Image>().color = uDark;
+        // Links-Highlight (simuliert Lichtquelle von links-oben)
+        MakeAnchored(torso, "HiL", new Vector2(-9f, 0f), new Vector2(4f, 20f))
+            .gameObject.AddComponent<Image>().color = uMid;
+        // Knopfleiste
+        MakeAnchored(torso, "Buttons", new Vector2(0f, 2f), new Vector2(2f, 17f))
+            .gameObject.AddComponent<Image>().color = uLight;
+        // Einzelne Knöpfe
+        for (int b = 0; b < 4; b++)
+            MakeAnchored(torso, $"Btn{b}", new Vector2(0f, 7f - b * 4f), new Vector2(3f, 2f))
+                .gameObject.AddComponent<Image>().color = silver;
+
+        // ─ 9. Brustabzeichen / Polizei-Stern ─────────────────────────────
+        // Äußeres Schild-Polygon (aus 3 überlagerten Rechtecken)
+        var badgeBg = MakeAnchored(torso, "BadgeBg", new Vector2(-5f, 6f), new Vector2(11f, 14f));
+        badgeBg.gameObject.AddComponent<Image>().color = gold1;
+        MakeAnchored(badgeBg, "Wing", new Vector2(0f, 0f), new Vector2(14f, 8f))
+            .gameObject.AddComponent<Image>().color = gold1;         // breiter Mittelteil
+        MakeAnchored(badgeBg, "Star1", new Vector2(0f, 1f), new Vector2(5f, 11f))
+            .gameObject.AddComponent<Image>().color = gold2;         // Stern vertikal
+        MakeAnchored(badgeBg, "Star2", new Vector2(0f, 1f), new Vector2(11f, 5f))
+            .gameObject.AddComponent<Image>().color = gold2;         // Stern horizontal
+        MakeAnchored(badgeBg, "Center", new Vector2(0f, 1f), new Vector2(4f, 4f))
+            .gameObject.AddComponent<Image>().color = new Color(0.12f, 0.14f, 0.32f); // dunkler Mittelpunkt
+        // Nummernstreifen (nur Image, kein TMP auf gleichem GO)
+        MakeAnchored(torso, "NumPlate", new Vector2(-5f, -3f), new Vector2(9f, 3f))
+            .gameObject.AddComponent<Image>().color = new Color(0.78f, 0.78f, 0.84f);
+
+        // ─ 10. Epauletten (keine lokale Funktion – ausgeschrieben) ───────
+        var epL = MakeAnchored(parent, "EpL", new Vector2(-12f, 10f), new Vector2(7f, 5f));
+        epL.gameObject.AddComponent<Image>().color = ac;
+        MakeAnchored(epL, "S0", new Vector2(0f,  1f), new Vector2(7f, 1f)).gameObject.AddComponent<Image>().color = acDim;
+        MakeAnchored(epL, "S1", new Vector2(0f, -1f), new Vector2(7f, 1f)).gameObject.AddComponent<Image>().color = acDim;
+        var epR = MakeAnchored(parent, "EpR", new Vector2( 12f, 10f), new Vector2(7f, 5f));
+        epR.gameObject.AddComponent<Image>().color = ac;
+        MakeAnchored(epR, "S0", new Vector2(0f,  1f), new Vector2(7f, 1f)).gameObject.AddComponent<Image>().color = acDim;
+        MakeAnchored(epR, "S1", new Vector2(0f, -1f), new Vector2(7f, 1f)).gameObject.AddComponent<Image>().color = acDim;
+
+        // ─ 11. Kragen ────────────────────────────────────────────────────
+        var collar = MakeAnchored(parent, "Collar", new Vector2(0f, 14f), new Vector2(14f, 5f));
+        collar.gameObject.AddComponent<Image>().color = uMid;
+        MakeAnchored(collar, "Krawatte", new Vector2(0f, 0f), new Vector2(3f, 5f))
+            .gameObject.AddComponent<Image>().color = ac;
+
+        // ─ 12. Kopf / Gesicht ────────────────────────────────────────────
+        var head = MakeAnchored(parent, "Head", new Vector2(0f, 19f), new Vector2(15f, 11f));
+        head.gameObject.AddComponent<Image>().color = skin;
+        // Ohren
+        MakeAnchored(head, "EarL", new Vector2(-8f, 0f), new Vector2(3f, 5f))
+            .gameObject.AddComponent<Image>().color = new Color(skin.r * 0.9f, skin.g * 0.85f, skin.b * 0.80f);
+        MakeAnchored(head, "EarR", new Vector2( 8f, 0f), new Vector2(3f, 5f))
+            .gameObject.AddComponent<Image>().color = new Color(skin.r * 0.9f, skin.g * 0.85f, skin.b * 0.80f);
+
+        // ─ 13. Schirmmütze ───────────────────────────────────────────────
+        // Schirm (breiter, vorne / oben – Blickrichtung)
+        var brim = MakeAnchored(parent, "CapBrim", new Vector2(0f, 26f), new Vector2(26f, 5f));
+        brim.gameObject.AddComponent<Image>().color = capCol;
+        MakeAnchored(brim, "BrimHi", new Vector2(0f, 1.5f), new Vector2(24f, 1f))
+            .gameObject.AddComponent<Image>().color = capHi;
+        MakeAnchored(brim, "BrimSh", new Vector2(0f, -1.5f), new Vector2(24f, 1f))
+            .gameObject.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.5f);
+        // Mützenkorpus
+        var capBody = MakeAnchored(parent, "CapBody", new Vector2(0f, 31f), new Vector2(18f, 10f));
+        capBody.gameObject.AddComponent<Image>().color = capCol;
+        MakeAnchored(capBody, "HiL", new Vector2(-7f, 0f), new Vector2(3f, 10f))
+            .gameObject.AddComponent<Image>().color = capHi;
+        MakeAnchored(capBody, "HiT", new Vector2(0f, 4f), new Vector2(16f, 2f))
+            .gameObject.AddComponent<Image>().color = capHi;
+        // Akzentband
+        var band = MakeAnchored(parent, "CapBand", new Vector2(0f, 27f), new Vector2(18f, 3f));
+        band.gameObject.AddComponent<Image>().color = ac;
+        // Kokarde (Emblem auf der Kappe) – Stern aus 3 Schichten
+        MakeAnchored(capBody, "CockOuter",  new Vector2(0f, 1f), new Vector2(9f, 9f))
+            .gameObject.AddComponent<Image>().color = gold1;
+        MakeAnchored(capBody, "CockStar1",  new Vector2(0f, 1f), new Vector2(4f, 9f))
+            .gameObject.AddComponent<Image>().color = gold2;
+        MakeAnchored(capBody, "CockStar2",  new Vector2(0f, 1f), new Vector2(9f, 4f))
+            .gameObject.AddComponent<Image>().color = gold2;
+        MakeAnchored(capBody, "CockCenter", new Vector2(0f, 1f), new Vector2(3f, 3f))
+            .gameObject.AddComponent<Image>().color = new Color(0.12f, 0.12f, 0.25f);
+        // Kinnriemen
+        MakeAnchored(parent, "ChinL", new Vector2(-9f, 24f), new Vector2(2f, 4f))
+            .gameObject.AddComponent<Image>().color = capCol;
+        MakeAnchored(parent, "ChinR", new Vector2( 9f, 24f), new Vector2(2f, 4f))
+            .gameObject.AddComponent<Image>().color = capCol;
+
+        // ─ 14. Sicht-Richtungskegel (über Mützenschirm) ──────────────────
+        MakeAnchored(parent, "VisionA", new Vector2(0f, 42f), new Vector2(20f, 7f))
+            .gameObject.AddComponent<Image>().color = new Color(ac.r, ac.g, ac.b, 0.50f);
+        MakeAnchored(parent, "VisionB", new Vector2(0f, 50f), new Vector2(13f, 6f))
+            .gameObject.AddComponent<Image>().color = new Color(ac.r, ac.g, ac.b, 0.32f);
+        MakeAnchored(parent, "VisionC", new Vector2(0f, 57f), new Vector2(7f,  5f))
+            .gameObject.AddComponent<Image>().color = new Color(ac.r, ac.g, ac.b, 0.16f);
+        MakeAnchored(parent, "VisionD", new Vector2(0f, 63f), new Vector2(3f,  4f))
+            .gameObject.AddComponent<Image>().color = new Color(ac.r, ac.g, ac.b, 0.07f);
+
+        // ─ 15. Dienstgrad-Label (eigenes GO, NUR TextMeshProUGUI) ────────
+        var lblBg = new GameObject("LblBg");
+        lblBg.transform.SetParent(parent, false);
+        var lblBgRT = lblBg.AddComponent<RectTransform>();
+        lblBgRT.anchorMin = lblBgRT.anchorMax = lblBgRT.pivot = new Vector2(0.5f, 0.5f);
+        lblBgRT.anchoredPosition = new Vector2(0f, -30f);
+        lblBgRT.sizeDelta        = new Vector2(54f, 13f);
+        lblBg.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.50f);
+
+        var lblGO = new GameObject("Lbl");
+        lblGO.transform.SetParent(parent, false);
+        var lblRT  = lblGO.AddComponent<RectTransform>();
+        lblRT.anchorMin = lblRT.anchorMax = lblRT.pivot = new Vector2(0.5f, 0.5f);
+        lblRT.anchoredPosition = new Vector2(0f, -30f);
+        lblRT.sizeDelta        = new Vector2(54f, 13f);
+        var lblTxt = lblGO.AddComponent<TextMeshProUGUI>();
+        lblTxt.text      = index == 4 ? "CHEF-WAERTER" : $"WAERTER  0{index + 1}";
+        lblTxt.fontSize  = 6.5f;
+        lblTxt.alignment = TextAlignmentOptions.Center;
+        lblTxt.color     = new Color(ac.r, ac.g, ac.b, 0.92f);
+        lblTxt.fontStyle = FontStyles.Bold;
     }
 
     void BuildGoalIcon(RectTransform parent)
@@ -445,7 +640,7 @@ public class BuildLevel4Computer : EditorWindow
 
         // Rechts: Status-Badges
         BuildStatusBadge(topBar.transform, "STEALTH", new Vector2(750f, 0), new Color(0.2f, 0.8f, 0.3f));
-        BuildStatusBadge(topBar.transform, "WÄRTER: 4", new Vector2(860f, 0), new Color(0.9f, 0.3f, 0.2f));
+        BuildStatusBadge(topBar.transform, "WAERTER: 5", new Vector2(860f, 0), new Color(0.9f, 0.3f, 0.2f));
 
         // ── Untere Info-Leiste ─────────────────────────────────────────────
         var botBar = MakeAnchored(parent, "BottomBar", new Vector2(0, -490f), new Vector2(1920f, 60f));
