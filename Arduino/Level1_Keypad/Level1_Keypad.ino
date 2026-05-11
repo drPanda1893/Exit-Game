@@ -22,10 +22,10 @@
  *    7                          Row2   D8
  *    8 (ganz links)             Row1   D9
  *
- *  Protokoll (Arduino → PC, 9600 Baud):
- *    "KEY:0" … "KEY:9"   Ziffer gedrückt
- *    "KEY:DEL"            * oder A gedrückt  (löschen)
- *    "KEY:ENT"            # oder B gedrückt  (bestätigen)
+ *  Protokoll (Arduino → PC, 115200 Baud):
+ *    "05:0" … "05:9"   Ziffer gedrückt      (Cmd-ID 0x05)
+ *    "05:DEL"           * oder A gedrückt   (löschen)
+ *    "05:ENT"           # oder B gedrückt   (bestätigen)
  *
  *  Library: "Keypad" by Mark Stanley & Alexander Brevig
  *    Arduino IDE → Sketch → Include Library → Manage Libraries → "Keypad"
@@ -58,7 +58,7 @@ Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
 void setup()
 {
-  Serial.begin(9600);
+  Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
 }
@@ -75,19 +75,19 @@ void loop()
   delay(60);
   digitalWrite(LED_BUILTIN, LOW);
 
-  // Protokoll senden
+  // Protokoll: "05:payload"
   if (key >= '0' && key <= '9')
   {
-    Serial.print("KEY:");
+    Serial.print("05:");
     Serial.println(key);
   }
   else if (key == '*' || key == 'A')
   {
-    Serial.println("KEY:DEL");
+    Serial.println("05:DEL");
   }
   else if (key == '#' || key == 'B')
   {
-    Serial.println("KEY:ENT");
+    Serial.println("05:ENT");
   }
   // C, D → keine Funktion in Level 1
 }

@@ -1,12 +1,10 @@
 using UnityEngine;
 
 /// <summary>
-/// Leitet ArduinoBridge-Keypad-Events an NumpadController weiter.
+/// Leitet ArduinoBridge-Keypad-Events (Cmd 0x05) an NumpadController weiter.
 /// Nur aktiv solange das Numpad-Panel sichtbar ist.
 ///
-/// Wiring (Arduino D2–D9, von rechts nach links):
-///   D2=Col4  D3=Col3  D4=Col2  D5=Col1
-///   D6=Row4  D7=Row3  D8=Row2  D9=Row1
+/// Arduino-Protokoll:  "05:0" … "05:9" | "05:DEL" | "05:ENT"
 /// </summary>
 public class Level1_KeypadBridge : MonoBehaviour
 {
@@ -19,19 +17,19 @@ public class Level1_KeypadBridge : MonoBehaviour
             Debug.LogWarning("[KeypadBridge] ArduinoBridge nicht gefunden – kein Hardware-Input.");
             return;
         }
-        ArduinoBridge.Instance.OnKeypadKey += HandleKey;
+        ArduinoBridge.Instance.RegisterHandler(0x05, HandleKey);
     }
 
     void OnDestroy()
     {
         if (ArduinoBridge.Instance != null)
-            ArduinoBridge.Instance.OnKeypadKey -= HandleKey;
+            ArduinoBridge.Instance.UnregisterHandler(0x05, HandleKey);
     }
 
-    void HandleKey(string key)
+    // payload = "0"–"9" | "DEL" | "ENT"
+    void HandleKey(string payload)
     {
         if (numpadController == null || !numpadController.gameObject.activeSelf) return;
-        // NumpadController.ButtonPressed versteht "0"-"9", "DEL", "ENT" direkt
-        numpadController.ButtonPressed(key);
+        numpadController.ButtonPressed(payload);
     }
 }
