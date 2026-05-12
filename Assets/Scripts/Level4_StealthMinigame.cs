@@ -367,8 +367,24 @@ public class Level4_StealthMinigame : MonoBehaviour
         if (!active) return;
         if (!GetRect(player).Overlaps(GetRect(goal))) return;
         active = false;
+        SnapPlayerInFrontOfGoal();
         if (statusText != null) statusText.text = "Schuppen erreicht! Level abgeschlossen!";
         StartCoroutine(DelayedComplete());
+    }
+
+    /// <summary>
+    /// Beim Erreichen des Schuppens den Spieler exakt davor positionieren –
+    /// nicht halb überlappend. Damit "steht" Big Yahu vor der Tür, wenn
+    /// der Fade zum Werkstatt-Level beginnt.
+    /// </summary>
+    void SnapPlayerInFrontOfGoal()
+    {
+        if (player == null || goal == null) return;
+        float frontY = goal.anchoredPosition.y
+                     - goal.sizeDelta.y * 0.5f
+                     - player.sizeDelta.y * 0.5f
+                     - 4f;   // kleine Lücke, damit Player visuell vor der Tür steht
+        player.anchoredPosition = new Vector2(goal.anchoredPosition.x, frontY);
     }
 
     // ── Coroutines ────────────────────────────────────────────────────────
