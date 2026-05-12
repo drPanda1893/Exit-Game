@@ -34,10 +34,11 @@ Level currentLevel = LV_NONE;
 String serialBuf = "";
 
 // ── Level 1 – Keypad ───────────────────────────────────────────────────────
-#define BUZZER_PIN  8
-#define RELAY_PIN   4
-#define BEEP_MS     80
-#define DEBOUNCE_MS 40
+#define BUZZER_PIN     8
+#define RELAY_PIN      4
+#define BEEP_MS        30      // kurzer Klick
+#define BEEP_FREQ_HZ   2000    // passiver Buzzer braucht AC-Signal
+#define DEBOUNCE_MS    40
 
 const byte ROWS = 4;
 const byte COLS = 4;
@@ -155,9 +156,15 @@ void silenceKeypad() {
 }
 
 void beep() {
+  // Passiver Buzzer braucht ein Rechteck-Signal (tone), kein DC HIGH.
+  // tone() erzeugt es unabhaengig vom vorherigen Pin-Zustand – wichtig,
+  // weil Pin 8 = BUZZER_PIN auch Keypad-Spalte 2 (Tasten 3, 6, 9) ist
+  // und durch eine gehaltene Taste vorgeladen sein kann.
+  digitalWrite(BUZZER_PIN, LOW);
   pinMode(BUZZER_PIN, OUTPUT);
-  digitalWrite(BUZZER_PIN, HIGH);
+  tone(BUZZER_PIN, BEEP_FREQ_HZ, BEEP_MS);
   delay(BEEP_MS);
+  noTone(BUZZER_PIN);
   digitalWrite(BUZZER_PIN, LOW);
   pinMode(BUZZER_PIN, INPUT);
 }
@@ -171,7 +178,9 @@ char rawScanKeypad() {
     for (byte r = 0; r < ROWS; r++) {
       if (digitalRead(rowPins[r]) == LOW) {
         char key = keys[r][c];
-        digitalWrite(colPins[c], HIGH);
+        // INPUT ohne Pull-Up zurueckgeben (PORT-Bit bleibt LOW von oben).
+        // Wichtig fuer Spalte 2 = BUZZER_PIN: sonst summt der Buzzer leise
+        // zwischen Erkennung und beep() durch den aktivierten Pull-Up.
         pinMode(colPins[c], INPUT);
         return key;
       }
