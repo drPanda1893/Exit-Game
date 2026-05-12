@@ -28,6 +28,7 @@
  *   10:TEMP:<celsius>      Level2 laufender Temperaturwert
  *   10:BLOW:<celsius>      Level2 Schwellwert ueberschritten
  *   success                einmaliger Marker bei Level2-Erfolg
+ *   COLOR:RGB:<r>,<g>,<b>,<name>   Level3 laufende Scanner-Werte (0..255 + erkannte Farbe), jeder Takt
  *   COLOR:RED|GREEN|BLUE   Level3 erkannte Farbe – NUR bei echter Aenderung (1 Farbe = 1 Eingabe)
  *   COLOR:RESET            Level3 physischer Reset-Taster gedrueckt
  *   FF:ready               einmal nach Setup
@@ -322,6 +323,7 @@ DetColor      colConfirmed    = COL_NONE;   // zuletzt an Unity gemeldete Farbe
 bool          colBtnLast      = HIGH;       // Reset-Taster Entprellung
 bool          colBtnHandled   = false;
 unsigned long colBtnChangedAt = 0;
+int           colLastR = 0, colLastG = 0, colLastB = 0;   // letzte gemappten 0..255-Werte
 
 void initColorSensor() {
   pinMode(TCS_S0, OUTPUT);
@@ -373,6 +375,7 @@ DetColor measureColorOnce() {
   long r = constrain(map(redRaw,   COL_R_MIN, COL_R_MAX, 255, 0), 0, 255);
   long g = constrain(map(greenRaw, COL_G_MIN, COL_G_MAX, 255, 0), 0, 255);
   long b = constrain(map(blueRaw,  COL_B_MIN, COL_B_MAX, 255, 0), 0, 255);
+  colLastR = (int)r; colLastG = (int)g; colLastB = (int)b;
 
   if (r > g && r > b && r > COL_THRESHOLD) return COL_RED;
   if (g > r && g > b && g > COL_THRESHOLD) return COL_GREEN;
@@ -410,6 +413,13 @@ void tickColor() {
   colLastSampleAt = now;
 
   DetColor c = measureColorOnce();
+
+  // Live-Werte des Scanners ans Terminal melden (jeder Mess-Takt)
+  Serial.print("COLOR:RGB:");
+  Serial.print(colLastR); Serial.print(',');
+  Serial.print(colLastG); Serial.print(',');
+  Serial.print(colLastB); Serial.print(',');
+  Serial.println(colorName(c));
 
   // Stabilitaets-Serie verlaengern oder neu starten
   if (c == colCandidate) {

@@ -1620,11 +1620,12 @@ public class BuildLevel3Library : EditorWindow
             o.effectDistance = new Vector2(2f, 2f);
         }
 
-        // Blinkender Cursor unter den Slots
-        var promptGO  = MakeUIPanel(winT, "Prompt", new Vector2(0.07f, 0.30f), new Vector2(0.5f, 0.35f));
+        // Terminal-Zeile unter den Slots: zeigt live die Scannerwerte (R/G/B + Farbe)
+        // plus blinkenden Cursor. Inhalt setzt Level3_ColorCodeUI zur Laufzeit.
+        var promptGO  = MakeUIPanel(winT, "Prompt", new Vector2(0.07f, 0.295f), new Vector2(0.93f, 0.35f));
         var promptTxt = promptGO.AddComponent<TextMeshProUGUI>();
         promptTxt.text      = "> _";
-        promptTxt.fontSize  = 24;
+        promptTxt.fontSize  = 20;
         promptTxt.alignment = TextAlignmentOptions.MidlineLeft;
         promptTxt.color     = new Color(0.55f, 0.95f, 0.70f);
 

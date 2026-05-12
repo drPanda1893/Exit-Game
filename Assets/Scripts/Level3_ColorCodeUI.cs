@@ -77,6 +77,8 @@ public class Level3_ColorCodeUI : MonoBehaviour
     private bool locked;
     private bool arduinoSubscribed;
     private Coroutine promptBlink;
+    private bool cursorOn = true;
+    private string sensorReadout = "";   // letzte Live-Werte des Farbscanners
 
     // ══════════════════════════════════════════════════════════
     // Lifecycle
@@ -115,12 +117,14 @@ public class Level3_ColorCodeUI : MonoBehaviour
 
         ResetInput();
         locked = false;
+        sensorReadout = "";
 
         if (titleText   != null) { titleText.text   = "ZUGANG GESPERRT"; titleText.color   = TermRed;   }
         if (messageText != null) { messageText.text = MessageBody;        messageText.color = TermGreen; }
 
         SubscribeArduino();
         StartPromptBlink();
+        RenderPromptLine();
     }
 
     public void Hide()
@@ -154,16 +158,45 @@ public class Level3_ColorCodeUI : MonoBehaviour
         ArduinoBridge.Instance.Send(0x20, "STOP");
     }
 
-    // raw kommt bereits ohne "COLOR:"-Präfix von der ArduinoBridge.
-    // Der Sketch liefert genau einen Eintrag pro echter Farbänderung – kein
-    // zusätzliches Entprellen nötig. "RESET" kommt vom physischen Taster.
+    // raw kommt bereits ohne "COLOR:"-Präfix von der ArduinoBridge:
+    //   "RGB:r,g,b,NAME" -> nur Live-Anzeige im Terminal, keine Eingabe
+    //   "RESET"          -> Eingabe zurücksetzen (physischer Taster)
+    //   "RED"|"GREEN"|"BLUE" -> bestätigte Farbe (Sketch sendet nur bei echter Änderung)
     private void HandleArduinoColor(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return;
-        if (raw.Trim().Equals("RESET", StringComparison.OrdinalIgnoreCase)) { ResetInput(); return; }
+        string t = raw.Trim();
+
+        if (t.StartsWith("RGB:", StringComparison.OrdinalIgnoreCase)) { UpdateSensorReadout(t.Substring(4)); return; }
+        if (t.Equals("RESET", StringComparison.OrdinalIgnoreCase))    { ResetInput(); return; }
 
         string c = NormalizeColor(raw);
         if (c != null) Press(c);
+    }
+
+    // csv = "r,g,b,NAME" -> Live-Zeile "R=xxx G=xxx B=xxx  ->  FARBE" im Terminal
+    private void UpdateSensorReadout(string csv)
+    {
+        var p = csv.Split(',');
+        if (p.Length >= 4 &&
+            int.TryParse(p[0].Trim(), out int r) &&
+            int.TryParse(p[1].Trim(), out int g) &&
+            int.TryParse(p[2].Trim(), out int b))
+        {
+            string label = NormalizeColor(p[3]) switch
+            {
+                "Red"   => "ROT",
+                "Blue"  => "BLAU",
+                "Green" => "GRÜN",
+                _       => "--"
+            };
+            sensorReadout = $"R={r:000} G={g:000} B={b:000}  ->  {label}";
+        }
+        else
+        {
+            sensorReadout = csv.Trim();
+        }
+        RenderPromptLine();
     }
 
     private static string NormalizeColor(string raw)
@@ -271,13 +304,21 @@ public class Level3_ColorCodeUI : MonoBehaviour
     };
 
     // ══════════════════════════════════════════════════════════
-    // Blinkender Terminal-Cursor
+    // Terminal-Zeile: Live-Scannerwerte + blinkender Cursor
     // ══════════════════════════════════════════════════════════
+
+    private void RenderPromptLine()
+    {
+        if (promptText == null) return;
+        string body = string.IsNullOrEmpty(sensorReadout) ? "" : sensorReadout + "   ";
+        promptText.text = "> " + body + (cursorOn ? "_" : " ");
+    }
 
     private void StartPromptBlink()
     {
         if (promptText == null) return;
         StopPromptBlink();
+        cursorOn    = true;
         promptBlink = StartCoroutine(PromptBlinkLoop());
     }
 
@@ -289,12 +330,11 @@ public class Level3_ColorCodeUI : MonoBehaviour
 
     private IEnumerator PromptBlinkLoop()
     {
-        bool on = true;
         var wait = new WaitForSeconds(0.5f);
         while (true)
         {
-            promptText.text = on ? "> _" : "> ";
-            on = !on;
+            cursorOn = !cursorOn;
+            RenderPromptLine();
             yield return wait;
         }
     }
