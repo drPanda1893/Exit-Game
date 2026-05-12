@@ -32,6 +32,9 @@ public class BookSelectionUI : MonoBehaviour
         overlayCanvas.gameObject.SetActive(true);
         if (feedbackText != null) feedbackText.text = "";
 
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible   = true;
+
         // Bücher in zufälliger Reihenfolge anzeigen
         int[] order = ShuffleOrder();
         for (int i = 0; i < bookButtons.Length; i++)
@@ -48,6 +51,9 @@ public class BookSelectionUI : MonoBehaviour
     {
         if (overlayCanvas != null)
             overlayCanvas.gameObject.SetActive(false);
+
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible   = false;
     }
 
     private void OnBookChosen(int bookIdx)

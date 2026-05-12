@@ -3,6 +3,8 @@ using UnityEditor;
 using UnityEditor.Animations;
 using UnityEditor.SceneManagement;
 using UnityEngine.SceneManagement;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 using TMPro;
 
 /// <summary>
@@ -46,20 +48,21 @@ public class BuildLevel3Library : EditorWindow
         Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
         EditorSceneManager.SaveScene(scene, "Assets/Scenes/Level3.unity");
 
-        // Kamera – fest am Eingang wie Level 2
+        // Kamera – Top-Down Follow, leicht geneigt für gute Übersicht im großen Raum
         var camGO = new GameObject("Main Camera");
         var cam   = camGO.AddComponent<Camera>();
         cam.clearFlags      = CameraClearFlags.SolidColor;
         cam.backgroundColor = new Color(0.02f, 0.03f, 0.07f);
-        cam.farClipPlane    = 30f;
+        cam.farClipPlane    = 50f;
         cam.nearClipPlane   = 0.1f;
         cam.tag             = "MainCamera";
         camGO.AddComponent<AudioListener>();
-        // Identische Kamera-Startpose wie Level 2
-        camGO.transform.position = new Vector3(0f, 6f, -3f);
-        camGO.transform.rotation = Quaternion.Euler(60f, 0f, 0f);
+        camGO.transform.position = new Vector3(0f, 11f, -4f);
+        camGO.transform.rotation = Quaternion.Euler(70f, 0f, 0f);
         var follow = camGO.AddComponent<TopDownCameraFollow>();
-        follow.fixedWorldPosition = new Vector3(0f, 1.8f, -4.4f);
+        follow.fixedWorldPosition = Vector3.zero;   // explizit deaktivieren -> Follow-Modus
+        follow.height     = 11f;
+        follow.pitchAngle = 70f;
         SceneManager.MoveGameObjectToScene(camGO, scene);
 
         // GameManager – nötig wenn Level 3 direkt gestartet wird
@@ -1144,6 +1147,15 @@ public class BuildLevel3Library : EditorWindow
         BuildThresenArea(envRoot, dark, mid, light, brass, parchment, wax, flame, leather,
                          bRed, bGreen, bBlue, bBrown);
 
+        // EventSystem (essentiell – ohne kein Mausklick auf UI Buttons!)
+        if (Object.FindFirstObjectByType<EventSystem>() == null)
+        {
+            var esGO = new GameObject("EventSystem");
+            esGO.AddComponent<EventSystem>();
+            esGO.AddComponent<InputSystemUIInputModule>();
+            SceneManager.MoveGameObjectToScene(esGO, scene);
+        }
+
         // ── Helios instanziieren ──────────────────────────────────────────────
         const string fbxPath = "Assets/Big Yahu/Helios plotting.fbx";
 
@@ -1231,22 +1243,19 @@ public class BuildLevel3Library : EditorWindow
         spotGO.transform.LookAt(helios.transform.position + Vector3.up * 0.9f);
         SceneManager.MoveGameObjectToScene(spotGO, scene);
 
-        // ── Ausgangs-Trigger (inaktiv bis Bibel gewählt) ──────────────────────
-        var exitGO  = new GameObject("ExitTrigger");
-        exitGO.transform.position = new Vector3(0f, 1.2f, 5.5f);
-        var exitCol = exitGO.AddComponent<BoxCollider>();
-        exitCol.isTrigger = true;
-        exitCol.size = new Vector3(6f, 2.4f, 0.5f);
-        var ltt = exitGO.AddComponent<LevelTransitionTrigger>();
-        ltt.targetScene = "Level4";
-        exitGO.SetActive(false);
-        SceneManager.MoveGameObjectToScene(exitGO, scene);
-
         // ── Hinweis-Canvas (E-Taste) ──────────────────────────────────────────
         var hintGO = BuildHintUI(scene);
 
         // ── Buch-UI Canvas ────────────────────────────────────────────────────
         var bookUI = BuildBookUI(scene);
+
+        // ── PC im Raum + Farbcode-UI ──────────────────────────────────────────
+        // Der PC IST der Übergang zu Level 4 (Computer-Minigame),
+        // kein zusätzlicher Lauf-Trigger nötig.
+        var pcHintGO = BuildPcHintUI(scene);
+        var codeUI   = BuildColorCodeUI(scene);
+        var pcInter  = BuildComputerDeskAndInteraction(envRoot, scene, dark, mid, brass,
+                                                        codeUI, pcHintGO);
 
         // ── HeliosInteraction Trigger ─────────────────────────────────────────
         var interGO = new GameObject("HeliosInteraction");
@@ -1255,9 +1264,9 @@ public class BuildLevel3Library : EditorWindow
         interCol.isTrigger = true;
         interCol.size = new Vector3(3.5f, 2.2f, 2.5f);
         var interaction = interGO.AddComponent<HeliosInteraction>();
-        interaction.bookUI        = bookUI;
-        interaction.exitTriggerGO = exitGO;
-        interaction.hintGO        = hintGO;
+        interaction.bookUI   = bookUI;
+        interaction.hintGO   = hintGO;
+        interaction.computer = pcInter;
         SceneManager.MoveGameObjectToScene(interGO,   scene);
         SceneManager.MoveGameObjectToScene(helios,    scene);
     }
@@ -1393,6 +1402,249 @@ public class BuildLevel3Library : EditorWindow
         SceneManager.MoveGameObjectToScene(canvasGO, scene);
         SceneManager.MoveGameObjectToScene(uiGO,     scene);
         return ui;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // PC: 3D-Modell + Trigger + Hint + Farbcode-UI
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private Level3_ComputerInteraction BuildComputerDeskAndInteraction(
+        Transform envRoot, Scene scene,
+        Material woodDark, Material woodMid, Material brass,
+        Level3_ColorCodeUI codeUI, GameObject hintGO)
+    {
+        // Materialien für PC
+        var plastic       = M(new Color(0.10f, 0.10f, 0.12f), 0.05f, 0.30f);
+        var screenOff     = M(new Color(0.04f, 0.05f, 0.07f), 0f,    0.55f);
+        var screenOn      = Emit(new Color(0.10f, 0.40f, 0.90f),
+                                 new Color(0.30f, 0.70f, 1.00f), 1.8f);
+
+        // Asset speichern, damit Material persistent ist
+        const string offPath = "Assets/Big Yahu/PC_ScreenOff.mat";
+        const string onPath  = "Assets/Big Yahu/PC_ScreenOn.mat";
+        if (AssetDatabase.LoadAssetAtPath<Material>(offPath) != null) AssetDatabase.DeleteAsset(offPath);
+        if (AssetDatabase.LoadAssetAtPath<Material>(onPath)  != null) AssetDatabase.DeleteAsset(onPath);
+        AssetDatabase.CreateAsset(screenOff, offPath);
+        AssetDatabase.CreateAsset(screenOn,  onPath);
+        AssetDatabase.SaveAssets();
+        screenOff = AssetDatabase.LoadAssetAtPath<Material>(offPath);
+        screenOn  = AssetDatabase.LoadAssetAtPath<Material>(onPath);
+
+        // Position: rechts an der Rückwand, frei zugänglich
+        var pcRoot = new GameObject("ComputerDesk");
+        pcRoot.transform.position = new Vector3(-2.6f, 0f, 4.4f);
+        pcRoot.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+        pcRoot.transform.SetParent(envRoot);
+
+        // Schreibtisch
+        Box("DeskTop",   new Vector3(0f, 0.80f,  0f),    new Vector3(1.6f, 0.06f, 0.80f), woodMid,  pcRoot.transform);
+        Box("DeskFront", new Vector3(0f, 0.42f, -0.36f), new Vector3(1.6f, 0.78f, 0.05f), woodDark, pcRoot.transform);
+        Box("DeskLegL",  new Vector3(-0.72f,0.40f,0f),   new Vector3(0.06f, 0.78f, 0.78f), woodDark, pcRoot.transform);
+        Box("DeskLegR",  new Vector3( 0.72f,0.40f,0f),   new Vector3(0.06f, 0.78f, 0.78f), woodDark, pcRoot.transform);
+
+        // Monitor-Korpus (CRT-Stil, passt zum Knast-Setting)
+        Box("MonitorBase",  new Vector3(0f, 0.86f, 0.05f), new Vector3(0.50f, 0.05f, 0.36f), plastic, pcRoot.transform, col: false);
+        Box("MonitorBody",  new Vector3(0f, 1.18f, 0.10f), new Vector3(0.70f, 0.55f, 0.46f), plastic, pcRoot.transform);
+        // Frame um den Screen
+        Box("MonitorFrameT",new Vector3(0f, 1.43f, -0.13f), new Vector3(0.62f, 0.04f, 0.02f), plastic, pcRoot.transform, col: false);
+        Box("MonitorFrameB",new Vector3(0f, 0.93f, -0.13f), new Vector3(0.62f, 0.04f, 0.02f), plastic, pcRoot.transform, col: false);
+        Box("MonitorFrameL",new Vector3(-0.30f, 1.18f, -0.13f), new Vector3(0.04f, 0.52f, 0.02f), plastic, pcRoot.transform, col: false);
+        Box("MonitorFrameR",new Vector3( 0.30f, 1.18f, -0.13f), new Vector3(0.04f, 0.52f, 0.02f), plastic, pcRoot.transform, col: false);
+
+        // Der Bildschirm selbst – Quad mit austauschbarem Material
+        var screen = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        screen.name = "MonitorScreen";
+        screen.transform.SetParent(pcRoot.transform, false);
+        screen.transform.localPosition = new Vector3(0f, 1.18f, -0.135f);
+        screen.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+        screen.transform.localScale    = new Vector3(0.56f, 0.46f, 1f);
+        Object.DestroyImmediate(screen.GetComponent<Collider>());
+        screen.GetComponent<Renderer>().sharedMaterial = screenOff;
+
+        // Tastatur und Maus für Atmosphäre
+        Box("Keyboard", new Vector3(0f, 0.835f, -0.18f), new Vector3(0.55f, 0.025f, 0.18f), plastic, pcRoot.transform, col: false);
+        Box("Mouse",    new Vector3(0.34f, 0.835f, -0.20f), new Vector3(0.08f, 0.025f, 0.12f), plastic, pcRoot.transform, col: false);
+
+        // Tower auf dem Boden neben dem Schreibtisch
+        Box("Tower",    new Vector3(-0.85f, 0.30f, 0.25f), new Vector3(0.22f, 0.60f, 0.40f), plastic, pcRoot.transform);
+
+        // Spotlight, das den PC akzentuiert (aktiviert sich mit dem Monitor)
+        var spotGO = new GameObject("MonitorLight");
+        spotGO.transform.SetParent(pcRoot.transform);
+        spotGO.transform.localPosition = new Vector3(0f, 2.4f, -0.6f);
+        spotGO.transform.localRotation = Quaternion.Euler(60f, 0f, 0f);
+        var spot = spotGO.AddComponent<Light>();
+        spot.type      = LightType.Spot;
+        spot.color     = new Color(0.55f, 0.75f, 1.0f);
+        spot.intensity = 2.5f;
+        spot.range     = 4f;
+        spot.spotAngle = 45f;
+        spot.shadows   = LightShadows.None;
+        spot.enabled   = false;
+
+        // Trigger-Zone vor dem PC
+        var triggerGO = new GameObject("ComputerTrigger");
+        triggerGO.transform.position = pcRoot.transform.position + new Vector3(0f, 1.0f, -1.2f);
+        triggerGO.transform.SetParent(envRoot);
+        var trCol = triggerGO.AddComponent<BoxCollider>();
+        trCol.isTrigger = true;
+        trCol.size = new Vector3(2.2f, 2.2f, 1.8f);
+
+        var pcInter = triggerGO.AddComponent<Level3_ComputerInteraction>();
+        pcInter.codeUI         = codeUI;
+        pcInter.hintGO         = hintGO;
+        pcInter.monitorScreen  = screen;
+        pcInter.monitorLight   = spot;
+        pcInter.monitorOffMat  = screenOff;
+        pcInter.monitorOnMat   = screenOn;
+        pcInter.nextScene      = "Level4";
+
+        SceneManager.MoveGameObjectToScene(triggerGO, scene);
+        return pcInter;
+    }
+
+    private GameObject BuildPcHintUI(Scene scene)
+    {
+        var canvasGO = new GameObject("PcHintCanvas");
+        var canvas   = canvasGO.AddComponent<Canvas>();
+        canvas.renderMode   = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 6;
+        canvasGO.AddComponent<UnityEngine.UI.CanvasScaler>().uiScaleMode =
+            UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        canvasGO.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+
+        var panel     = MakeUIPanel(canvasGO.transform, "HintPanel",
+            new Vector2(0.3f, 0.12f), new Vector2(0.7f, 0.22f));
+        var panelImg  = panel.AddComponent<UnityEngine.UI.Image>();
+        panelImg.color = new Color(0f, 0f, 0f, 0.65f);
+
+        var txtGO = MakeUIPanel(panel.transform, "HintText", Vector2.zero, Vector2.one);
+        var txt   = txtGO.AddComponent<TextMeshProUGUI>();
+        txt.text      = "[ E ]  Computer benutzen";
+        txt.fontSize  = 26;
+        txt.alignment = TextAlignmentOptions.Center;
+        txt.color     = new Color(0.55f, 0.85f, 1.0f);
+
+        canvasGO.SetActive(false);
+        SceneManager.MoveGameObjectToScene(canvasGO, scene);
+        return canvasGO;
+    }
+
+    private Level3_ColorCodeUI BuildColorCodeUI(Scene scene)
+    {
+        var canvasGO = new GameObject("ColorCodeCanvas");
+        var canvas   = canvasGO.AddComponent<Canvas>();
+        canvas.renderMode   = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 12;
+        canvasGO.AddComponent<UnityEngine.UI.CanvasScaler>().uiScaleMode =
+            UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        canvasGO.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+
+        // Dunkler Vollbild-Hintergrund
+        var bg = MakeUIBox(canvasGO.transform, "Background", Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+        bg.AddComponent<UnityEngine.UI.Image>().color = new Color(0f, 0f, 0f, 0.82f);
+
+        // Titel
+        var titleGO  = MakeUIPanel(canvasGO.transform, "Title", new Vector2(0.1f, 0.78f), new Vector2(0.9f, 0.88f));
+        var titleTxt = titleGO.AddComponent<TextMeshProUGUI>();
+        titleTxt.text      = "Farbcode eingeben";
+        titleTxt.fontSize  = 44;
+        titleTxt.alignment = TextAlignmentOptions.Center;
+        titleTxt.color     = new Color(0.55f, 0.85f, 1.0f);
+
+        // 4 Slot-Anzeigen
+        var slotImages = new UnityEngine.UI.Image[4];
+        float[] slotX = { 0.30f, 0.41f, 0.52f, 0.63f };
+        for (int i = 0; i < 4; i++)
+        {
+            var slot = MakeUIPanel(canvasGO.transform, $"Slot_{i}",
+                new Vector2(slotX[i], 0.62f), new Vector2(slotX[i] + 0.08f, 0.72f));
+            var img = slot.AddComponent<UnityEngine.UI.Image>();
+            img.color = new Color(0.10f, 0.10f, 0.13f, 1f);
+            slotImages[i] = img;
+
+            var outline = slot.AddComponent<UnityEngine.UI.Outline>();
+            outline.effectColor = new Color(0.55f, 0.85f, 1.0f, 0.55f);
+            outline.effectDistance = new Vector2(2f, 2f);
+        }
+
+        // 4 Farb-Buttons in einer Reihe
+        Color cRed    = new Color(0.85f, 0.15f, 0.15f);
+        Color cBlue   = new Color(0.20f, 0.40f, 1.00f);
+        Color cYellow = new Color(0.95f, 0.85f, 0.18f);
+        Color cGreen  = new Color(0.20f, 0.85f, 0.30f);
+
+        var redBtn    = MakeColorButton(canvasGO.transform, "RedBtn",    0.18f, 0.30f, cRed);
+        var blueBtn   = MakeColorButton(canvasGO.transform, "BlueBtn",   0.36f, 0.48f, cBlue);
+        var yellowBtn = MakeColorButton(canvasGO.transform, "YellowBtn", 0.54f, 0.66f, cYellow);
+        var greenBtn  = MakeColorButton(canvasGO.transform, "GreenBtn",  0.72f, 0.84f, cGreen);
+
+        // Reset + Schließen
+        var resetGO = MakeUIPanel(canvasGO.transform, "ResetBtn",
+            new Vector2(0.30f, 0.10f), new Vector2(0.46f, 0.18f));
+        resetGO.AddComponent<UnityEngine.UI.Image>().color = new Color(0.20f, 0.20f, 0.24f);
+        var resetBtn = resetGO.AddComponent<UnityEngine.UI.Button>();
+        var resetTxtGO = MakeUIPanel(resetGO.transform, "Text", Vector2.zero, Vector2.one);
+        var resetTxt = resetTxtGO.AddComponent<TextMeshProUGUI>();
+        resetTxt.text = "Zurücksetzen"; resetTxt.fontSize = 22;
+        resetTxt.alignment = TextAlignmentOptions.Center;
+        resetTxt.color = Color.white;
+
+        var closeGO = MakeUIPanel(canvasGO.transform, "CloseBtn",
+            new Vector2(0.54f, 0.10f), new Vector2(0.70f, 0.18f));
+        closeGO.AddComponent<UnityEngine.UI.Image>().color = new Color(0.20f, 0.20f, 0.24f);
+        var closeBtn = closeGO.AddComponent<UnityEngine.UI.Button>();
+        var closeTxtGO = MakeUIPanel(closeGO.transform, "Text", Vector2.zero, Vector2.one);
+        var closeTxt = closeTxtGO.AddComponent<TextMeshProUGUI>();
+        closeTxt.text = "Schließen"; closeTxt.fontSize = 22;
+        closeTxt.alignment = TextAlignmentOptions.Center;
+        closeTxt.color = Color.white;
+
+        // Feedback-Text
+        var fbGO  = MakeUIPanel(canvasGO.transform, "Feedback",
+            new Vector2(0.1f, 0.20f), new Vector2(0.9f, 0.28f));
+        var fbTxt = fbGO.AddComponent<TextMeshProUGUI>();
+        fbTxt.fontSize  = 28;
+        fbTxt.alignment = TextAlignmentOptions.Center;
+        fbTxt.color     = Color.white;
+
+        // Logik-Komponente auf eigenem GameObject
+        var uiGO = new GameObject("ColorCodeUI");
+        var ui   = uiGO.AddComponent<Level3_ColorCodeUI>();
+        ui.overlayCanvas = canvas;
+        ui.redButton     = redBtn;
+        ui.blueButton    = blueBtn;
+        ui.yellowButton  = yellowBtn;
+        ui.greenButton   = greenBtn;
+        ui.resetButton   = resetBtn;
+        ui.closeButton   = closeBtn;
+        ui.slotImages    = slotImages;
+        ui.feedbackText  = fbTxt;
+        ui.titleText     = titleTxt;
+        ui.solution      = new[] { "Red", "Blue", "Yellow", "Green" };
+
+        canvasGO.SetActive(false);
+        SceneManager.MoveGameObjectToScene(canvasGO, scene);
+        SceneManager.MoveGameObjectToScene(uiGO,     scene);
+        return ui;
+    }
+
+    private UnityEngine.UI.Button MakeColorButton(Transform parent, string name,
+                                                   float xMin, float xMax, Color color)
+    {
+        var btnGO  = MakeUIPanel(parent, name,
+            new Vector2(xMin, 0.36f), new Vector2(xMax, 0.52f));
+        var btnImg = btnGO.AddComponent<UnityEngine.UI.Image>();
+        btnImg.color = color;
+        var btn = btnGO.AddComponent<UnityEngine.UI.Button>();
+
+        var cb = btn.colors;
+        cb.normalColor      = color;
+        cb.highlightedColor = Color.Lerp(color, Color.white, 0.25f);
+        cb.pressedColor     = Color.Lerp(color, Color.black, 0.25f);
+        cb.selectedColor    = color;
+        btn.colors = cb;
+        return btn;
     }
 
     private GameObject MakeUIBox(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax,

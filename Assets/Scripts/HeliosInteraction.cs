@@ -5,14 +5,15 @@ using TMPro;
 /// <summary>
 /// Trigger-Zone um Helios. Spieler betritt sie → Hinweis "E zum Interagieren".
 /// Drückt der Spieler E → Buch-Auswahl öffnet sich.
-/// Richtige Wahl (Bibel) → LevelTransitionTrigger zu Level4 wird aktiviert.
+/// Richtige Wahl (Bibel) → Computer wird aktiviert.
+/// Farbcode am PC erfolgreich → Szenenwechsel zu Level 4 (Computer-Minigame).
 /// </summary>
 [RequireComponent(typeof(Collider))]
 public class HeliosInteraction : MonoBehaviour
 {
     public BookSelectionUI bookUI;
-    public GameObject exitTriggerGO;
     public GameObject hintGO;          // "[ E ] Interagieren"-Hinweis
+    public Level3_ComputerInteraction computer;
 
     private bool solved     = false;
     private bool inRange    = false;
@@ -20,9 +21,8 @@ public class HeliosInteraction : MonoBehaviour
     void Start()
     {
         GetComponent<Collider>().isTrigger = true;
-        if (exitTriggerGO != null) exitTriggerGO.SetActive(false);
-        if (hintGO        != null) hintGO.SetActive(false);
-        if (bookUI        != null) bookUI.OnCorrectBook += OnBibleChosen;
+        if (hintGO != null) hintGO.SetActive(false);
+        if (bookUI != null) bookUI.OnCorrectBook += OnBibleChosen;
     }
 
     void OnDestroy()
@@ -57,7 +57,7 @@ public class HeliosInteraction : MonoBehaviour
     {
         solved = true;
         inRange = false;
-        if (hintGO        != null) hintGO.SetActive(false);
-        if (exitTriggerGO != null) exitTriggerGO.SetActive(true);
+        if (hintGO != null) hintGO.SetActive(false);
+        if (computer != null) computer.ActivateComputer();
     }
 }
