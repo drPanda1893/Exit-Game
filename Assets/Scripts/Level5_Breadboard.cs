@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using TMPro;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 
@@ -21,6 +22,14 @@ public class Level5_Breadboard : MonoBehaviour
     [Header("UI")]
     [SerializeField] private TextMeshProUGUI statusText;
     [SerializeField] private Image           burnerFlame; // Bunsenbrenner-Flamme (dunkel→orange)
+
+    [Header("Verhalten")]
+    [Tooltip("Standalone-Szene: nach Lösung Fade-To-Black + Level 6 laden. "
+           + "Als Overlay: false – nur OnPuzzleSolved feuern.")]
+    [SerializeField] private bool autoTransitionAfterSolve = true;
+
+    /// <summary>Feuert genau einmal, sobald der Schaltkreis geschlossen ist.</summary>
+    public event Action OnPuzzleSolved;
 
     // ── Puzzle-Definition ─────────────────────────────────────────────────
     // TileType: 0=Leer  1=Gerade  2=Ecke  3=Quelle(fix)  4=Ziel(fix)
@@ -291,7 +300,11 @@ public class Level5_Breadboard : MonoBehaviour
             }
         }
 
-        yield return new WaitForSeconds(1f);
+        yield return new WaitForSeconds(0.8f);
+
+        OnPuzzleSolved?.Invoke();
+
+        if (!autoTransitionAfterSolve) yield break;
 
         if (BigYahuDialogSystem.Instance != null)
             BigYahuDialogSystem.Instance.ShowDialog(new[]
