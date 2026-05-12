@@ -65,6 +65,7 @@ public class Level2_DustWall : MonoBehaviour
     private bool humidityClearQueued;
     private bool dustWasCleared;
     private bool successLogged;
+    private bool joshiSpoken;
 
     private static readonly Key[] correctKeys =
         { Key.UpArrow, Key.UpArrow, Key.DownArrow, Key.DownArrow };
@@ -88,8 +89,7 @@ public class Level2_DustWall : MonoBehaviour
         if (useArduinoHumidity && ArduinoBridge.Instance != null)
         {
             ArduinoBridge.Instance.RegisterHandler(0x10, HandleHumidity);
-            // Thermistor sofort beim Betreten von Level 2 starten, nicht erst an der Staubwand.
-            ArduinoBridge.Instance.Send(0x10, "START");
+            // Thermistor wird erst gestartet, wenn der Spieler die Staubwand mit E oeffnet.
         }
 
         if (joshiPrompt)           joshiPrompt.SetActive(false);
@@ -136,11 +136,13 @@ public class Level2_DustWall : MonoBehaviour
     void HandleWaitingJoshi()
     {
         bool near = joshiSpot != null && joshiSpot.PlayerNearby;
-        if (joshiPrompt) joshiPrompt.SetActive(near);
+        // Prompt nur am Anfang anzeigen – nach dem ersten Dialog dauerhaft aus.
+        if (joshiPrompt) joshiPrompt.SetActive(near && !joshiSpoken);
 
         if (!near) return;
         if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
         {
+            joshiSpoken = true;
             if (joshiPrompt) joshiPrompt.SetActive(false);
             StartJoshiDialog();
         }
@@ -209,7 +211,9 @@ public class Level2_DustWall : MonoBehaviour
         if (dustWallPanel) dustWallPanel.SetActive(true);
         if (dustOverlay) dustOverlay.gameObject.SetActive(true);
         if (instructionText) instructionText.gameObject.SetActive(true);
-        // Thermistor laeuft bereits seit OnEnable – kein erneutes START noetig.
+        // Thermistor erst jetzt starten – durchgehendes Polling, solange die Wand offen ist.
+        if (useArduinoHumidity && ArduinoBridge.Instance != null)
+            ArduinoBridge.Instance.Send(0x10, "START");
         StartCoroutine(BuildTexture());
     }
 
@@ -220,7 +224,40 @@ public class Level2_DustWall : MonoBehaviour
         if (dustWallPanel)   dustWallPanel.SetActive(false);
         if (dustOverlay)     dustOverlay.gameObject.SetActive(false);
         if (instructionText) instructionText.gameObject.SetActive(false);
-        state = State.WaitingInteraction;
+
+        // Wenn die Pfeile freigelegt sind, startet jetzt erst der zweite Joshi-Dialog.
+        if (dustWasCleared)
+        {
+            StartCoroutine(ShowArrowRevealDialog());
+        }
+        else
+        {
+            state = State.WaitingInteraction;
+        }
+    }
+
+    IEnumerator ShowArrowRevealDialog()
+    {
+        state = State.Idle;
+        yield return null;
+
+        if (BigYahuDialogSystem.Instance != null)
+        {
+            BigYahuDialogSystem.Instance.SetSpeaker("Joshi");
+            BigYahuDialogSystem.Instance.ShowDialog(new[]
+            {
+                "Joshi: Da! Siehst du die Pfeile? Das ist mein Code.",
+                "Joshi: Merk dir die Sequenz. Das Schloss haengt am Eingang – geh hin und gib den Code ein!"
+            }, () =>
+            {
+                BigYahuDialogSystem.Instance.ResetSpeaker();
+                state = State.WaitingLock;
+            });
+        }
+        else
+        {
+            state = State.WaitingLock;
+        }
     }
 
     IEnumerator BuildTexture()
@@ -359,7 +396,6 @@ public class Level2_DustWall : MonoBehaviour
 
     IEnumerator OnDustCleared()
     {
-        state = State.Idle;
         if (!successLogged)
         {
             Debug.Log("success");
@@ -371,32 +407,11 @@ public class Level2_DustWall : MonoBehaviour
             ArduinoBridge.Instance.Send(0x10, "STOP");
 
         if (instructionText) instructionText.gameObject.SetActive(false);
-        if (dustOverlay) dustOverlay.gameObject.SetActive(false);
-        yield return new WaitForSeconds(0.6f);
-
-        Cursor.visible   = false;
-        Cursor.lockState = CursorLockMode.Locked;
-
-        if (BigYahuDialogSystem.Instance != null)
-        {
-            BigYahuDialogSystem.Instance.SetSpeaker("Joshi");
-            BigYahuDialogSystem.Instance.ShowDialog(new[]
-            {
-                "Joshi: Da! Siehst du die Pfeile? Das ist mein Code.",
-                "Joshi: Merk dir die Sequenz. Das Schloss haengt am Eingang – geh hin und gib den Code ein!"
-            }, () =>
-            {
-                if (dustWallPanel) dustWallPanel.SetActive(false);
-                BigYahuDialogSystem.Instance.ResetSpeaker();
-                state = State.WaitingLock;
-            });
-        }
-        else
-        {
-            yield return new WaitForSeconds(1.5f);
-            if (dustWallPanel) dustWallPanel.SetActive(false);
-            state = State.WaitingLock;
-        }
+        // dustOverlay bleibt sichtbar (transparent) – Spieler sieht die freigelegten Pfeile.
+        // dustClearing bleibt true → Erase und Humidity-Trigger sind blockiert.
+        // State bleibt Scratching: Spieler verlaesst die Ansicht selbst mit [E],
+        // erst dann startet der zweite Joshi-Dialog (siehe ExitScratch).
+        yield break;
     }
 
     // =========================================================================
