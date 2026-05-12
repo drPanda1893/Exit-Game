@@ -13,7 +13,7 @@ using UnityEditor.SceneManagement;
 ///  zugunsten der Standard-Unity-Menüstruktur entfernt.)
 ///
 /// Nutzung:
-///   - Sceneöffnen (z.B. GameLevel.unity), Menüpunkt klicken.
+///   - Sceneöffnen (z.B. eine Level-Szene), Menüpunkt klicken.
 ///   - Erstellt Canvas + DialogPanel + Portrait + SpeakerLabel + DialogText + ContinueButton.
 ///   - Hängt BigYahuDialogSystem an und verkabelt alle SerializeFields.
 ///   - Idempotent: re-runs überschreiben sauber, statt zu duplizieren.

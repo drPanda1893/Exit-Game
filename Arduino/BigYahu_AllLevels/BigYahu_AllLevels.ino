@@ -11,10 +11,10 @@
  *   Thermistor                          -> A0
  *   Buzzer                              -> Pin 8 (geteilt mit Keypad-Spalte)
  *   Relay                               -> Pin 4 (geteilt mit Keypad-Reihe)
- *   Farbsensor TCS3200 (Level 3)        -> S0=D4, S1=D5, S2=D6, S3=D7, OUT=D12, OE=D13
+ *   Farbsensor TCS3200 (Level 3)        -> S0=D4, S1=D5, S2=D6, S3=D7, OUT=D8, OE=D13
  *                                          (OE aktiv-LOW; teilt sich Pins mit Keypad –
  *                                           es ist immer nur ein Level aktiv, daher ok)
- *   Reset-Taster (Level 3)              -> D8 gegen GND (INPUT_PULLUP)
+ *   Reset-Taster (Level 3, optional)    -> D12 gegen GND (INPUT_PULLUP)
  *
  * Unity -> Arduino:
  *   LV:0 / LV:1 / LV:2 / LV:3   explizit Level setzen (optional)
@@ -28,7 +28,8 @@
  *   10:TEMP:<celsius>      Level2 laufender Temperaturwert
  *   10:BLOW:<celsius>      Level2 Schwellwert ueberschritten
  *   success                einmaliger Marker bei Level2-Erfolg
- *   COLOR:RGB:<r>,<g>,<b>,<name>   Level3 laufende Scanner-Werte (0..255 + erkannte Farbe), jeder Takt
+ *   COLOR:RGB:<r>,<g>,<b>,<name>,<rawR>,<rawG>,<rawB>
+ *                                      Level3 laufende Scanner-Werte zum Testen/Kalibrieren
  *   COLOR:RED|GREEN|BLUE   Level3 erkannte Farbe – NUR bei echter Aenderung (1 Farbe = 1 Eingabe)
  *   COLOR:RESET            Level3 physischer Reset-Taster gedrueckt
  *   FF:ready               einmal nach Setup
@@ -290,17 +291,17 @@ void tickTemp() {
 // ═══════════════════════════════════════════════════════════════════════════
 // Level 3 – Farbsensor TCS3200 (Login-Terminal in der Bibliothek)
 //
-// Aktiv erst ab "20:START" (Unity sendet das, sobald das Login-UI aufgeht).
-// Verkabelung: S0=D4, S1=D5, S2=D6, S3=D7, OUT=D12, OE=D13 (OE aktiv-LOW).
+// Aktiv erst ab "20:START" (Unity sendet das direkt nach der Bibel-Auswahl).
+// Verkabelung: S0=D4, S1=D5, S2=D6, S3=D7, OUT=D8, OE=D13 (OE aktiv-LOW).
 // Logik nach dem Test-Sketch des Spielers: Rohwerte messen, kalibrieren,
 // auf 0..255 mappen und die staerkste Komponente als Farbe werten.
-// Sendet jeden Takt "COLOR:RGB:r,g,b,NAME" (Live-Werte fuers Terminal).
+// Sendet jeden Takt "COLOR:RGB:r,g,b,NAME,rawR,rawG,rawB" (Live-Werte fuers Terminal).
 //
 // WICHTIG: Es wird genau EIN bestaetigter Input pro echter Farbaenderung gemeldet:
 //   - eine Farbe muss COL_STABLE_NEED Messungen in Folge stabil sein,
 //   - und sie muss sich vom zuletzt gemeldeten Wert unterscheiden,
 //   - "NONE/Schwarz" loest nichts aus und ueberschreibt den letzten Wert nicht.
-// Der physische Reset-Taster (D8 -> GND) sendet "COLOR:RESET" und macht den
+// Der physische Reset-Taster (D12 -> GND) sendet "COLOR:RESET" und macht den
 // zuletzt gemeldeten Wert wieder "frei", sodass dieselbe Farbe danach erneut zaehlt.
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -308,11 +309,11 @@ void tickTemp() {
 #define TCS_S1              5
 #define TCS_S2              6
 #define TCS_S3              7
-#define TCS_OUT             12
+#define TCS_OUT             8
 #define TCS_OE              13   // Output-Enable, aktiv-LOW (LOW = Sensor-Ausgang an).
                                  // Falls D13 bei dir die Beleuchtungs-LED steuert:
                                  // Logik invertieren (HIGH = an).
-#define COLOR_RESET_BTN_PIN 8
+#define COLOR_RESET_BTN_PIN 12
 
 // Kalibrierung: Rohwerte -> 0..255  (Weiss = kleiner Rohwert, Schwarz = grosser).
 // Bei Bedarf an die echte Umgebung anpassen (siehe Original-Test-Sketch).
@@ -320,8 +321,8 @@ const long COL_R_MIN = 25,  COL_R_MAX = 150;
 const long COL_G_MIN = 30,  COL_G_MAX = 160;
 const long COL_B_MIN = 25,  COL_B_MAX = 140;
 const int  COL_THRESHOLD    = 100;   // ab hier gilt eine Komponente als "Farbe"
-const byte COL_STABLE_NEED  = 4;     // so viele gleiche Messungen in Folge = bestaetigt
-const unsigned long COL_SAMPLE_MS = 80;
+const byte COL_STABLE_NEED  = 2;     // so viele gleiche Messungen in Folge = bestaetigt
+const unsigned long COL_SAMPLE_MS = 500;
 const unsigned long COL_PULSE_TIMEOUT_US = 8000;
 
 // (enum DetColor steht weiter oben bei enum Level – Arduino-Prototyp-Reihenfolge)
@@ -332,7 +333,8 @@ DetColor      colConfirmed    = COL_NONE;   // zuletzt an Unity gemeldete Farbe
 bool          colBtnLast      = HIGH;       // Reset-Taster Entprellung
 bool          colBtnHandled   = false;
 unsigned long colBtnChangedAt = 0;
-int           colLastR = 0, colLastG = 0, colLastB = 0;   // letzte gemappten 0..255-Werte
+int           colLastR = 0, colLastG = 0, colLastB = 0;          // letzte gemappten 0..255-Werte
+long          colLastRawR = 0, colLastRawG = 0, colLastRawB = 0;  // letzte Roh-Pulswerte (zum Kalibrieren)
 
 void initColorSensor() {
   pinMode(TCS_S0, OUTPUT);
@@ -383,6 +385,10 @@ DetColor measureColorOnce() {
   long greenRaw = readTcsPulse(true,  true);    // S2=H S3=H -> Gruen
   long blueRaw  = readTcsPulse(false, true);    // S2=L S3=H -> Blau
 
+  colLastRawR = redRaw;
+  colLastRawG = greenRaw;
+  colLastRawB = blueRaw;
+
   long r = constrain(map(redRaw,   COL_R_MIN, COL_R_MAX, 255, 0), 0, 255);
   long g = constrain(map(greenRaw, COL_G_MIN, COL_G_MAX, 255, 0), 0, 255);
   long b = constrain(map(blueRaw,  COL_B_MIN, COL_B_MAX, 255, 0), 0, 255);
@@ -429,7 +435,10 @@ void tickColor() {
   Serial.print(colLastR); Serial.print(',');
   Serial.print(colLastG); Serial.print(',');
   Serial.print(colLastB); Serial.print(',');
-  Serial.println(colorName(c));
+  Serial.print(colorName(c)); Serial.print(',');
+  Serial.print(colLastRawR); Serial.print(',');
+  Serial.print(colLastRawG); Serial.print(',');
+  Serial.println(colLastRawB);
 
   // Stabilitaets-Serie verlaengern oder neu starten
   if (c == colCandidate) {

@@ -98,6 +98,11 @@ public class BuildLevel3Library : EditorWindow
         gmSo.ApplyModifiedPropertiesWithoutUndo();
         MoveToScene(gmGO, scene);
 
+        // ArduinoBridge - noetig, wenn Level 3 direkt gestartet wird.
+        var arduinoGO = new GameObject("ArduinoBridge");
+        arduinoGO.AddComponent<ArduinoBridge>();
+        MoveToScene(arduinoGO, scene);
+
         // EventSystem wird in BookSelectionUI.Show() zur Laufzeit angelegt –
         // hier nicht einfuegen, weil InputSystemUIInputModule.OnEnable im Edit-Mode
         // beim anschliessenden MoveGameObjectToScene mit "Gameobject is not a root

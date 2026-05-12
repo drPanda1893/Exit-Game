@@ -99,6 +99,7 @@ public class Level3_ComputerInteraction : MonoBehaviour
     public void OpenLoginScreen(float delay = 1.7f)
     {
         ActivateComputer();
+        codeUI?.BeginArduinoScan();
         if (isSolved) return;
         StartCoroutine(ShowLoginAfter(delay));
     }

@@ -118,7 +118,7 @@ public class Level3_ColorCodeUI : MonoBehaviour
         if (titleText   != null) { titleText.text   = "ZUGANG GESPERRT"; titleText.color   = TermRed;   }
         if (messageText != null) { messageText.text = MessageBody;        messageText.color = TermGreen; }
 
-        SubscribeArduino();
+        SubscribeArduino(resetSensor: true);
         StartPromptBlink();
         RenderPromptLine();
     }
@@ -137,12 +137,39 @@ public class Level3_ColorCodeUI : MonoBehaviour
     // Arduino-Farbsensor (CMD 0x20)
     // ══════════════════════════════════════════════════════════
 
-    private void SubscribeArduino()
+    private void SubscribeArduino(bool resetSensor = false)
     {
-        if (arduinoSubscribed || ArduinoBridge.Instance == null) return;
-        ArduinoBridge.Instance.OnColor += HandleArduinoColor;
+        if (ArduinoBridge.Instance == null)
+        {
+            Debug.LogWarning("[Level3_ColorSensor] Kein ArduinoBridge gefunden - Farbsensor nicht verbunden.");
+            return;
+        }
+
+        if (!arduinoSubscribed)
+        {
+            ArduinoBridge.Instance.OnColor += HandleArduinoColor;
+            ArduinoBridge.Instance.OnConnectionChanged += HandleArduinoConnectionChanged;
+            arduinoSubscribed = true;
+        }
+
+        if (!ArduinoBridge.Instance.IsConnected)
+        {
+            Debug.LogWarning("[Level3_ColorSensor] ArduinoBridge noch nicht verbunden - START wird nach Verbindung erneut gesendet.");
+            return;
+        }
+
+        if (resetSensor)
+            ArduinoBridge.Instance.Send(0x20, "STOP");
+
         ArduinoBridge.Instance.Send(0x20, "START");  // -> "20:START": aktiviert den Sensor
-        arduinoSubscribed = true;
+        Debug.Log("[Level3_ColorSensor] Farbscanner aktiviert.");
+    }
+
+    private void HandleArduinoConnectionChanged(bool connected)
+    {
+        if (!connected || !arduinoSubscribed || ArduinoBridge.Instance == null) return;
+        ArduinoBridge.Instance.Send(0x20, "START");
+        Debug.Log("[Level3_ColorSensor] Farbscanner aktiviert.");
     }
 
     private void UnsubscribeArduino()
@@ -151,26 +178,39 @@ public class Level3_ColorCodeUI : MonoBehaviour
         arduinoSubscribed = false;
         if (ArduinoBridge.Instance == null) return;
         ArduinoBridge.Instance.OnColor -= HandleArduinoColor;
-        ArduinoBridge.Instance.Send(0x20, "STOP");
+        ArduinoBridge.Instance.OnConnectionChanged -= HandleArduinoConnectionChanged;
+        if (ArduinoBridge.Instance.IsConnected)
+            ArduinoBridge.Instance.Send(0x20, "STOP");
     }
 
     // raw kommt bereits ohne "COLOR:"-Präfix von der ArduinoBridge:
-    //   "RGB:r,g,b,NAME" -> nur Live-Anzeige im Terminal, keine Eingabe
+    //   "RGB:r,g,b,NAME[,rawR,rawG,rawB]" -> nur Live-Anzeige im Terminal, keine Eingabe
     //   "RESET"          -> Eingabe zurücksetzen (physischer Taster)
     //   "RED"|"GREEN"|"BLUE" -> bestätigte Farbe (Sketch sendet nur bei echter Änderung)
+    public void BeginArduinoScan() => SubscribeArduino();
+
     private void HandleArduinoColor(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return;
         string t = raw.Trim();
 
         if (t.StartsWith("RGB:", StringComparison.OrdinalIgnoreCase)) { UpdateSensorReadout(t.Substring(4)); return; }
-        if (t.Equals("RESET", StringComparison.OrdinalIgnoreCase))    { ResetInput(); return; }
+        if (t.Equals("RESET", StringComparison.OrdinalIgnoreCase))
+        {
+            Debug.Log("[Level3_ColorSensor] Reset vom Sensor.");
+            ResetInput();
+            return;
+        }
 
         string c = NormalizeColor(raw);
-        if (c != null) Press(c);
+        if (c != null)
+        {
+            Debug.Log($"[Level3_ColorSensor] Bestaetigte Farbe: {c}");
+            Press(c);
+        }
     }
 
-    // csv = "r,g,b,NAME" -> Live-Zeile "R=xxx G=xxx B=xxx  ->  FARBE" im Terminal
+    // csv = "r,g,b,NAME[,rawR,rawG,rawB]" -> Live-Zeile im Terminal
     private void UpdateSensorReadout(string csv)
     {
         var p = csv.Split(',');
@@ -186,12 +226,23 @@ public class Level3_ColorCodeUI : MonoBehaviour
                 "Green" => "GRÜN",
                 _       => "--"
             };
-            sensorReadout = $"R={r:000} G={g:000} B={b:000}  ->  {label}";
+            if (p.Length >= 7 &&
+                long.TryParse(p[4].Trim(), out long rawR) &&
+                long.TryParse(p[5].Trim(), out long rawG) &&
+                long.TryParse(p[6].Trim(), out long rawB))
+            {
+                sensorReadout = $"ROH R={rawR} G={rawG} B={rawB} | RGB {r:000},{g:000},{b:000} -> {label}";
+            }
+            else
+            {
+                sensorReadout = $"RGB {r:000},{g:000},{b:000} -> {label}";
+            }
         }
         else
         {
             sensorReadout = csv.Trim();
         }
+        Debug.Log($"[Level3_ColorSensor] {sensorReadout}");
         RenderPromptLine();
     }
 

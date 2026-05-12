@@ -1,5 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 using TMPro;
 using System;
 
@@ -29,6 +31,7 @@ public class BookSelectionUI : MonoBehaviour
     public void Show()
     {
         if (overlayCanvas == null) return;
+        EnsureEventSystem();
         overlayCanvas.gameObject.SetActive(true);
         if (feedbackText != null) feedbackText.text = "";
 
@@ -68,6 +71,17 @@ public class BookSelectionUI : MonoBehaviour
         {
             if (feedbackText != null) feedbackText.text = "✗ Das ist nicht das gesuchte Buch.";
         }
+    }
+
+    // Level3.unity wurde ohne EventSystem gebaut – ohne das werden UI-Klicks
+    // niemals an Buttons weitergegeben (Cursor bewegt sich trotzdem, weil das
+    // vom OS kommt). Falls keiner existiert, einen mit Input-System-Modul anlegen.
+    private static void EnsureEventSystem()
+    {
+        if (EventSystem.current != null) return;
+        var go = new GameObject("EventSystem");
+        go.AddComponent<EventSystem>();
+        go.AddComponent<InputSystemUIInputModule>();
     }
 
     private int[] ShuffleOrder()

@@ -137,10 +137,34 @@ public class ArduinoBridge : MonoBehaviour
             OnConnectionChanged?.Invoke(true);
             StartCoroutine(AutoPingRoutine());
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            Debug.LogWarning(
+                $"[ArduinoBridge] COM-Port belegt ({portName}): {ex.Message}\n" +
+                "Schliesse Arduino IDE Serial Monitor/Plotter, laufende arduino-cli Uploads " +
+                "oder zweite Unity-Instanzen, dann Play neu starten.\n" +
+                $"Verfuegbare Ports: {AvailableSerialPorts()}");
+            _port = null;
+        }
         catch (Exception ex)
         {
-            Debug.LogWarning($"[ArduinoBridge] Verbindungsfehler ({portName}): {ex.Message}");
+            Debug.LogWarning(
+                $"[ArduinoBridge] Verbindungsfehler ({portName}): {ex.Message}\n" +
+                $"Verfuegbare Ports: {AvailableSerialPorts()}");
             _port = null;
+        }
+    }
+
+    string AvailableSerialPorts()
+    {
+        try
+        {
+            string[] ports = SerialPort.GetPortNames();
+            return ports.Length == 0 ? "keine" : string.Join(", ", ports);
+        }
+        catch (Exception ex)
+        {
+            return $"unbekannt ({ex.Message})";
         }
     }
 
