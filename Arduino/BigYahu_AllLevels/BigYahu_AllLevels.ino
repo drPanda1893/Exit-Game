@@ -11,10 +11,10 @@
  *   Thermistor                          -> A0
  *   Buzzer                              -> Pin 8 (geteilt mit Keypad-Spalte)
  *   Relay                               -> Pin 4 (geteilt mit Keypad-Reihe)
- *   Farbsensor TCS3200 (Level 3)        -> S0=4, S1=5, S2=6, S3=7, OUT=8
- *                                          (teilt sich Pins mit dem Keypad – es ist
- *                                           immer nur ein Level aktiv, daher ok)
- *   Reset-Taster (Level 3)              -> Pin 12 gegen GND (INPUT_PULLUP)
+ *   Farbsensor TCS3200 (Level 3)        -> S0=D4, S1=D5, S2=D6, S3=D7, OUT=D12, OE=D13
+ *                                          (OE aktiv-LOW; teilt sich Pins mit Keypad –
+ *                                           es ist immer nur ein Level aktiv, daher ok)
+ *   Reset-Taster (Level 3)              -> D8 gegen GND (INPUT_PULLUP)
  *
  * Unity -> Arduino:
  *   LV:0 / LV:1 / LV:2 / LV:3   explizit Level setzen (optional)
@@ -286,14 +286,16 @@ void tickTemp() {
 // Level 3 – Farbsensor TCS3200 (Login-Terminal in der Bibliothek)
 //
 // Aktiv erst ab "20:START" (Unity sendet das, sobald das Login-UI aufgeht).
+// Verkabelung: S0=D4, S1=D5, S2=D6, S3=D7, OUT=D12, OE=D13 (OE aktiv-LOW).
 // Logik nach dem Test-Sketch des Spielers: Rohwerte messen, kalibrieren,
 // auf 0..255 mappen und die staerkste Komponente als Farbe werten.
+// Sendet jeden Takt "COLOR:RGB:r,g,b,NAME" (Live-Werte fuers Terminal).
 //
-// WICHTIG: Es wird genau EIN Input pro echter Farbaenderung gemeldet:
+// WICHTIG: Es wird genau EIN bestaetigter Input pro echter Farbaenderung gemeldet:
 //   - eine Farbe muss COL_STABLE_NEED Messungen in Folge stabil sein,
 //   - und sie muss sich vom zuletzt gemeldeten Wert unterscheiden,
 //   - "NONE/Schwarz" loest nichts aus und ueberschreibt den letzten Wert nicht.
-// Der physische Reset-Taster (Pin 12 -> GND) sendet "COLOR:RESET" und macht den
+// Der physische Reset-Taster (D8 -> GND) sendet "COLOR:RESET" und macht den
 // zuletzt gemeldeten Wert wieder "frei", sodass dieselbe Farbe danach erneut zaehlt.
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -301,8 +303,11 @@ void tickTemp() {
 #define TCS_S1              5
 #define TCS_S2              6
 #define TCS_S3              7
-#define TCS_OUT             8
-#define COLOR_RESET_BTN_PIN 12
+#define TCS_OUT             12
+#define TCS_OE              13   // Output-Enable, aktiv-LOW (LOW = Sensor-Ausgang an).
+                                 // Falls D13 bei dir die Beleuchtungs-LED steuert:
+                                 // Logik invertieren (HIGH = an).
+#define COLOR_RESET_BTN_PIN 8
 
 // Kalibrierung: Rohwerte -> 0..255  (Weiss = kleiner Rohwert, Schwarz = grosser).
 // Bei Bedarf an die echte Umgebung anpassen (siehe Original-Test-Sketch).
@@ -331,6 +336,8 @@ void initColorSensor() {
   pinMode(TCS_S2, OUTPUT);
   pinMode(TCS_S3, OUTPUT);
   pinMode(TCS_OUT, INPUT);
+  pinMode(TCS_OE, OUTPUT);
+  digitalWrite(TCS_OE, LOW);             // Sensor-Ausgang aktivieren (OE aktiv-LOW)
   pinMode(COLOR_RESET_BTN_PIN, INPUT_PULLUP);
   // Frequenz-Skalierung 20 % (Standard fuer den TCS3200)
   digitalWrite(TCS_S0, HIGH);
@@ -404,7 +411,6 @@ void tickColor() {
     colCandidate  = COL_NONE;
     colStableCnt  = 0;
     Serial.println("COLOR:RESET");
-    digitalWrite(LED_BUILTIN, HIGH); delay(40); digitalWrite(LED_BUILTIN, LOW);
   }
   if (btn == HIGH) colBtnHandled = false;
 
@@ -436,5 +442,4 @@ void tickColor() {
   colConfirmed = c;
   Serial.print("COLOR:");
   Serial.println(colorName(c));
-  digitalWrite(LED_BUILTIN, HIGH); delay(20); digitalWrite(LED_BUILTIN, LOW);
 }

@@ -1549,10 +1549,23 @@ public class BuildLevel3Library : EditorWindow
     }
 
     // Login-Terminal: erscheint als Popup nachdem die Bibel gewählt wurde.
-    // Stil = Computer-Login-Fenster; der Hinweistext verweist auf die echte Bibel
-    // auf dem Tisch. Drei Farben (ROT/BLAU/GRÜN), 3-stelliger Code: GRÜN → BLAU → GRÜN.
+    // Optik: futuristisch / clean / high-end – dunkles Panel, EINE Akzentfarbe (Cyan),
+    // dünne Akzentlinien statt klobiger Rahmen, viel Negativraum, gespreizte Caps.
+    // Hinweistext verweist auf die echte Bibel. Drei Farben (ROT/BLAU/GRÜN),
+    // 3-stelliger Code: GRÜN → BLAU → GRÜN.
     private Level3_ColorCodeUI BuildColorCodeUI(Scene scene)
     {
+        // ── Palette ───────────────────────────────────────────────────────────
+        Color cBg      = new Color(0.020f, 0.030f, 0.055f, 0.965f);  // Backdrop
+        Color cPanel   = new Color(0.040f, 0.058f, 0.085f, 0.992f);  // Fenster
+        Color cAccent  = new Color(0.180f, 0.850f, 0.910f, 1.000f);  // Cyan-Akzent
+        Color cAccentD = new Color(0.180f, 0.850f, 0.910f, 0.280f);  // Cyan gedimmt (Linien)
+        Color cText    = new Color(0.880f, 0.940f, 0.965f, 1.000f);  // Primärtext
+        Color cTextDim = new Color(0.470f, 0.585f, 0.660f, 1.000f);  // Sekundärtext / Caps
+        Color cAlert   = new Color(1.000f, 0.380f, 0.360f, 1.000f);  // "Gesperrt"
+        Color cSlot    = new Color(0.055f, 0.085f, 0.120f, 1.000f);  // leerer Slot
+        Color cCyanT   = new Color(cAccent.r, cAccent.g, cAccent.b, 0.92f);
+
         var canvasGO = new GameObject("ColorCodeCanvas");
         var canvas   = canvasGO.AddComponent<Canvas>();
         canvas.renderMode   = RenderMode.ScreenSpaceOverlay;
@@ -1561,97 +1574,132 @@ public class BuildLevel3Library : EditorWindow
             UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
         canvasGO.AddComponent<UnityEngine.UI.GraphicRaycaster>();
 
-        // Vollbild-Verdunkelung hinter dem Fenster
+        // Vollbild-Verdunkelung
         var backdrop = MakeUIBox(canvasGO.transform, "Backdrop", Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-        backdrop.AddComponent<UnityEngine.UI.Image>().color = new Color(0.02f, 0.03f, 0.05f, 0.93f);
+        backdrop.AddComponent<UnityEngine.UI.Image>().color = cBg;
 
-        // ── Login-Fenster ─────────────────────────────────────────────────
+        // ── Fenster ───────────────────────────────────────────────────────────
         var win = MakeUIPanel(canvasGO.transform, "LoginWindow",
-            new Vector2(0.16f, 0.08f), new Vector2(0.84f, 0.92f));
-        win.AddComponent<UnityEngine.UI.Image>().color = new Color(0.05f, 0.07f, 0.10f, 0.99f);
-        var winOutline = win.AddComponent<UnityEngine.UI.Outline>();
-        winOutline.effectColor    = new Color(0.20f, 0.85f, 1.0f, 0.85f);
-        winOutline.effectDistance = new Vector2(3f, 3f);
+            new Vector2(0.215f, 0.10f), new Vector2(0.785f, 0.90f));
+        win.AddComponent<UnityEngine.UI.Image>().color = cPanel;
+        var winGlow = win.AddComponent<UnityEngine.UI.Outline>();
+        winGlow.effectColor    = new Color(cAccent.r, cAccent.g, cAccent.b, 0.16f);
+        winGlow.effectDistance = new Vector2(1.5f, 1.5f);
         var winT = win.transform;
 
-        // Titelleiste (Fenster-Kopf)
-        var bar = MakeUIPanel(winT, "TitleBar", new Vector2(0f, 0.92f), new Vector2(1f, 1f));
-        bar.AddComponent<UnityEngine.UI.Image>().color = new Color(0.09f, 0.15f, 0.22f, 1f);
-        var barTxtGO = MakeUIPanel(bar.transform, "BarText", new Vector2(0.025f, 0f), new Vector2(0.975f, 1f));
-        var barTxt = barTxtGO.AddComponent<TextMeshProUGUI>();
-        barTxt.text      = "[ o o o ]   LIBRARY_TERMINAL  ::  SECURE LOGIN";
-        barTxt.fontSize  = 22;
-        barTxt.alignment = TextAlignmentOptions.MidlineLeft;
-        barTxt.color     = new Color(0.55f, 0.85f, 1.0f);
+        // dünne Akzentlinien oben/unten
+        MakeBar(winT, "AccentTop",    new Vector2(0f, 0.987f), new Vector2(1f, 1.000f), cAccent);
+        MakeBar(winT, "AccentBottom", new Vector2(0f, 0.000f), new Vector2(1f, 0.009f),
+                new Color(cAccent.r, cAccent.g, cAccent.b, 0.55f));
 
-        // Status-Zeile
-        var titleGO  = MakeUIPanel(winT, "Status", new Vector2(0.05f, 0.83f), new Vector2(0.95f, 0.915f));
+        // ── Kopf ──────────────────────────────────────────────────────────────
+        var subGO  = MakeUIPanel(winT, "SubLabel", new Vector2(0.055f, 0.932f), new Vector2(0.62f, 0.972f));
+        var subTxt = subGO.AddComponent<TextMeshProUGUI>();
+        subTxt.text             = "BIBLIOTHEK  ·  ZUGANGSTERMINAL";
+        subTxt.fontSize         = 16;
+        subTxt.characterSpacing = 12f;
+        subTxt.alignment        = TextAlignmentOptions.MidlineLeft;
+        subTxt.color            = cTextDim;
+
+        var headGO  = MakeUIPanel(winT, "Header", new Vector2(0.055f, 0.872f), new Vector2(0.70f, 0.932f));
+        var headTxt = headGO.AddComponent<TextMeshProUGUI>();
+        headTxt.text             = "AUTHENTIFIZIERUNG";
+        headTxt.fontSize         = 38;
+        headTxt.fontStyle        = FontStyles.Bold;
+        headTxt.characterSpacing = 3f;
+        headTxt.alignment        = TextAlignmentOptions.MidlineLeft;
+        headTxt.color            = cText;
+
+        // Status (rechts oben) – Inhalt setzt Level3_ColorCodeUI ("ZUGANG GESPERRT"/"ZUGANG FREI")
+        var titleGO  = MakeUIPanel(winT, "Status", new Vector2(0.50f, 0.900f), new Vector2(0.945f, 0.952f));
         var titleTxt = titleGO.AddComponent<TextMeshProUGUI>();
-        titleTxt.text      = "ZUGANG GESPERRT";
-        titleTxt.fontSize  = 40;
-        titleTxt.fontStyle = FontStyles.Bold;
-        titleTxt.alignment = TextAlignmentOptions.Center;
-        titleTxt.color     = new Color(0.95f, 0.35f, 0.30f);
+        titleTxt.text             = "ZUGANG GESPERRT";
+        titleTxt.fontSize         = 19;
+        titleTxt.fontStyle        = FontStyles.Bold;
+        titleTxt.characterSpacing = 6f;
+        titleTxt.alignment        = TextAlignmentOptions.MidlineRight;
+        titleTxt.color            = cAlert;
 
-        // Terminal-Hinweistext (linksbündig) – Inhalt wird in Level3_ColorCodeUI.Show() gesetzt
-        var msgGO  = MakeUIPanel(winT, "Message", new Vector2(0.07f, 0.45f), new Vector2(0.93f, 0.82f));
+        MakeBar(winT, "DividerTop", new Vector2(0.055f, 0.860f), new Vector2(0.945f, 0.864f), cAccentD);
+
+        // ── Hinweistext (Terminal) – Inhalt setzt Level3_ColorCodeUI.Show() ──
+        var msgGO  = MakeUIPanel(winT, "Message", new Vector2(0.065f, 0.515f), new Vector2(0.935f, 0.848f));
         var msgTxt = msgGO.AddComponent<TextMeshProUGUI>();
-        msgTxt.text      = "> ...";
-        msgTxt.fontSize  = 22;
-        msgTxt.alignment = TextAlignmentOptions.TopLeft;
-        msgTxt.color     = new Color(0.55f, 0.95f, 0.70f);
+        msgTxt.text        = "> ...";
+        msgTxt.fontSize    = 21;
+        msgTxt.lineSpacing = 8f;
+        msgTxt.alignment   = TextAlignmentOptions.TopLeft;
+        msgTxt.color       = new Color(0.62f, 0.92f, 1.0f);
 
-        // 3 Code-Slots (mittig)
+        // ── Code-Slots ────────────────────────────────────────────────────────
+        var seqLblGO = MakeUIPanel(winT, "SeqLabel", new Vector2(0.065f, 0.475f), new Vector2(0.935f, 0.505f));
+        var seqLbl   = seqLblGO.AddComponent<TextMeshProUGUI>();
+        seqLbl.text             = "FARBSEQUENZ";
+        seqLbl.fontSize         = 15;
+        seqLbl.characterSpacing = 14f;
+        seqLbl.alignment        = TextAlignmentOptions.Center;
+        seqLbl.color            = cTextDim;
+
         const int   slotCount = 3;
         var slotImages = new UnityEngine.UI.Image[slotCount];
-        const float slotW = 0.10f, slotGap = 0.03f;
+        const float slotW = 0.085f, slotGap = 0.045f;
         float totalW = slotCount * slotW + (slotCount - 1) * slotGap;
         float startX = 0.5f - totalW * 0.5f;
         for (int i = 0; i < slotCount; i++)
         {
             float x0   = startX + i * (slotW + slotGap);
             var   slot = MakeUIPanel(winT, $"Slot_{i}",
-                new Vector2(x0, 0.355f), new Vector2(x0 + slotW, 0.435f));
+                new Vector2(x0, 0.385f), new Vector2(x0 + slotW, 0.468f));
             var img    = slot.AddComponent<UnityEngine.UI.Image>();
-            img.color  = new Color(0.06f, 0.09f, 0.11f, 1f);
+            img.color  = cSlot;
             slotImages[i] = img;
             var o = slot.AddComponent<UnityEngine.UI.Outline>();
-            o.effectColor    = new Color(0.20f, 0.85f, 1.0f, 0.5f);
-            o.effectDistance = new Vector2(2f, 2f);
+            o.effectColor    = new Color(cAccent.r, cAccent.g, cAccent.b, 0.45f);
+            o.effectDistance = new Vector2(1.2f, 1.2f);
         }
 
-        // Terminal-Zeile unter den Slots: zeigt live die Scannerwerte (R/G/B + Farbe)
-        // plus blinkenden Cursor. Inhalt setzt Level3_ColorCodeUI zur Laufzeit.
-        var promptGO  = MakeUIPanel(winT, "Prompt", new Vector2(0.07f, 0.295f), new Vector2(0.93f, 0.35f));
+        // ── Live-Scannerzeile (R/G/B + blinkender Cursor) – setzt Level3_ColorCodeUI ──
+        var promptGO  = MakeUIPanel(winT, "Prompt", new Vector2(0.065f, 0.330f), new Vector2(0.935f, 0.378f));
         var promptTxt = promptGO.AddComponent<TextMeshProUGUI>();
         promptTxt.text      = "> _";
-        promptTxt.fontSize  = 20;
+        promptTxt.fontSize  = 19;
         promptTxt.alignment = TextAlignmentOptions.MidlineLeft;
-        promptTxt.color     = new Color(0.55f, 0.95f, 0.70f);
+        promptTxt.color     = cCyanT;
 
-        // 3 Farb-Buttons (Fallback-Eingabe): ROT, BLAU, GRÜN
-        Color cRed   = new Color(0.90f, 0.18f, 0.16f);
-        Color cBlue  = new Color(0.20f, 0.45f, 1.00f);
-        Color cGreen = new Color(0.22f, 0.86f, 0.32f);
-        const float btY0 = 0.185f, btY1 = 0.285f;
-        var redBtn   = MakeColorButton(winT, "RedBtn",   0.13f, 0.35f, btY0, btY1, cRed,   "ROT");
-        var blueBtn  = MakeColorButton(winT, "BlueBtn",  0.39f, 0.61f, btY0, btY1, cBlue,  "BLAU");
-        var greenBtn = MakeColorButton(winT, "GreenBtn", 0.65f, 0.87f, btY0, btY1, cGreen, "GRÜN");
+        // ── Manuelle Eingabe (Fallback) ───────────────────────────────────────
+        var manLblGO = MakeUIPanel(winT, "ManLabel", new Vector2(0.065f, 0.305f), new Vector2(0.935f, 0.330f));
+        var manLbl   = manLblGO.AddComponent<TextMeshProUGUI>();
+        manLbl.text             = "MANUELLE EINGABE";
+        manLbl.fontSize         = 15;
+        manLbl.characterSpacing = 14f;
+        manLbl.alignment        = TextAlignmentOptions.Center;
+        manLbl.color            = cTextDim;
 
-        // Feedback-Zeile
-        var fbGO  = MakeUIPanel(winT, "Feedback", new Vector2(0.07f, 0.105f), new Vector2(0.93f, 0.175f));
+        Color cRed   = new Color(0.92f, 0.26f, 0.24f);
+        Color cBlue  = new Color(0.26f, 0.52f, 1.00f);
+        Color cGreen = new Color(0.26f, 0.86f, 0.46f);
+        const float btY0 = 0.205f, btY1 = 0.295f;
+        var redBtn   = MakeColorTile(winT, "RedBtn",   0.115f, 0.355f, btY0, btY1, cRed,   "ROT",  cAccent);
+        var blueBtn  = MakeColorTile(winT, "BlueBtn",  0.380f, 0.620f, btY0, btY1, cBlue,  "BLAU", cAccent);
+        var greenBtn = MakeColorTile(winT, "GreenBtn", 0.645f, 0.885f, btY0, btY1, cGreen, "GRÜN", cAccent);
+
+        // ── Feedback-Zeile ────────────────────────────────────────────────────
+        var fbGO  = MakeUIPanel(winT, "Feedback", new Vector2(0.065f, 0.135f), new Vector2(0.935f, 0.195f));
         var fbTxt = fbGO.AddComponent<TextMeshProUGUI>();
-        fbTxt.fontSize  = 26;
-        fbTxt.alignment = TextAlignmentOptions.MidlineLeft;
-        fbTxt.color     = new Color(0.55f, 0.95f, 0.70f);
+        fbTxt.fontSize         = 22;
+        fbTxt.characterSpacing = 2f;
+        fbTxt.alignment        = TextAlignmentOptions.MidlineLeft;
+        fbTxt.color            = cCyanT;
 
-        // Reset / Schließen
-        var resetBtn = MakeTextButton(winT, "ResetBtn",
-            new Vector2(0.20f, 0.025f), new Vector2(0.45f, 0.09f), "Zurücksetzen", new Color(0.14f, 0.18f, 0.24f));
-        var closeBtn = MakeTextButton(winT, "CloseBtn",
-            new Vector2(0.55f, 0.025f), new Vector2(0.80f, 0.09f), "Schließen",    new Color(0.14f, 0.18f, 0.24f));
+        MakeBar(winT, "DividerBottom", new Vector2(0.055f, 0.118f), new Vector2(0.945f, 0.122f), cAccentD);
 
-        // Logik-Komponente
+        // ── Footer (dezente Ghost-Buttons, rechtsbündig) ──────────────────────
+        var resetBtn = MakeGhostButton(winT, "ResetBtn",
+            new Vector2(0.555f, 0.035f), new Vector2(0.745f, 0.100f), "ZURÜCKSETZEN", cAccent, cTextDim);
+        var closeBtn = MakeGhostButton(winT, "CloseBtn",
+            new Vector2(0.755f, 0.035f), new Vector2(0.945f, 0.100f), "SCHLIESSEN",   cAccent, cTextDim);
+
+        // ── Logik-Komponente ──────────────────────────────────────────────────
         var uiGO = new GameObject("ColorCodeUI");
         var ui   = uiGO.AddComponent<Level3_ColorCodeUI>();
         ui.overlayCanvas   = canvas;
@@ -1674,49 +1722,74 @@ public class BuildLevel3Library : EditorWindow
         return ui;
     }
 
-    private UnityEngine.UI.Button MakeColorButton(Transform parent, string name,
-                                                   float xMin, float xMax, float yMin, float yMax,
-                                                   Color color, string label)
+    // Dünne Akzent-/Trennlinie (einfarbiges Image-Band).
+    private GameObject MakeBar(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Color color)
+    {
+        var go = MakeUIPanel(parent, name, anchorMin, anchorMax);
+        go.AddComponent<UnityEngine.UI.Image>().color = color;
+        return go;
+    }
+
+    // Cleane Farb-Kachel (flach, dünne Akzentlinie am unteren Rand, beschriftet).
+    private UnityEngine.UI.Button MakeColorTile(Transform parent, string name,
+                                                 float xMin, float xMax, float yMin, float yMax,
+                                                 Color color, string label, Color accent)
     {
         var btnGO  = MakeUIPanel(parent, name, new Vector2(xMin, yMin), new Vector2(xMax, yMax));
         var btnImg = btnGO.AddComponent<UnityEngine.UI.Image>();
-        btnImg.color = color;
+        btnImg.color = Color.white;                        // tatsächliche Farbe kommt aus dem ColorBlock
         var btn = btnGO.AddComponent<UnityEngine.UI.Button>();
 
         var cb = btn.colors;
         cb.normalColor      = color;
-        cb.highlightedColor = Color.Lerp(color, Color.white, 0.30f);
-        cb.pressedColor     = Color.Lerp(color, Color.black, 0.25f);
+        cb.highlightedColor = Color.Lerp(color, Color.white, 0.22f);
+        cb.pressedColor     = Color.Lerp(color, Color.black, 0.22f);
         cb.selectedColor    = color;
+        cb.fadeDuration     = 0.08f;
         btn.colors = cb;
 
-        if (!string.IsNullOrEmpty(label))
-        {
-            var lblGO = MakeUIPanel(btnGO.transform, "Label", Vector2.zero, Vector2.one);
-            var lbl   = lblGO.AddComponent<TextMeshProUGUI>();
-            lbl.text      = label;
-            lbl.fontSize  = 22;
-            lbl.fontStyle = FontStyles.Bold;
-            lbl.alignment = TextAlignmentOptions.Center;
-            float lum = color.r * 0.299f + color.g * 0.587f + color.b * 0.114f;
-            lbl.color = lum > 0.55f ? new Color(0.05f, 0.05f, 0.05f) : Color.white;
-        }
+        // dünne Linie am unteren Rand der Kachel
+        MakeBar(btnGO.transform, "Edge", new Vector2(0f, 0f), new Vector2(1f, 0.055f),
+                new Color(accent.r, accent.g, accent.b, 0.85f));
+
+        var lblGO = MakeUIPanel(btnGO.transform, "Label", Vector2.zero, Vector2.one);
+        var lbl   = lblGO.AddComponent<TextMeshProUGUI>();
+        lbl.text             = label;
+        lbl.fontSize         = 22;
+        lbl.fontStyle        = FontStyles.Bold;
+        lbl.characterSpacing = 8f;
+        lbl.alignment        = TextAlignmentOptions.Center;
+        float lum = color.r * 0.299f + color.g * 0.587f + color.b * 0.114f;
+        lbl.color = lum > 0.55f ? new Color(0.04f, 0.04f, 0.05f) : new Color(0.96f, 0.98f, 1f);
         return btn;
     }
 
-    private UnityEngine.UI.Button MakeTextButton(Transform parent, string name,
-                                                  Vector2 anchorMin, Vector2 anchorMax,
-                                                  string label, Color background)
+    // Dezenter "Ghost"-Button: dunkler Hintergrund, dünner Akzentrahmen, Akzenttext.
+    private UnityEngine.UI.Button MakeGhostButton(Transform parent, string name,
+                                                   Vector2 anchorMin, Vector2 anchorMax,
+                                                   string label, Color accent, Color textColor)
     {
         var go  = MakeUIPanel(parent, name, anchorMin, anchorMax);
-        go.AddComponent<UnityEngine.UI.Image>().color = background;
+        go.AddComponent<UnityEngine.UI.Image>().color = Color.white;   // Farbe steuert der ColorBlock
+        var ol = go.AddComponent<UnityEngine.UI.Outline>();
+        ol.effectColor    = new Color(accent.r, accent.g, accent.b, 0.45f);
+        ol.effectDistance = new Vector2(1f, 1f);
+
         var btn = go.AddComponent<UnityEngine.UI.Button>();
+        var cb = btn.colors;
+        cb.normalColor      = new Color(0.075f, 0.105f, 0.145f, 1f);
+        cb.highlightedColor = new Color(0.110f, 0.160f, 0.210f, 1f);
+        cb.pressedColor     = new Color(0.055f, 0.080f, 0.110f, 1f);
+        cb.fadeDuration     = 0.08f;
+        btn.colors = cb;
+
         var txtGO = MakeUIPanel(go.transform, "Text", Vector2.zero, Vector2.one);
         var txt   = txtGO.AddComponent<TextMeshProUGUI>();
-        txt.text      = label;
-        txt.fontSize  = 22;
-        txt.alignment = TextAlignmentOptions.Center;
-        txt.color     = new Color(0.85f, 0.92f, 1.0f);
+        txt.text             = label;
+        txt.fontSize         = 17;
+        txt.characterSpacing = 8f;
+        txt.alignment        = TextAlignmentOptions.Center;
+        txt.color            = textColor;
         return btn;
     }
 

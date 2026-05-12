@@ -164,7 +164,7 @@ Dialog is routed through `BigYahuDialogSystem`. For non-Big-Yahu NPCs, set `spea
 | G-02 | L2: Joshi NPC audio narration, not Big Yahu | `Level2_DustWall.cs` uses `BigYahuDialogSystem` | HIGH |
 | G-03 | L2: Arrow combo `↑↑↓↓` via joystick opens door | Current code reveals a hidden number; no directional puzzle | HIGH |
 | G-04 | L3: Helios NPC + book selection (must pick Bible) | ✅ `HeliosInteraction` + `BookSelectionUI` (Level3.unity) | DONE |
-| G-05 | L3: Color sequence via Arduino (hold sensor to code) | ✅ `Level3_ColorCodeUI` login terminal (3-stelliger Code GRÜN→BLAU→GRÜN, Farben ROT/BLAU/GRÜN), mouse fallback. Arduino: TCS3200 in `BigYahu_AllLevels.ino` als `LV_COLOR` (Cmd `20:START/STOP`), sendet `COLOR:RED/GREEN/BLUE` nur bei echter Farbänderung + `COLOR:RESET` (physischer Taster Pin 12) | DONE |
+| G-05 | L3: Color sequence via Arduino (hold sensor to code) | ✅ `Level3_ColorCodeUI` futuristisches Login-Terminal (3-stelliger Code GRÜN→BLAU→GRÜN, Farben ROT/BLAU/GRÜN), Live-Scannerwerte (`COLOR:RGB:...`), mouse fallback. Arduino: TCS3200 (S0=D4,S1=D5,S2=D6,S3=D7,OUT=D12,OE=D13) als `LV_COLOR` (Cmd `20:START/STOP`), sendet `COLOR:RED/GREEN/BLUE` nur bei echter Farbänderung + `COLOR:RESET` (Taster D8) | DONE |
 | G-06 | L6: Bunsenbrenner / Föhn metaphor | Generic "heat button" UI | LOW |
 
 ---

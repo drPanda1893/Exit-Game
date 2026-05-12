@@ -61,17 +61,13 @@ public class Level3_ColorCodeUI : MonoBehaviour
     private static readonly Color TermRed   = new Color(0.95f, 0.35f, 0.30f);
 
     private const string MessageBody =
-        "> SYS: AUTHENTIFIZIERUNG ERFORDERLICH\n" +
+        "> Der Zugangscode ist nicht im System hinterlegt.\n" +
+        "> Er liegt verborgen in der echten Bibel vor dir auf dem Tisch.\n" +
         ">\n" +
-        "> Der Zugangscode ist NICHT im System hinterlegt.\n" +
-        "> Er liegt verborgen in der echten Bibel auf dem Tisch.\n" +
+        "> Drei Stellen sind darin markiert -- in ROT, GRÜN und BLAU.\n" +
+        "> Scanne sie in der Reihenfolge ihrer Seitenzahlen.\n" +
         ">\n" +
-        "> Drei Stellen sind darin markiert -- in ROT, GRÜN, BLAU.\n" +
-        "> Lies sie in der Reihenfolge ihrer Seitenzahlen und\n" +
-        "> halte den Farbsensor an jede Markierung.\n" +
-        ">\n" +
-        "> Vertippt? -> RESET-Taster am Sensor drücken\n" +
-        ">             (oder \"Zurücksetzen\" unten).";
+        "> Vertippt?  RESET-Taster am Sensor (oder \"Zurücksetzen\" unten).";
 
     private readonly List<string> input = new();
     private bool locked;
