@@ -70,6 +70,7 @@ public class BuildLevel3Library : EditorWindow
         var cam   = camGO.AddComponent<Camera>();
         cam.clearFlags      = CameraClearFlags.SolidColor;
         cam.backgroundColor = new Color(0.02f, 0.03f, 0.07f);
+        cam.fieldOfView     = 40f;
         cam.farClipPlane    = 50f;
         cam.nearClipPlane   = 0.1f;
         cam.tag             = "MainCamera";
