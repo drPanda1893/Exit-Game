@@ -29,6 +29,17 @@ public class BuildLevel3Library : EditorWindow
         finally { DestroyImmediate(w); }
     }
 
+    // Defensiver Wrapper: SceneManager.MoveGameObjectToScene wirft
+    // "Gameobject is not a root in a scene", sobald das GO einen Parent hat –
+    // z.B. weil eine AddComponent-OnEnable-Logik im Edit-Mode unbeabsichtigt
+    // reparentet. Vorher entkoppeln und dann verschieben.
+    private static void MoveToScene(GameObject go, Scene scene)
+    {
+        if (go == null) return;
+        if (go.transform.parent != null) go.transform.SetParent(null, true);
+        UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(go, scene);
+    }
+
     void OnGUI()
     {
         GUILayout.Label("Level 3 – Gefängnis-Bibliothek", EditorStyles.boldLabel);
@@ -48,7 +59,13 @@ public class BuildLevel3Library : EditorWindow
         Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
         EditorSceneManager.SaveScene(scene, "Assets/Scenes/Level3.unity");
 
-        // Kamera – Top-Down Follow, leicht geneigt für gute Übersicht im großen Raum
+        // Kamera – feste Position am Eingang (wie Level 2), schaut durch die Tueroeffnung
+        // in den Raum und rotiert via LookRotation zum Spieler.
+        // Constraints:
+        //   - Frontwand bei z=-6, Tueroeffnung y in [0, 3.6] (FrontWall_Top startet bei 3.6).
+        //   - Kamera 1.4 m vor der Wand (z=-7.4), gleicher Abstand wie Level 2.
+        //   - Hoehe 2.8 m: obere FOV-Kante an der Tuerebene bleibt unter 3.6 → keine
+        //     Wand-Oberkante im Bild, selbst wenn der Spieler tief im Raum steht.
         var camGO = new GameObject("Main Camera");
         var cam   = camGO.AddComponent<Camera>();
         cam.clearFlags      = CameraClearFlags.SolidColor;
@@ -57,13 +74,13 @@ public class BuildLevel3Library : EditorWindow
         cam.nearClipPlane   = 0.1f;
         cam.tag             = "MainCamera";
         camGO.AddComponent<AudioListener>();
-        camGO.transform.position = new Vector3(0f, 11f, -4f);
-        camGO.transform.rotation = Quaternion.Euler(70f, 0f, 0f);
+        camGO.transform.position = new Vector3(0f, 2.8f, -7.4f);
+        camGO.transform.rotation = Quaternion.Euler(15f, 0f, 0f);
         var follow = camGO.AddComponent<TopDownCameraFollow>();
-        follow.fixedWorldPosition = Vector3.zero;   // explizit deaktivieren -> Follow-Modus
-        follow.height     = 11f;
-        follow.pitchAngle = 70f;
-        SceneManager.MoveGameObjectToScene(camGO, scene);
+        follow.fixedWorldPosition = new Vector3(0f, 2.8f, -7.4f);
+        follow.height     = 2.8f;
+        follow.pitchAngle = 15f;
+        MoveToScene(camGO, scene);
 
         // GameManager – nötig wenn Level 3 direkt gestartet wird
         var gmGO = new GameObject("GameManager");
@@ -78,11 +95,16 @@ public class BuildLevel3Library : EditorWindow
         levelNames.GetArrayElementAtIndex(4).stringValue = "Level5";
         levelNames.GetArrayElementAtIndex(5).stringValue = "Level6";
         gmSo.ApplyModifiedPropertiesWithoutUndo();
-        SceneManager.MoveGameObjectToScene(gmGO, scene);
+        MoveToScene(gmGO, scene);
+
+        // EventSystem wird in BookSelectionUI.Show() zur Laufzeit angelegt –
+        // hier nicht einfuegen, weil InputSystemUIInputModule.OnEnable im Edit-Mode
+        // beim anschliessenden MoveGameObjectToScene mit "Gameobject is not a root
+        // in a scene" fehlschlaegt.
 
         // Umgebung
         var root = new GameObject("Environment");
-        SceneManager.MoveGameObjectToScene(root, scene);
+        MoveToScene(root, scene);
         BuildRoom(root.transform);
 
         // Spieler
@@ -292,13 +314,8 @@ public class BuildLevel3Library : EditorWindow
         Box("LeftWall",     new Vector3(-5.0f,3.0f,  0f  ), new Vector3(0.3f,6f, 12f),   stone, root);
         Box("RightWall",    new Vector3( 5.0f,3.0f,  0f  ), new Vector3(0.3f,6f, 12f),   stone, root);
 
-        // Decke (niedrig sichtbar für Atmosphäre, kein Collider)
-        Box("Ceiling", new Vector3(0, 6.05f, 0), new Vector3(10f, 0.2f, 12f), stone, root, col: false);
-
-        // Deckenbalken aus Holz
-        var beamMat = M(new Color(0.16f, 0.10f, 0.05f), 0.01f, 0.08f);
-        for (int bi = -4; bi <= 4; bi += 2)
-            Box($"Beam_{bi}", new Vector3(bi, 5.7f, 0), new Vector3(0.25f, 0.25f, 12f), beamMat, root, col: false);
+        // Decke absichtlich weggelassen – Top-Down-Kamera (height 11) säße sonst
+        // darüber und würde nur die Deckenoberseite rendern. Siehe Level 2.
 
         // Eingangsrahmen aus Eisen
         Box("EntryFrame_L",   new Vector3(-1.0f, 2.0f, -5.88f), new Vector3(0.10f, 4.0f, 0.10f), iron, root, col: false);
@@ -1089,7 +1106,7 @@ public class BuildLevel3Library : EditorWindow
 
         character.AddComponent<CharacterAnimator>();
         character.AddComponent<PlayerController>();
-        SceneManager.MoveGameObjectToScene(character, scene);
+        MoveToScene(character, scene);
         return character;
     }
 
@@ -1153,7 +1170,7 @@ public class BuildLevel3Library : EditorWindow
             var esGO = new GameObject("EventSystem");
             esGO.AddComponent<EventSystem>();
             esGO.AddComponent<InputSystemUIInputModule>();
-            SceneManager.MoveGameObjectToScene(esGO, scene);
+            MoveToScene(esGO, scene);
         }
 
         // ── Helios instanziieren ──────────────────────────────────────────────
@@ -1241,7 +1258,7 @@ public class BuildLevel3Library : EditorWindow
         spot.spotAngle = 35f;
         spot.shadows   = LightShadows.Soft;
         spotGO.transform.LookAt(helios.transform.position + Vector3.up * 0.9f);
-        SceneManager.MoveGameObjectToScene(spotGO, scene);
+        MoveToScene(spotGO, scene);
 
         // ── Hinweis-Canvas (E-Taste) ──────────────────────────────────────────
         var hintGO = BuildHintUI(scene);
@@ -1267,8 +1284,8 @@ public class BuildLevel3Library : EditorWindow
         interaction.bookUI   = bookUI;
         interaction.hintGO   = hintGO;
         interaction.computer = pcInter;
-        SceneManager.MoveGameObjectToScene(interGO,   scene);
-        SceneManager.MoveGameObjectToScene(helios,    scene);
+        MoveToScene(interGO,   scene);
+        MoveToScene(helios,    scene);
     }
 
     /// <summary>
@@ -1341,7 +1358,7 @@ public class BuildLevel3Library : EditorWindow
         txt.color     = new Color(0.95f, 0.88f, 0.62f);
 
         canvasGO.SetActive(false);
-        SceneManager.MoveGameObjectToScene(canvasGO, scene);
+        MoveToScene(canvasGO, scene);
         return canvasGO;
     }
 
@@ -1399,8 +1416,8 @@ public class BuildLevel3Library : EditorWindow
         ui.bookLabels    = labels;
         ui.feedbackText  = fbTxt;
 
-        SceneManager.MoveGameObjectToScene(canvasGO, scene);
-        SceneManager.MoveGameObjectToScene(uiGO,     scene);
+        MoveToScene(canvasGO, scene);
+        MoveToScene(uiGO,     scene);
         return ui;
     }
 
@@ -1499,7 +1516,7 @@ public class BuildLevel3Library : EditorWindow
         pcInter.monitorOnMat   = screenOn;
         pcInter.nextScene      = "Level4";
 
-        SceneManager.MoveGameObjectToScene(triggerGO, scene);
+        MoveToScene(triggerGO, scene);
         return pcInter;
     }
 
@@ -1526,10 +1543,13 @@ public class BuildLevel3Library : EditorWindow
         txt.color     = new Color(0.55f, 0.85f, 1.0f);
 
         canvasGO.SetActive(false);
-        SceneManager.MoveGameObjectToScene(canvasGO, scene);
+        MoveToScene(canvasGO, scene);
         return canvasGO;
     }
 
+    // Login-Terminal: erscheint als Popup nachdem die Bibel gewählt wurde.
+    // Stil = Computer-Login-Fenster; der Hinweistext verweist auf die echte Bibel
+    // auf dem Tisch. Drei Farben (ROT/BLAU/GRÜN), 3-stelliger Code: GRÜN → BLAU → GRÜN.
     private Level3_ColorCodeUI BuildColorCodeUI(Scene scene)
     {
         var canvasGO = new GameObject("ColorCodeCanvas");
@@ -1540,110 +1560,161 @@ public class BuildLevel3Library : EditorWindow
             UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
         canvasGO.AddComponent<UnityEngine.UI.GraphicRaycaster>();
 
-        // Dunkler Vollbild-Hintergrund
-        var bg = MakeUIBox(canvasGO.transform, "Background", Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-        bg.AddComponent<UnityEngine.UI.Image>().color = new Color(0f, 0f, 0f, 0.82f);
+        // Vollbild-Verdunkelung hinter dem Fenster
+        var backdrop = MakeUIBox(canvasGO.transform, "Backdrop", Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+        backdrop.AddComponent<UnityEngine.UI.Image>().color = new Color(0.02f, 0.03f, 0.05f, 0.93f);
 
-        // Titel
-        var titleGO  = MakeUIPanel(canvasGO.transform, "Title", new Vector2(0.1f, 0.78f), new Vector2(0.9f, 0.88f));
+        // ── Login-Fenster ─────────────────────────────────────────────────
+        var win = MakeUIPanel(canvasGO.transform, "LoginWindow",
+            new Vector2(0.16f, 0.08f), new Vector2(0.84f, 0.92f));
+        win.AddComponent<UnityEngine.UI.Image>().color = new Color(0.05f, 0.07f, 0.10f, 0.99f);
+        var winOutline = win.AddComponent<UnityEngine.UI.Outline>();
+        winOutline.effectColor    = new Color(0.20f, 0.85f, 1.0f, 0.85f);
+        winOutline.effectDistance = new Vector2(3f, 3f);
+        var winT = win.transform;
+
+        // Titelleiste (Fenster-Kopf)
+        var bar = MakeUIPanel(winT, "TitleBar", new Vector2(0f, 0.92f), new Vector2(1f, 1f));
+        bar.AddComponent<UnityEngine.UI.Image>().color = new Color(0.09f, 0.15f, 0.22f, 1f);
+        var barTxtGO = MakeUIPanel(bar.transform, "BarText", new Vector2(0.025f, 0f), new Vector2(0.975f, 1f));
+        var barTxt = barTxtGO.AddComponent<TextMeshProUGUI>();
+        barTxt.text      = "[ o o o ]   LIBRARY_TERMINAL  ::  SECURE LOGIN";
+        barTxt.fontSize  = 22;
+        barTxt.alignment = TextAlignmentOptions.MidlineLeft;
+        barTxt.color     = new Color(0.55f, 0.85f, 1.0f);
+
+        // Status-Zeile
+        var titleGO  = MakeUIPanel(winT, "Status", new Vector2(0.05f, 0.83f), new Vector2(0.95f, 0.915f));
         var titleTxt = titleGO.AddComponent<TextMeshProUGUI>();
-        titleTxt.text      = "Farbcode eingeben";
-        titleTxt.fontSize  = 44;
+        titleTxt.text      = "ZUGANG GESPERRT";
+        titleTxt.fontSize  = 40;
+        titleTxt.fontStyle = FontStyles.Bold;
         titleTxt.alignment = TextAlignmentOptions.Center;
-        titleTxt.color     = new Color(0.55f, 0.85f, 1.0f);
+        titleTxt.color     = new Color(0.95f, 0.35f, 0.30f);
 
-        // 4 Slot-Anzeigen
-        var slotImages = new UnityEngine.UI.Image[4];
-        float[] slotX = { 0.30f, 0.41f, 0.52f, 0.63f };
-        for (int i = 0; i < 4; i++)
+        // Terminal-Hinweistext (linksbündig) – Inhalt wird in Level3_ColorCodeUI.Show() gesetzt
+        var msgGO  = MakeUIPanel(winT, "Message", new Vector2(0.07f, 0.45f), new Vector2(0.93f, 0.82f));
+        var msgTxt = msgGO.AddComponent<TextMeshProUGUI>();
+        msgTxt.text      = "> ...";
+        msgTxt.fontSize  = 22;
+        msgTxt.alignment = TextAlignmentOptions.TopLeft;
+        msgTxt.color     = new Color(0.55f, 0.95f, 0.70f);
+
+        // 3 Code-Slots (mittig)
+        const int   slotCount = 3;
+        var slotImages = new UnityEngine.UI.Image[slotCount];
+        const float slotW = 0.10f, slotGap = 0.03f;
+        float totalW = slotCount * slotW + (slotCount - 1) * slotGap;
+        float startX = 0.5f - totalW * 0.5f;
+        for (int i = 0; i < slotCount; i++)
         {
-            var slot = MakeUIPanel(canvasGO.transform, $"Slot_{i}",
-                new Vector2(slotX[i], 0.62f), new Vector2(slotX[i] + 0.08f, 0.72f));
-            var img = slot.AddComponent<UnityEngine.UI.Image>();
-            img.color = new Color(0.10f, 0.10f, 0.13f, 1f);
+            float x0   = startX + i * (slotW + slotGap);
+            var   slot = MakeUIPanel(winT, $"Slot_{i}",
+                new Vector2(x0, 0.355f), new Vector2(x0 + slotW, 0.435f));
+            var img    = slot.AddComponent<UnityEngine.UI.Image>();
+            img.color  = new Color(0.06f, 0.09f, 0.11f, 1f);
             slotImages[i] = img;
-
-            var outline = slot.AddComponent<UnityEngine.UI.Outline>();
-            outline.effectColor = new Color(0.55f, 0.85f, 1.0f, 0.55f);
-            outline.effectDistance = new Vector2(2f, 2f);
+            var o = slot.AddComponent<UnityEngine.UI.Outline>();
+            o.effectColor    = new Color(0.20f, 0.85f, 1.0f, 0.5f);
+            o.effectDistance = new Vector2(2f, 2f);
         }
 
-        // 4 Farb-Buttons in einer Reihe
-        Color cRed    = new Color(0.85f, 0.15f, 0.15f);
-        Color cBlue   = new Color(0.20f, 0.40f, 1.00f);
-        Color cYellow = new Color(0.95f, 0.85f, 0.18f);
-        Color cGreen  = new Color(0.20f, 0.85f, 0.30f);
+        // Blinkender Cursor unter den Slots
+        var promptGO  = MakeUIPanel(winT, "Prompt", new Vector2(0.07f, 0.30f), new Vector2(0.5f, 0.35f));
+        var promptTxt = promptGO.AddComponent<TextMeshProUGUI>();
+        promptTxt.text      = "> _";
+        promptTxt.fontSize  = 24;
+        promptTxt.alignment = TextAlignmentOptions.MidlineLeft;
+        promptTxt.color     = new Color(0.55f, 0.95f, 0.70f);
 
-        var redBtn    = MakeColorButton(canvasGO.transform, "RedBtn",    0.18f, 0.30f, cRed);
-        var blueBtn   = MakeColorButton(canvasGO.transform, "BlueBtn",   0.36f, 0.48f, cBlue);
-        var yellowBtn = MakeColorButton(canvasGO.transform, "YellowBtn", 0.54f, 0.66f, cYellow);
-        var greenBtn  = MakeColorButton(canvasGO.transform, "GreenBtn",  0.72f, 0.84f, cGreen);
+        // 3 Farb-Buttons (Fallback-Eingabe): ROT, BLAU, GRÜN
+        Color cRed   = new Color(0.90f, 0.18f, 0.16f);
+        Color cBlue  = new Color(0.20f, 0.45f, 1.00f);
+        Color cGreen = new Color(0.22f, 0.86f, 0.32f);
+        const float btY0 = 0.185f, btY1 = 0.285f;
+        var redBtn   = MakeColorButton(winT, "RedBtn",   0.13f, 0.35f, btY0, btY1, cRed,   "ROT");
+        var blueBtn  = MakeColorButton(winT, "BlueBtn",  0.39f, 0.61f, btY0, btY1, cBlue,  "BLAU");
+        var greenBtn = MakeColorButton(winT, "GreenBtn", 0.65f, 0.87f, btY0, btY1, cGreen, "GRÜN");
 
-        // Reset + Schließen
-        var resetGO = MakeUIPanel(canvasGO.transform, "ResetBtn",
-            new Vector2(0.30f, 0.10f), new Vector2(0.46f, 0.18f));
-        resetGO.AddComponent<UnityEngine.UI.Image>().color = new Color(0.20f, 0.20f, 0.24f);
-        var resetBtn = resetGO.AddComponent<UnityEngine.UI.Button>();
-        var resetTxtGO = MakeUIPanel(resetGO.transform, "Text", Vector2.zero, Vector2.one);
-        var resetTxt = resetTxtGO.AddComponent<TextMeshProUGUI>();
-        resetTxt.text = "Zurücksetzen"; resetTxt.fontSize = 22;
-        resetTxt.alignment = TextAlignmentOptions.Center;
-        resetTxt.color = Color.white;
-
-        var closeGO = MakeUIPanel(canvasGO.transform, "CloseBtn",
-            new Vector2(0.54f, 0.10f), new Vector2(0.70f, 0.18f));
-        closeGO.AddComponent<UnityEngine.UI.Image>().color = new Color(0.20f, 0.20f, 0.24f);
-        var closeBtn = closeGO.AddComponent<UnityEngine.UI.Button>();
-        var closeTxtGO = MakeUIPanel(closeGO.transform, "Text", Vector2.zero, Vector2.one);
-        var closeTxt = closeTxtGO.AddComponent<TextMeshProUGUI>();
-        closeTxt.text = "Schließen"; closeTxt.fontSize = 22;
-        closeTxt.alignment = TextAlignmentOptions.Center;
-        closeTxt.color = Color.white;
-
-        // Feedback-Text
-        var fbGO  = MakeUIPanel(canvasGO.transform, "Feedback",
-            new Vector2(0.1f, 0.20f), new Vector2(0.9f, 0.28f));
+        // Feedback-Zeile
+        var fbGO  = MakeUIPanel(winT, "Feedback", new Vector2(0.07f, 0.105f), new Vector2(0.93f, 0.175f));
         var fbTxt = fbGO.AddComponent<TextMeshProUGUI>();
-        fbTxt.fontSize  = 28;
-        fbTxt.alignment = TextAlignmentOptions.Center;
-        fbTxt.color     = Color.white;
+        fbTxt.fontSize  = 26;
+        fbTxt.alignment = TextAlignmentOptions.MidlineLeft;
+        fbTxt.color     = new Color(0.55f, 0.95f, 0.70f);
 
-        // Logik-Komponente auf eigenem GameObject
+        // Reset / Schließen
+        var resetBtn = MakeTextButton(winT, "ResetBtn",
+            new Vector2(0.20f, 0.025f), new Vector2(0.45f, 0.09f), "Zurücksetzen", new Color(0.14f, 0.18f, 0.24f));
+        var closeBtn = MakeTextButton(winT, "CloseBtn",
+            new Vector2(0.55f, 0.025f), new Vector2(0.80f, 0.09f), "Schließen",    new Color(0.14f, 0.18f, 0.24f));
+
+        // Logik-Komponente
         var uiGO = new GameObject("ColorCodeUI");
         var ui   = uiGO.AddComponent<Level3_ColorCodeUI>();
-        ui.overlayCanvas = canvas;
-        ui.redButton     = redBtn;
-        ui.blueButton    = blueBtn;
-        ui.yellowButton  = yellowBtn;
-        ui.greenButton   = greenBtn;
-        ui.resetButton   = resetBtn;
-        ui.closeButton   = closeBtn;
-        ui.slotImages    = slotImages;
-        ui.feedbackText  = fbTxt;
-        ui.titleText     = titleTxt;
-        ui.solution      = new[] { "Red", "Blue", "Yellow", "Green" };
+        ui.overlayCanvas   = canvas;
+        ui.redButton       = redBtn;
+        ui.blueButton      = blueBtn;
+        ui.greenButton     = greenBtn;
+        ui.resetButton     = resetBtn;
+        ui.closeButton     = closeBtn;
+        ui.slotImages      = slotImages;
+        ui.feedbackText    = fbTxt;
+        ui.titleText       = titleTxt;
+        ui.messageText     = msgTxt;
+        ui.promptText      = promptTxt;
+        ui.arduinoFallback = true;
+        ui.solution        = new[] { "Green", "Blue", "Green" };  // 3-stelliger Code
 
         canvasGO.SetActive(false);
-        SceneManager.MoveGameObjectToScene(canvasGO, scene);
-        SceneManager.MoveGameObjectToScene(uiGO,     scene);
+        MoveToScene(canvasGO, scene);
+        MoveToScene(uiGO,     scene);
         return ui;
     }
 
     private UnityEngine.UI.Button MakeColorButton(Transform parent, string name,
-                                                   float xMin, float xMax, Color color)
+                                                   float xMin, float xMax, float yMin, float yMax,
+                                                   Color color, string label)
     {
-        var btnGO  = MakeUIPanel(parent, name,
-            new Vector2(xMin, 0.36f), new Vector2(xMax, 0.52f));
+        var btnGO  = MakeUIPanel(parent, name, new Vector2(xMin, yMin), new Vector2(xMax, yMax));
         var btnImg = btnGO.AddComponent<UnityEngine.UI.Image>();
         btnImg.color = color;
         var btn = btnGO.AddComponent<UnityEngine.UI.Button>();
 
         var cb = btn.colors;
         cb.normalColor      = color;
-        cb.highlightedColor = Color.Lerp(color, Color.white, 0.25f);
+        cb.highlightedColor = Color.Lerp(color, Color.white, 0.30f);
         cb.pressedColor     = Color.Lerp(color, Color.black, 0.25f);
         cb.selectedColor    = color;
         btn.colors = cb;
+
+        if (!string.IsNullOrEmpty(label))
+        {
+            var lblGO = MakeUIPanel(btnGO.transform, "Label", Vector2.zero, Vector2.one);
+            var lbl   = lblGO.AddComponent<TextMeshProUGUI>();
+            lbl.text      = label;
+            lbl.fontSize  = 22;
+            lbl.fontStyle = FontStyles.Bold;
+            lbl.alignment = TextAlignmentOptions.Center;
+            float lum = color.r * 0.299f + color.g * 0.587f + color.b * 0.114f;
+            lbl.color = lum > 0.55f ? new Color(0.05f, 0.05f, 0.05f) : Color.white;
+        }
+        return btn;
+    }
+
+    private UnityEngine.UI.Button MakeTextButton(Transform parent, string name,
+                                                  Vector2 anchorMin, Vector2 anchorMax,
+                                                  string label, Color background)
+    {
+        var go  = MakeUIPanel(parent, name, anchorMin, anchorMax);
+        go.AddComponent<UnityEngine.UI.Image>().color = background;
+        var btn = go.AddComponent<UnityEngine.UI.Button>();
+        var txtGO = MakeUIPanel(go.transform, "Text", Vector2.zero, Vector2.one);
+        var txt   = txtGO.AddComponent<TextMeshProUGUI>();
+        txt.text      = label;
+        txt.fontSize  = 22;
+        txt.alignment = TextAlignmentOptions.Center;
+        txt.color     = new Color(0.85f, 0.92f, 1.0f);
         return btn;
     }
 
@@ -1683,6 +1754,6 @@ public class BuildLevel3Library : EditorWindow
         src.clip = clip; src.loop = true; src.playOnAwake = true;
         src.volume = 0.6f; src.spatialBlend = 0f;
         go.AddComponent<BackgroundMusic>();
-        SceneManager.MoveGameObjectToScene(go, scene);
+        MoveToScene(go, scene);
     }
 }

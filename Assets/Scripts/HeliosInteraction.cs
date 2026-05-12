@@ -58,6 +58,9 @@ public class HeliosInteraction : MonoBehaviour
         solved = true;
         inRange = false;
         if (hintGO != null) hintGO.SetActive(false);
-        if (computer != null) computer.ActivateComputer();
+
+        // PC scharf schalten und das Login-Terminal direkt als Popup öffnen
+        // (mit kurzer Verzögerung, bis die Buch-Auswahl-UI ausgeblendet ist).
+        if (computer != null) computer.OpenLoginScreen();
     }
 }

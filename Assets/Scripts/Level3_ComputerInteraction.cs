@@ -90,6 +90,26 @@ public class Level3_ComputerInteraction : MonoBehaviour
         if (inRange && hintGO != null) hintGO.SetActive(true);
     }
 
+    /// <summary>
+    /// Direkt nach der Bibel-Wahl: PC scharf schalten UND das Login-Terminal
+    /// als Popup öffnen. Kleine Verzögerung, damit die Buch-Auswahl-UI vorher
+    /// sauber ausblenden kann. Schließt der Spieler das Popup, lässt es sich
+    /// später am PC erneut über die [E]-Interaktion öffnen.
+    /// </summary>
+    public void OpenLoginScreen(float delay = 1.7f)
+    {
+        ActivateComputer();
+        if (isSolved) return;
+        StartCoroutine(ShowLoginAfter(delay));
+    }
+
+    private IEnumerator ShowLoginAfter(float delay)
+    {
+        if (delay > 0f) yield return new WaitForSeconds(delay);
+        if (!isSolved) codeUI?.Show();
+        if (hintGO != null) hintGO.SetActive(false);
+    }
+
     private void ApplyMonitorState()
     {
         if (monitorScreen != null)

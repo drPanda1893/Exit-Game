@@ -163,8 +163,8 @@ Dialog is routed through `BigYahuDialogSystem`. For non-Big-Yahu NPCs, set `spea
 | G-01 | L1: Hex code `662` visible on blanket → decode to `1634` | Code correct (1634), but no in-world blanket hint object | HIGH |
 | G-02 | L2: Joshi NPC audio narration, not Big Yahu | `Level2_DustWall.cs` uses `BigYahuDialogSystem` | HIGH |
 | G-03 | L2: Arrow combo `↑↑↓↓` via joystick opens door | Current code reveals a hidden number; no directional puzzle | HIGH |
-| G-04 | L3: Helios NPC + book selection (must pick Bible) | No book selection mechanic; Big Yahu speaks instead | MEDIUM |
-| G-05 | L3: Color sequence via Arduino (hold sensor to code) | Mouse-click buttons only; no Arduino path | MEDIUM |
+| G-04 | L3: Helios NPC + book selection (must pick Bible) | ✅ `HeliosInteraction` + `BookSelectionUI` (Level3.unity) | DONE |
+| G-05 | L3: Color sequence via Arduino (hold sensor to code) | ✅ `Level3_ColorCodeUI` login terminal (3-stelliger Code GRÜN→BLAU→GRÜN, Farben ROT/BLAU/GRÜN), mouse fallback. Arduino: TCS3200 in `BigYahu_AllLevels.ino` als `LV_COLOR` (Cmd `20:START/STOP`), sendet `COLOR:RED/GREEN/BLUE` nur bei echter Farbänderung + `COLOR:RESET` (physischer Taster Pin 12) | DONE |
 | G-06 | L6: Bunsenbrenner / Föhn metaphor | Generic "heat button" UI | LOW |
 
 ---

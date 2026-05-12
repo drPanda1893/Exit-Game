@@ -11,11 +11,16 @@
  *   Thermistor                          -> A0
  *   Buzzer                              -> Pin 8 (geteilt mit Keypad-Spalte)
  *   Relay                               -> Pin 4 (geteilt mit Keypad-Reihe)
+ *   Farbsensor TCS3200 (Level 3)        -> S0=4, S1=5, S2=6, S3=7, OUT=8
+ *                                          (teilt sich Pins mit dem Keypad – es ist
+ *                                           immer nur ein Level aktiv, daher ok)
+ *   Reset-Taster (Level 3)              -> Pin 12 gegen GND (INPUT_PULLUP)
  *
  * Unity -> Arduino:
- *   LV:0 / LV:1 / LV:2     explizit Level setzen (optional)
+ *   LV:0 / LV:1 / LV:2 / LV:3   explizit Level setzen (optional)
  *   FF:START / FF:STOP     Level1-Keypad aktivieren/deaktivieren (impliziert LV:1 / LV:0)
  *   10:START / 10:STOP     Level2-Thermistor aktivieren/deaktivieren (impliziert LV:2 / LV:0)
+ *   20:START / 20:STOP     Level3-Farbsensor aktivieren/deaktivieren (impliziert LV:3 / LV:0)
  *   FF:ping                Health-Check, Antwort: FF:pong
  *
  * Arduino -> Unity:
@@ -23,12 +28,14 @@
  *   10:TEMP:<celsius>      Level2 laufender Temperaturwert
  *   10:BLOW:<celsius>      Level2 Schwellwert ueberschritten
  *   success                einmaliger Marker bei Level2-Erfolg
+ *   COLOR:RED|GREEN|BLUE   Level3 erkannte Farbe – NUR bei echter Aenderung (1 Farbe = 1 Eingabe)
+ *   COLOR:RESET            Level3 physischer Reset-Taster gedrueckt
  *   FF:ready               einmal nach Setup
  *   FF:pong                Antwort auf FF:ping
  */
 
 // ── Level-State ────────────────────────────────────────────────────────────
-enum Level : uint8_t { LV_NONE = 0, LV_KEYPAD = 1, LV_TEMP = 2 };
+enum Level : uint8_t { LV_NONE = 0, LV_KEYPAD = 1, LV_TEMP = 2, LV_COLOR = 3 };
 Level currentLevel = LV_NONE;
 
 String serialBuf = "";
@@ -87,6 +94,7 @@ void loop() {
   switch (currentLevel) {
     case LV_KEYPAD: tickKeypad(); break;
     case LV_TEMP:   tickTemp();   break;
+    case LV_COLOR:  tickColor();  break;
     case LV_NONE:   default:      break;  // bewusst still
   }
 }
@@ -101,12 +109,14 @@ void setLevel(Level newLevel) {
   // Aufraeumen des alten Levels
   if (currentLevel == LV_KEYPAD) silenceKeypad();
   if (currentLevel == LV_TEMP)   resetTempState();
+  if (currentLevel == LV_COLOR)  resetColorState();
 
   currentLevel = newLevel;
 
   // Initialisierung des neuen Levels
   if (currentLevel == LV_KEYPAD) silenceKeypad();   // sicherer Ausgangszustand fuer Scan
   if (currentLevel == LV_TEMP)   resetTempState();
+  if (currentLevel == LV_COLOR)  initColorSensor();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -136,12 +146,15 @@ void handleCommand(const String& raw) {
   if      (cmd == "LV:0") { setLevel(LV_NONE);   return; }
   else if (cmd == "LV:1") { setLevel(LV_KEYPAD); return; }
   else if (cmd == "LV:2") { setLevel(LV_TEMP);   return; }
+  else if (cmd == "LV:3") { setLevel(LV_COLOR);  return; }
 
   // Implizite Aktivierung ueber bestehende START/STOP-Kommandos
   if (cmd == "FF:START") { setLevel(LV_KEYPAD); return; }
   if (cmd == "FF:STOP")  { if (currentLevel == LV_KEYPAD) setLevel(LV_NONE); return; }
   if (cmd == "10:START") { setLevel(LV_TEMP); Serial.println("10:ready"); return; }
   if (cmd == "10:STOP")  { if (currentLevel == LV_TEMP)   setLevel(LV_NONE); Serial.println("10:stopped"); return; }
+  if (cmd == "20:START") { setLevel(LV_COLOR); Serial.println("20:ready"); return; }
+  if (cmd == "20:STOP")  { if (currentLevel == LV_COLOR)  setLevel(LV_NONE); Serial.println("20:stopped"); return; }
 
   if (cmd == "FF:PING")  { Serial.println("FF:pong"); return; }
 }
@@ -266,4 +279,152 @@ void tickTemp() {
   Serial.print("10:BLOW:");
   Serial.println((int)tempC);
   tempLastBlowAt = now;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Level 3 – Farbsensor TCS3200 (Login-Terminal in der Bibliothek)
+//
+// Aktiv erst ab "20:START" (Unity sendet das, sobald das Login-UI aufgeht).
+// Logik nach dem Test-Sketch des Spielers: Rohwerte messen, kalibrieren,
+// auf 0..255 mappen und die staerkste Komponente als Farbe werten.
+//
+// WICHTIG: Es wird genau EIN Input pro echter Farbaenderung gemeldet:
+//   - eine Farbe muss COL_STABLE_NEED Messungen in Folge stabil sein,
+//   - und sie muss sich vom zuletzt gemeldeten Wert unterscheiden,
+//   - "NONE/Schwarz" loest nichts aus und ueberschreibt den letzten Wert nicht.
+// Der physische Reset-Taster (Pin 12 -> GND) sendet "COLOR:RESET" und macht den
+// zuletzt gemeldeten Wert wieder "frei", sodass dieselbe Farbe danach erneut zaehlt.
+// ═══════════════════════════════════════════════════════════════════════════
+
+#define TCS_S0              4
+#define TCS_S1              5
+#define TCS_S2              6
+#define TCS_S3              7
+#define TCS_OUT             8
+#define COLOR_RESET_BTN_PIN 12
+
+// Kalibrierung: Rohwerte -> 0..255  (Weiss = kleiner Rohwert, Schwarz = grosser).
+// Bei Bedarf an die echte Umgebung anpassen (siehe Original-Test-Sketch).
+const long COL_R_MIN = 25,  COL_R_MAX = 150;
+const long COL_G_MIN = 30,  COL_G_MAX = 160;
+const long COL_B_MIN = 25,  COL_B_MAX = 140;
+const int  COL_THRESHOLD    = 100;   // ab hier gilt eine Komponente als "Farbe"
+const byte COL_STABLE_NEED  = 4;     // so viele gleiche Messungen in Folge = bestaetigt
+const unsigned long COL_SAMPLE_MS = 80;
+const unsigned long COL_PULSE_TIMEOUT_US = 8000;
+
+enum DetColor : uint8_t { COL_NONE = 0, COL_RED = 1, COL_GREEN = 2, COL_BLUE = 3 };
+
+unsigned long colLastSampleAt = 0;
+DetColor      colCandidate    = COL_NONE;   // aktuelle Mess-Serie
+byte          colStableCnt    = 0;          // Laenge der aktuellen Serie
+DetColor      colConfirmed    = COL_NONE;   // zuletzt an Unity gemeldete Farbe
+bool          colBtnLast      = HIGH;       // Reset-Taster Entprellung
+bool          colBtnHandled   = false;
+unsigned long colBtnChangedAt = 0;
+
+void initColorSensor() {
+  pinMode(TCS_S0, OUTPUT);
+  pinMode(TCS_S1, OUTPUT);
+  pinMode(TCS_S2, OUTPUT);
+  pinMode(TCS_S3, OUTPUT);
+  pinMode(TCS_OUT, INPUT);
+  pinMode(COLOR_RESET_BTN_PIN, INPUT_PULLUP);
+  // Frequenz-Skalierung 20 % (Standard fuer den TCS3200)
+  digitalWrite(TCS_S0, HIGH);
+  digitalWrite(TCS_S1, LOW);
+
+  colLastSampleAt = 0;
+  colCandidate    = COL_NONE;
+  colStableCnt    = 0;
+  colConfirmed    = COL_NONE;
+  colBtnLast      = digitalRead(COLOR_RESET_BTN_PIN);
+  colBtnHandled   = (colBtnLast == LOW);   // beim Eintritt gedrueckt? -> nicht sofort feuern
+  colBtnChangedAt = millis();
+}
+
+void resetColorState() {
+  colLastSampleAt = 0;
+  colCandidate    = COL_NONE;
+  colStableCnt    = 0;
+  colConfirmed    = COL_NONE;
+  colBtnLast      = HIGH;
+  colBtnHandled   = false;
+  // Sensor-Pins freigeben, damit Keypad/None sie ungestoert nutzen koennen
+  pinMode(TCS_S0, INPUT);
+  pinMode(TCS_S1, INPUT);
+  pinMode(TCS_S2, INPUT);
+  pinMode(TCS_S3, INPUT);
+  pinMode(TCS_OUT, INPUT);
+}
+
+long readTcsPulse(bool s2, bool s3) {
+  digitalWrite(TCS_S2, s2 ? HIGH : LOW);
+  digitalWrite(TCS_S3, s3 ? HIGH : LOW);
+  delayMicroseconds(200);                       // Photodioden-Filter umschalten lassen
+  return pulseIn(TCS_OUT, LOW, COL_PULSE_TIMEOUT_US);
+}
+
+DetColor measureColorOnce() {
+  long redRaw   = readTcsPulse(false, false);   // S2=L S3=L -> Rot
+  long greenRaw = readTcsPulse(true,  true);    // S2=H S3=H -> Gruen
+  long blueRaw  = readTcsPulse(false, true);    // S2=L S3=H -> Blau
+
+  long r = constrain(map(redRaw,   COL_R_MIN, COL_R_MAX, 255, 0), 0, 255);
+  long g = constrain(map(greenRaw, COL_G_MIN, COL_G_MAX, 255, 0), 0, 255);
+  long b = constrain(map(blueRaw,  COL_B_MIN, COL_B_MAX, 255, 0), 0, 255);
+
+  if (r > g && r > b && r > COL_THRESHOLD) return COL_RED;
+  if (g > r && g > b && g > COL_THRESHOLD) return COL_GREEN;
+  if (b > r && b > g && b > COL_THRESHOLD) return COL_BLUE;
+  return COL_NONE;
+}
+
+const char* colorName(DetColor c) {
+  switch (c) {
+    case COL_RED:   return "RED";
+    case COL_GREEN: return "GREEN";
+    case COL_BLUE:  return "BLUE";
+    default:        return "NONE";
+  }
+}
+
+void tickColor() {
+  unsigned long now = millis();
+
+  // ── Reset-Taster (entprellt, gegen GND) ──────────────────────────────────
+  bool btn = digitalRead(COLOR_RESET_BTN_PIN);
+  if (btn != colBtnLast) { colBtnLast = btn; colBtnChangedAt = now; }
+  if (btn == LOW && !colBtnHandled && (now - colBtnChangedAt) >= 30) {
+    colBtnHandled = true;
+    colConfirmed  = COL_NONE;            // dieselbe Farbe danach wieder zaehlbar
+    colCandidate  = COL_NONE;
+    colStableCnt  = 0;
+    Serial.println("COLOR:RESET");
+    digitalWrite(LED_BUILTIN, HIGH); delay(40); digitalWrite(LED_BUILTIN, LOW);
+  }
+  if (btn == HIGH) colBtnHandled = false;
+
+  // ── Farbmessung im festen Takt ───────────────────────────────────────────
+  if (now - colLastSampleAt < COL_SAMPLE_MS) return;
+  colLastSampleAt = now;
+
+  DetColor c = measureColorOnce();
+
+  // Stabilitaets-Serie verlaengern oder neu starten
+  if (c == colCandidate) {
+    if (colStableCnt < 255) colStableCnt++;
+  } else {
+    colCandidate = c;
+    colStableCnt = 1;
+  }
+
+  if (colStableCnt != COL_STABLE_NEED) return;   // genau einmal beim Bestaetigen
+  if (c == COL_NONE)        return;              // "kein/schwarz" loest nichts aus
+  if (c == colConfirmed)    return;              // unveraendert -> kein neuer Input
+
+  colConfirmed = c;
+  Serial.print("COLOR:");
+  Serial.println(colorName(c));
+  digitalWrite(LED_BUILTIN, HIGH); delay(20); digitalWrite(LED_BUILTIN, LOW);
 }
