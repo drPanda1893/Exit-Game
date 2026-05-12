@@ -86,7 +86,11 @@ public class Level2_DustWall : MonoBehaviour
         humidityClearQueued = false;
 
         if (useArduinoHumidity && ArduinoBridge.Instance != null)
+        {
             ArduinoBridge.Instance.RegisterHandler(0x10, HandleHumidity);
+            // Thermistor sofort beim Betreten von Level 2 starten, nicht erst an der Staubwand.
+            ArduinoBridge.Instance.Send(0x10, "START");
+        }
 
         if (joshiPrompt)           joshiPrompt.SetActive(false);
         if (dustWallPanel)         dustWallPanel.SetActive(false);
@@ -205,9 +209,18 @@ public class Level2_DustWall : MonoBehaviour
         if (dustWallPanel) dustWallPanel.SetActive(true);
         if (dustOverlay) dustOverlay.gameObject.SetActive(true);
         if (instructionText) instructionText.gameObject.SetActive(true);
-        if (useArduinoHumidity && ArduinoBridge.Instance != null)
-            ArduinoBridge.Instance.Send(0x10, "START");
+        // Thermistor laeuft bereits seit OnEnable – kein erneutes START noetig.
         StartCoroutine(BuildTexture());
+    }
+
+    void ExitScratch()
+    {
+        Cursor.visible   = false;
+        Cursor.lockState = CursorLockMode.Locked;
+        if (dustWallPanel)   dustWallPanel.SetActive(false);
+        if (dustOverlay)     dustOverlay.gameObject.SetActive(false);
+        if (instructionText) instructionText.gameObject.SetActive(false);
+        state = State.WaitingInteraction;
     }
 
     IEnumerator BuildTexture()
@@ -240,6 +253,13 @@ public class Level2_DustWall : MonoBehaviour
     void HandleScratch()
     {
         if (dustTex == null) return;
+
+        // E verlaesst die Scratch-Ansicht (Toggle gegenstueck zum Eintreten via E).
+        if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
+        {
+            ExitScratch();
+            return;
+        }
 
         var mouse = Mouse.current;
         if (mouse == null || !mouse.leftButton.isPressed) return;
@@ -346,6 +366,7 @@ public class Level2_DustWall : MonoBehaviour
             successLogged = true;
         }
 
+        // Schwelle erreicht – Thermistor abschalten, Polling ist nicht mehr noetig.
         if (useArduinoHumidity && ArduinoBridge.Instance != null)
             ArduinoBridge.Instance.Send(0x10, "STOP");
 
