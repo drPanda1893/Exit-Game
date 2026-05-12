@@ -39,6 +39,11 @@
 enum Level : uint8_t { LV_NONE = 0, LV_KEYPAD = 1, LV_TEMP = 2, LV_COLOR = 3 };
 Level currentLevel = LV_NONE;
 
+// Vom Farbsensor (Level 3) erkannte Farbe. MUSS hier oben stehen: die Arduino-IDE
+// generiert Prototypen fuer measureColorOnce()/colorName(DetColor) und fuegt sie vor
+// setup() ein – DetColor muss dort schon bekannt sein, sonst "does not name a type".
+enum DetColor : uint8_t { COL_NONE = 0, COL_RED = 1, COL_GREEN = 2, COL_BLUE = 3 };
+
 String serialBuf = "";
 
 // ── Level 1 – Keypad ───────────────────────────────────────────────────────
@@ -319,8 +324,7 @@ const byte COL_STABLE_NEED  = 4;     // so viele gleiche Messungen in Folge = be
 const unsigned long COL_SAMPLE_MS = 80;
 const unsigned long COL_PULSE_TIMEOUT_US = 8000;
 
-enum DetColor : uint8_t { COL_NONE = 0, COL_RED = 1, COL_GREEN = 2, COL_BLUE = 3 };
-
+// (enum DetColor steht weiter oben bei enum Level – Arduino-Prototyp-Reihenfolge)
 unsigned long colLastSampleAt = 0;
 DetColor      colCandidate    = COL_NONE;   // aktuelle Mess-Serie
 byte          colStableCnt    = 0;          // Laenge der aktuellen Serie
