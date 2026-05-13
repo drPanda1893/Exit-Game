@@ -31,6 +31,7 @@ public class ArduinoBridge : MonoBehaviour
     [SerializeField] private string portName    = "COM3";
     [SerializeField] private int    baudRate    = 115200;
     [SerializeField] private bool   autoConnect = true;
+    [SerializeField] private bool   autoDetectSerialPort = true;
 
     [Header("TCP Emulator (kein Hardware nötig)")]
     [SerializeField] private bool useTcpEmulator = false;
@@ -117,9 +118,47 @@ public class ArduinoBridge : MonoBehaviour
 
     void OpenSerialPort()
     {
+        var candidates = SerialPortCandidates();
+        var errors = new List<string>();
+
+        foreach (string candidate in candidates)
+            if (TryOpenSerialPort(candidate, errors))
+                return;
+
+        string tried = candidates.Count == 0 ? "keine" : string.Join(", ", candidates);
+        string detail = errors.Count == 0 ? "" : "\n" + string.Join("\n", errors);
+        Debug.LogWarning(
+            $"[ArduinoBridge] Kein serieller Arduino verbunden. Versucht: {tried}\n" +
+            $"Verfuegbare Ports: {AvailableSerialPorts()}{detail}");
+    }
+
+    List<string> SerialPortCandidates()
+    {
+        var candidates = new List<string>();
+        if (!string.IsNullOrWhiteSpace(portName))
+            candidates.Add(portName);
+
+        if (!autoDetectSerialPort) return candidates;
+
         try
         {
-            _port = new SerialPort(portName, baudRate)
+            foreach (string detected in SerialPort.GetPortNames())
+                if (!candidates.Contains(detected))
+                    candidates.Add(detected);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[ArduinoBridge] COM-Port-Erkennung fehlgeschlagen: {ex.Message}");
+        }
+
+        return candidates;
+    }
+
+    bool TryOpenSerialPort(string candidate, List<string> errors)
+    {
+        try
+        {
+            _port = new SerialPort(candidate, baudRate)
             {
                 ReadTimeout  = 1000,
                 WriteTimeout = 500,
@@ -129,6 +168,7 @@ public class ArduinoBridge : MonoBehaviour
             };
             _port.Open();
 
+            portName = candidate;
             _running = true;
             _thread  = new Thread(SerialReadLoop) { IsBackground = true, Name = "ArduinoSerial" };
             _thread.Start();
@@ -136,23 +176,25 @@ public class ArduinoBridge : MonoBehaviour
             Debug.Log($"[ArduinoBridge] Verbunden: {portName} @ {baudRate} Baud");
             OnConnectionChanged?.Invoke(true);
             StartCoroutine(AutoPingRoutine());
+            return true;
         }
         catch (UnauthorizedAccessException ex)
         {
-            Debug.LogWarning(
-                $"[ArduinoBridge] COM-Port belegt ({portName}): {ex.Message}\n" +
-                "Schliesse Arduino IDE Serial Monitor/Plotter, laufende arduino-cli Uploads " +
-                "oder zweite Unity-Instanzen, dann Play neu starten.\n" +
-                $"Verfuegbare Ports: {AvailableSerialPorts()}");
-            _port = null;
+            errors.Add($"  {candidate}: belegt ({ex.Message})");
         }
         catch (Exception ex)
         {
-            Debug.LogWarning(
-                $"[ArduinoBridge] Verbindungsfehler ({portName}): {ex.Message}\n" +
-                $"Verfuegbare Ports: {AvailableSerialPorts()}");
-            _port = null;
+            errors.Add($"  {candidate}: {ex.Message}");
         }
+
+        CleanupFailedSerialPort();
+        return false;
+    }
+
+    void CleanupFailedSerialPort()
+    {
+        try { if (_port?.IsOpen == true) _port.Close(); _port?.Dispose(); } catch { }
+        _port = null;
     }
 
     string AvailableSerialPorts()

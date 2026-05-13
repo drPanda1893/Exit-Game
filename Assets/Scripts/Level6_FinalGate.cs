@@ -41,11 +41,11 @@ public class Level6_FinalGate : MonoBehaviour
     [SerializeField] private float heatSpeed = 0.10f;
     [SerializeField] private float coolSpeed = 0.04f;
 
-    [Header("Arduino (Temperatursensor / Föhn)")]
-    [Tooltip("Befehls-ID des Temperatursensors (Standard 0x60).")]
-    [SerializeField] private byte arduinoCmdId = 0x60;
-    [Tooltip("Schwelle in Grad Celsius, ab der der Föhn als 'aktiv' zählt.")]
-    [SerializeField] private float heatThresholdC = 32f;
+    [Header("Arduino (Thermistor – wie Level 2)")]
+    [Tooltip("Befehls-ID des Thermistors (gleich wie Level 2 → 0x10).")]
+    [SerializeField] private byte arduinoCmdId = 0x10;
+    [Tooltip("Schwelle in Grad Celsius, ab der der Bunsenbrenner als 'aktiv' zählt – Balken faengt an zu wandern.")]
+    [SerializeField] private float heatThresholdC = 40f;
     [Tooltip("Sekunden Karenz nach letztem Sensor-Wert, bevor wieder abgekühlt wird.")]
     [SerializeField] private float arduinoTimeoutSec = 0.6f;
 
@@ -55,9 +55,11 @@ public class Level6_FinalGate : MonoBehaviour
     private bool  holding;
     private bool  won;
     private bool  arduinoConnected;
+    private bool  arduinoSubscribed;
     private float arduinoLastTempC;
     private float arduinoLastUpdateTime;
     private Action<string> tempHandler;
+    private Coroutine arduinoStartRoutine;
 
     void Awake() => Instance = this;
 
@@ -80,13 +82,30 @@ public class Level6_FinalGate : MonoBehaviour
         SetupHeatButton();
         if (restartButton) restartButton.onClick.AddListener(OnRestartClicked);
 
-        // Arduino-Temperatursensor (Befehl 0x60) – physikalischer Föhn vor Sensor
-        // halten erhitzt das Tor. Wenn kein Arduino vorhanden, greift der
-        // Maus-Fallback ("BRENNER HALTEN").
+        EnsureArduinoBridge();
+
+        // Arduino-Thermistor (Cmd 0x10 – gleich wie Level 2) sofort scharf schalten,
+        // damit ab Level-6-Start durchgehend "10:TEMP:<C>" gesendet wird und die
+        // Werte in der Konsole sichtbar sind – auch bevor der Spieler am Tor steht.
         if (ArduinoBridge.Instance != null)
         {
             tempHandler = OnTemperatureFromArduino;
             ArduinoBridge.Instance.RegisterHandler(arduinoCmdId, tempHandler);
+            ArduinoBridge.Instance.OnConnectionChanged += HandleArduinoConnectionChanged;
+            arduinoSubscribed = true;
+
+            Debug.Log($"[Level6] ArduinoBridge gefunden. Port={ArduinoBridge.Instance.PortName}, " +
+                      $"connected={ArduinoBridge.Instance.IsConnected}");
+
+            // START wird wiederholt gesendet, weil Arduino beim Oeffnen des
+            // Serial-Ports oft kurz resetet und das erste Kommando verlieren kann.
+            RequestArduinoStart();
+        }
+        else
+        {
+            Debug.LogWarning("[Level6] ArduinoBridge.Instance ist NULL – kein Thermistor-Empfang. " +
+                             "Wurde Level 6 direkt gestartet ohne Level 1 davor? " +
+                             "Die Bridge wird normalerweise dort erzeugt und per DontDestroyOnLoad mitgenommen.");
         }
 
         if (BigYahuDialogSystem.Instance)
@@ -94,30 +113,107 @@ public class Level6_FinalGate : MonoBehaviour
             {
                 "Big Yahu: Das ist es – das letzte Tor. Dahinter liegt die Freiheit!",
                 "Big Yahu: Ich hab den Bunsenbrenner aus der Werkstatt dabei …",
-                "Big Yahu: Halt den Föhn vor den Sensor – oder den Brenner-Button gedrückt!"
+                "Big Yahu: Halt die Flamme an den Sensor – ab 40 °C schmilzt das Schloss!"
             });
     }
 
     void OnDisable()
     {
-        if (ArduinoBridge.Instance != null && tempHandler != null)
-            ArduinoBridge.Instance.UnregisterHandler(arduinoCmdId, tempHandler);
+        if (ArduinoBridge.Instance != null)
+        {
+            if (arduinoStartRoutine != null)
+            {
+                StopCoroutine(arduinoStartRoutine);
+                arduinoStartRoutine = null;
+            }
+            if (tempHandler != null)
+                ArduinoBridge.Instance.UnregisterHandler(arduinoCmdId, tempHandler);
+            if (arduinoSubscribed)
+                ArduinoBridge.Instance.OnConnectionChanged -= HandleArduinoConnectionChanged;
+            arduinoSubscribed = false;
+            // Thermistor abschalten, damit andere Level (z.B. spaeter Level 2)
+            // den Sensor wieder sauber initialisieren koennen.
+            ArduinoBridge.Instance.Send(arduinoCmdId, "STOP");
+        }
     }
 
     // -------------------------------------------------------------------------
     // Arduino-Eingang: empfängt "TEMP:42" oder rohen Wert "42"
     // -------------------------------------------------------------------------
 
+    void EnsureArduinoBridge()
+    {
+        if (ArduinoBridge.Instance != null) return;
+
+        var go = new GameObject("ArduinoBridge");
+        go.AddComponent<ArduinoBridge>();
+        Debug.Log("[Level6] ArduinoBridge fehlte in der Szene und wurde automatisch erstellt.");
+    }
+
+    void HandleArduinoConnectionChanged(bool connected)
+    {
+        arduinoConnected = connected;
+        if (!connected)
+        {
+            arduinoLastUpdateTime = 0f;
+            return;
+        }
+
+        RequestArduinoStart();
+    }
+
+    void RequestArduinoStart()
+    {
+        if (!isActiveAndEnabled) return;
+        if (arduinoStartRoutine != null)
+            StopCoroutine(arduinoStartRoutine);
+        arduinoStartRoutine = StartCoroutine(StartArduinoThermistorRoutine());
+    }
+
+    IEnumerator StartArduinoThermistorRoutine()
+    {
+        const int maxAttempts = 6;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            var bridge = ArduinoBridge.Instance;
+            if (bridge == null) break;
+
+            if (bridge.IsConnected)
+            {
+                bridge.Send(arduinoCmdId, "START");
+                Debug.Log($"[Level6] Thermistor {arduinoCmdId:X2}:START gesendet (Versuch {attempt}).");
+                yield return new WaitForSeconds(attempt == 1 ? 1.2f : 0.75f);
+
+                if (arduinoLastUpdateTime > 0f &&
+                    Time.time - arduinoLastUpdateTime <= arduinoTimeoutSec)
+                    break;
+            }
+            else
+            {
+                yield return new WaitForSeconds(0.5f);
+            }
+        }
+
+        arduinoStartRoutine = null;
+    }
+
     void OnTemperatureFromArduino(string payload)
     {
         string val = payload;
-        if (val.StartsWith("TEMP:", StringComparison.Ordinal)) val = val.Substring(5);
+        if (val.StartsWith("TEMP:", StringComparison.OrdinalIgnoreCase)) val = val.Substring(5);
+        else if (val.StartsWith("BLOW:", StringComparison.OrdinalIgnoreCase)) val = val.Substring(5);
+        else if (val.StartsWith("HUM:", StringComparison.OrdinalIgnoreCase)) val = val.Substring(4);
 
         if (float.TryParse(val, NumberStyles.Float, CultureInfo.InvariantCulture, out float tempC))
         {
             arduinoConnected      = true;
             arduinoLastTempC      = tempC;
             arduinoLastUpdateTime = Time.time;
+
+            // Jeden Sensor-Wert direkt in der Unity-Konsole ausgeben.
+            // Marker zeigt, ob der Balken gerade wandert (>= Schwelle).
+            string marker = tempC >= heatThresholdC ? "BRENNER" : "SENSOR";
+            Debug.Log($"[Level6] {marker} – {tempC:F1} °C");
         }
     }
 
@@ -147,10 +243,11 @@ public class Level6_FinalGate : MonoBehaviour
 
     void HandleApproach()
     {
+        // Kein [E] mehr – sobald der Spieler am Tor steht, geht das Heat-Panel
+        // automatisch auf und der Thermistor wird aktiviert.
         bool near = gateSpot != null && gateSpot.PlayerNearby;
         if (interactionPrompt) interactionPrompt.SetActive(near);
-        if (near && Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
-            OpenHeatPanel();
+        if (near) OpenHeatPanel();
     }
 
     void OpenHeatPanel()
@@ -161,6 +258,7 @@ public class Level6_FinalGate : MonoBehaviour
         Cursor.visible   = true;
         Cursor.lockState = CursorLockMode.None;
         EventSystem.current?.SetSelectedGameObject(null);
+        // Thermistor laeuft bereits seit Start() – kein zweites 10:START noetig.
     }
 
     void HandleHeat()
@@ -187,10 +285,16 @@ public class Level6_FinalGate : MonoBehaviour
 
         if (statusText)
         {
-            // Eingangsquelle anzeigen, damit klar ist welche Eingabe gerade zählt
-            string src = arduinoHeating ? $"[FÖHN  {arduinoLastTempC:F0}°C]"
-                       : holding        ? "[BRENNER]"
-                       : string.Empty;
+            // Live-Temperatur immer anzeigen, sobald ein frischer Sensor-Wert vorliegt –
+            // auch unterhalb der 40-Grad-Schwelle. Brennt der Brenner aktiv, wird der
+            // Wert hervorgehoben.
+            bool freshTemp = arduinoConnected
+                          && (Time.time - arduinoLastUpdateTime) <= arduinoTimeoutSec;
+            string src = freshTemp
+                       ? (arduinoHeating
+                            ? $"[BRENNER  {arduinoLastTempC:F1}°C]"
+                            : $"[SENSOR  {arduinoLastTempC:F1}°C]")
+                       : holding ? "[FALLBACK]" : string.Empty;
 
             string phase =
                   pct <  1f  ? string.Empty

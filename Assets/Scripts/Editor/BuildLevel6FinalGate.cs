@@ -120,6 +120,10 @@ public class BuildLevel6FinalGate : LevelBuilderBase
         for (int i = 0; i < names.Length; i++) arr.GetArrayElementAtIndex(i).stringValue = names[i];
         gmso.ApplyModifiedPropertiesWithoutUndo();
 
+        var arduinoGO = new GameObject("ArduinoBridge");
+        arduinoGO.AddComponent<ArduinoBridge>();
+        SceneManager.MoveGameObjectToScene(arduinoGO, scene);
+
         // ── UI ────────────────────────────────────────────────────────────────
         BuildUI(scene, gateTrigger, gateBarsGO);
 
