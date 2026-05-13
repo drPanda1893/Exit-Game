@@ -55,17 +55,21 @@ public class BuildLevel6FinalGate : LevelBuilderBase
         Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
         EditorSceneManager.SaveScene(scene, "Assets/Scenes/Level6.unity");
 
-        // ── Kamera ───────────────────────────────────────────────────────────
+        // ── Kamera (Top-Down Follow, pitched – damit der Horizont sichtbar ist) ──
         var camGO = new GameObject("Main Camera");
         var cam   = camGO.AddComponent<Camera>();
         cam.clearFlags      = CameraClearFlags.SolidColor;
-        cam.backgroundColor = new Color(0.02f, 0.02f, 0.04f);
-        cam.farClipPlane    = 40f;
+        cam.backgroundColor = new Color(0.45f, 0.65f, 0.85f);   // helles Himmelblau – kein Schwarz mehr
+        cam.farClipPlane    = 80f;
+        cam.nearClipPlane   = 0.1f;
         cam.tag             = "MainCamera";
         camGO.AddComponent<AudioListener>();
-        camGO.transform.position = new Vector3(0f, 11f, 0f);
-        camGO.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+        camGO.transform.position = new Vector3(0f, 11f, -8f);
+        camGO.transform.rotation = Quaternion.Euler(65f, 0f, 0f);
         var follow = camGO.AddComponent<TopDownCameraFollow>();
+        follow.fixedWorldPosition = Vector3.zero;   // explizit Follow-Modus
+        follow.height     = 11f;
+        follow.pitchAngle = 65f;
         SceneManager.MoveGameObjectToScene(camGO, scene);
 
         // ── Umgebung ─────────────────────────────────────────────────────────
@@ -77,19 +81,27 @@ public class BuildLevel6FinalGate : LevelBuilderBase
         var player = AddPlayer(scene, new Vector3(0f, 0f, -5f));
         if (player != null) follow.SetTarget(player.transform);
 
-        // ── Beleuchtung ───────────────────────────────────────────────────────
+        // ── Beleuchtung ─ Drinnen warm, draußen Tageslicht ────────────────────
         RenderSettings.ambientMode  = UnityEngine.Rendering.AmbientMode.Flat;
-        RenderSettings.ambientLight = new Color(0.14f, 0.12f, 0.09f);
+        RenderSettings.ambientLight = new Color(0.40f, 0.42f, 0.46f);
+
+        // Sonne (Directional) – sorgt für ein durchgehend helles Bild,
+        // auch wenn alle Point-Lichter aus wären.
+        var sunGO = new GameObject("Sun");
+        sunGO.transform.SetParent(root.transform);
+        sunGO.transform.rotation = Quaternion.Euler(55f, 25f, 0f);
+        var sun = sunGO.AddComponent<Light>();
+        sun.type = LightType.Directional;
+        sun.color = new Color(1.00f, 0.96f, 0.82f);
+        sun.intensity = 1.1f;
+        sun.shadows   = LightShadows.Soft;
+
         AddLight("SpawnLight", root.transform, new Vector3(0f, 3.5f, -4.5f),
-            LightType.Point, new Color(0.82f, 0.72f, 0.52f), 1.2f, 8f, LightShadows.None);
-        AddLight("CorridorLight", root.transform, new Vector3(0f, 4f, -2f),
-            LightType.Point, new Color(0.85f, 0.75f, 0.55f), 1.4f, 10f, LightShadows.Soft);
-        AddLight("GateSpot_L", root.transform, new Vector3(-2f, 5f, 3.5f),
-            LightType.Spot, new Color(1f, 0.6f, 0.2f), 3.0f, 12f, LightShadows.Hard,
-            Quaternion.Euler(60f, 30f, 0f));
-        AddLight("GateSpot_R", root.transform, new Vector3(2f, 5f, 3.5f),
-            LightType.Spot, new Color(1f, 0.5f, 0.15f), 3.0f, 12f, LightShadows.Hard,
-            Quaternion.Euler(60f, -30f, 0f));
+            LightType.Point, new Color(1.00f, 0.85f, 0.55f), 1.4f, 9f, LightShadows.None);
+        AddLight("CorridorLight", root.transform, new Vector3(0f, 4f, -1f),
+            LightType.Point, new Color(0.95f, 0.85f, 0.65f), 1.6f, 10f, LightShadows.None);
+        AddLight("GateGlow", root.transform, new Vector3(0f, 3.5f, 2.5f),
+            LightType.Point, new Color(1.0f, 0.95f, 0.85f), 1.8f, 9f, LightShadows.None);
 
         // ── Gate-Trigger ──────────────────────────────────────────────────────
         var gateTrigger = BuildGateTrigger(root.transform);
@@ -119,51 +131,199 @@ public class BuildLevel6FinalGate : LevelBuilderBase
     // 3D Umgebung
     // =========================================================================
 
-    /// <summary>Baut den Korridor + das Eisentor. Gibt das GateBars-GO zurück.</summary>
+    /// <summary>Baut den Korridor + das Eisentor + die Freiheit dahinter.
+    /// Kein Dach, damit die Top-Down-Kamera den Innenraum sieht.</summary>
     GameObject BuildEnvironment(Transform root)
     {
-        var concreteMat = M(new Color(0.22f, 0.20f, 0.18f), 0.01f, 0.05f);
-        var stoneMat    = M(new Color(0.18f, 0.17f, 0.15f), 0.00f, 0.03f);
-        var ironMat     = M(new Color(0.25f, 0.23f, 0.20f), 0.65f, 0.30f);
-        var rustMat     = M(new Color(0.30f, 0.15f, 0.05f), 0.40f, 0.10f);
+        var concreteMat = M(new Color(0.32f, 0.30f, 0.28f), 0.01f, 0.05f);
+        var stoneMat    = M(new Color(0.28f, 0.27f, 0.25f), 0.00f, 0.03f);
+        var ironMat     = M(new Color(0.20f, 0.19f, 0.18f), 0.60f, 0.35f);
+        var rustMat     = M(new Color(0.35f, 0.18f, 0.06f), 0.40f, 0.10f);
 
-        // ── Korridor (z -6 … +2) ─────────────────────────────────────────────
-        Box("Boden",      new Vector3(0f, -0.08f, -2f), new Vector3(6f, 0.16f, 16f), concreteMat, root);
-        Box("Wand_Links", new Vector3(-3f, 2.5f, -2f),  new Vector3(0.22f, 5f, 16f), stoneMat,    root);
-        Box("Wand_Rechts",new Vector3( 3f, 2.5f, -2f),  new Vector3(0.22f, 5f, 16f), stoneMat,    root);
-        Box("Decke",      new Vector3(0f, 5.1f, -2f),   new Vector3(6.44f, 0.2f, 16f), concreteMat, root, col: false);
-        Box("EW_Links",   new Vector3(-2f, 2.5f, -6f),  new Vector3(2f, 5f, 0.22f),  stoneMat,    root);
-        Box("EW_Rechts",  new Vector3( 2f, 2.5f, -6f),  new Vector3(2f, 5f, 0.22f),  stoneMat,    root);
-        Box("EW_Top",     new Vector3( 0f, 3.8f, -6f),  new Vector3(6f, 2.4f, 0.22f),stoneMat,    root);
+        // ── Innen-Korridor (z -7 … +2) ───────────────────────────────────────
+        Box("Boden",      new Vector3(0f, -0.08f, -2.5f), new Vector3(6f, 0.16f, 16f), concreteMat, root);
+        Box("Wand_Links", new Vector3(-3f, 2.5f, -2.5f),  new Vector3(0.22f, 5f, 16f), stoneMat,    root);
+        Box("Wand_Rechts",new Vector3( 3f, 2.5f, -2.5f),  new Vector3(0.22f, 5f, 16f), stoneMat,    root);
+        // KEINE Decke – würde die Top-Down-Sicht ins Innere blockieren.
+        // Stattdessen Querbalken als Atmosphäre:
+        for (int b = 0; b < 4; b++)
+            Box($"Balken_{b}", new Vector3(0f, 4.7f, -7f + b * 2.5f), new Vector3(6f, 0.18f, 0.18f),
+                M(new Color(0.18f, 0.13f, 0.07f)), root, col: false);
 
-        // ── Tor-Rahmen ────────────────────────────────────────────────────────
+        // Rückwand am Spieler-Start (z=-7)
+        Box("EW_Links",   new Vector3(-2f, 2.5f, -7f),  new Vector3(2f, 5f, 0.22f),  stoneMat, root);
+        Box("EW_Rechts",  new Vector3( 2f, 2.5f, -7f),  new Vector3(2f, 5f, 0.22f),  stoneMat, root);
+        Box("EW_Top",     new Vector3( 0f, 3.8f, -7f),  new Vector3(6f, 2.4f, 0.22f),stoneMat, root);
+
+        // ── Tor-Rahmen (Pfeiler + Sturz) ──────────────────────────────────────
         Box("Pfeiler_L",  new Vector3(-2.6f, 2.5f, 2f), new Vector3(1.0f, 5f, 0.6f), stoneMat, root);
         Box("Pfeiler_R",  new Vector3( 2.6f, 2.5f, 2f), new Vector3(1.0f, 5f, 0.6f), stoneMat, root);
-        Box("Sturz",      new Vector3(0f, 4.1f, 2f),    new Vector3(6.44f, 0.8f, 0.6f), stoneMat, root);
+        Box("Sturz",      new Vector3(0f, 4.5f, 2f),    new Vector3(6.44f, 0.8f, 0.6f), stoneMat, root);
         Box("Schloss",    new Vector3(0f, 1.4f, 1.76f), new Vector3(0.32f, 0.40f, 0.12f), rustMat, root, col: false);
 
-        // ── Tor-Stäbe (werden bei Sieg deaktiviert) ───────────────────────────
+        // ── Tor-Stäbe (Pivot oben am Sturz, klappen bei Sieg nach oben) ───────
         var bars = new GameObject("GateBars");
         bars.transform.SetParent(root);
-        bars.transform.position = Vector3.zero;
+        bars.transform.position = new Vector3(0f, 4.0f, 2f);   // Drehpunkt: oben am Sturz
         for (int i = 0; i < 5; i++)
         {
             float x = -1.6f + i * 0.8f;
+            // Stäbe hängen vom Pivot nach unten (lokal y=-2 → Mitte des Stabs)
             Box($"Bar_{i}", new Vector3(x, 2.0f, 2f), new Vector3(0.10f, 4.0f, 0.10f), ironMat, bars.transform, col: false);
         }
         Box("Bar_H1", new Vector3(0f, 3.2f, 2f), new Vector3(3.4f, 0.10f, 0.10f), ironMat, bars.transform, col: false);
         Box("Bar_H2", new Vector3(0f, 1.0f, 2f), new Vector3(3.4f, 0.10f, 0.10f), ironMat, bars.transform, col: false);
         var barsCol = bars.AddComponent<BoxCollider>();
         barsCol.size   = new Vector3(4f, 4f, 0.2f);
-        barsCol.center = new Vector3(0f, 2f, 2f);
+        barsCol.center = new Vector3(0f, -2f, 0f);   // lokal: Mitte zwischen den Stäben (Pivot oben → Stäbe nach unten)
 
-        // ── Atmosphäre ────────────────────────────────────────────────────────
-        var debrisMat = M(new Color(0.18f, 0.14f, 0.09f));
-        Box("Kiste_L",  new Vector3(-2.2f, 0.25f, -3f),  new Vector3(0.55f, 0.50f, 0.55f), debrisMat, root);
-        Box("Kiste_R",  new Vector3( 2.3f, 0.22f, -1.5f),new Vector3(0.45f, 0.44f, 0.45f), debrisMat, root);
-        Box("Stein",    new Vector3(-1.8f, 0.12f, 0.5f), new Vector3(0.30f, 0.24f, 0.28f), stoneMat,  root, col: false);
+        // ── Atmosphäre im Korridor ────────────────────────────────────────────
+        var debrisMat = M(new Color(0.20f, 0.16f, 0.10f));
+        Box("Kiste_L",  new Vector3(-2.2f, 0.25f, -3f),   new Vector3(0.55f, 0.50f, 0.55f), debrisMat, root);
+        Box("Kiste_R",  new Vector3( 2.3f, 0.22f, -1.5f), new Vector3(0.45f, 0.44f, 0.45f), debrisMat, root);
+        Box("Stein",    new Vector3(-1.8f, 0.12f, 0.5f),  new Vector3(0.30f, 0.24f, 0.28f), stoneMat,  root, col: false);
+        // Fackeln an den Pfeilern (warmes Licht im Korridor)
+        var flameMat = Emit(new Color(1.0f, 0.55f, 0.10f), new Color(1.0f, 0.65f, 0.15f), 2.0f);
+        Box("Fackel_L", new Vector3(-2.85f, 3.0f, -1f), new Vector3(0.18f, 0.30f, 0.18f), flameMat, root, col: false);
+        Box("Fackel_R", new Vector3( 2.85f, 3.0f, -1f), new Vector3(0.18f, 0.30f, 0.18f), flameMat, root, col: false);
+
+        // ════════════════════════════════════════════════════════════════════
+        //   D R A U S S E N  —  Die Freiheit hinter dem Tor (z > 2)
+        // ════════════════════════════════════════════════════════════════════
+        BuildOutdoorFreedom(root);
 
         return bars;
+    }
+
+    /// <summary>Wiese, Weg, Bäume, Berge, Sonne – alles was hinter dem Tor zu sehen sein soll.</summary>
+    void BuildOutdoorFreedom(Transform root)
+    {
+        var grassMat   = M(new Color(0.32f, 0.62f, 0.22f), 0f, 0.10f);
+        var grassDark  = M(new Color(0.24f, 0.50f, 0.18f), 0f, 0.08f);
+        var dirtMat    = M(new Color(0.50f, 0.36f, 0.22f), 0f, 0.10f);
+        var trunkMat   = M(new Color(0.30f, 0.18f, 0.08f), 0f, 0.08f);
+        var leavesMat  = M(new Color(0.22f, 0.55f, 0.20f), 0f, 0.06f);
+        var leavesAlt  = M(new Color(0.28f, 0.62f, 0.22f), 0f, 0.06f);
+        var mountainMat= M(new Color(0.42f, 0.48f, 0.55f), 0f, 0.05f);
+        var hillMat    = M(new Color(0.30f, 0.55f, 0.25f), 0f, 0.06f);
+        var skyMat     = Emit(new Color(0.55f, 0.78f, 0.95f),
+                              new Color(0.65f, 0.85f, 1.0f), 0.6f);
+        var sunMat     = Emit(new Color(1.0f, 0.92f, 0.55f),
+                              new Color(1.0f, 0.95f, 0.65f), 3.0f);
+
+        // Wiese (großes Plateau hinter dem Tor)
+        Box("Wiese", new Vector3(0f, -0.05f, 14f), new Vector3(40f, 0.10f, 26f),
+            grassMat, root);
+
+        // Wiesen-Flecken für Tiefe
+        for (int i = 0; i < 8; i++)
+        {
+            float x = -14f + i * 4f;
+            Box($"Wiesenfleck_{i}", new Vector3(x + Random.Range(-1f,1f), 0.005f, 10f + Random.Range(0f, 4f)),
+                new Vector3(2.2f, 0.02f, 2.0f), grassDark, root, col: false);
+        }
+
+        // Erdweg in der Mitte (Fortsetzung des Korridorbodens)
+        Box("Weg", new Vector3(0f, 0.005f, 9f), new Vector3(2.6f, 0.02f, 8f), dirtMat, root, col: false);
+        Box("Weg2", new Vector3(0f, 0.005f, 16f), new Vector3(2.2f, 0.02f, 6f), dirtMat, root, col: false);
+
+        // Bäume (zwei Reihen entlang des Wegs)
+        for (int i = 0; i < 6; i++)
+        {
+            float side = (i % 2 == 0) ? -1f : 1f;
+            float xOff = side * (3.5f + Random.Range(0f, 1.5f));
+            float z    = 6.5f + i * 2.8f + Random.Range(-0.5f, 0.5f);
+            BuildTree(root, new Vector3(xOff, 0f, z), trunkMat,
+                      (i % 2 == 0) ? leavesMat : leavesAlt);
+        }
+        // ein paar Bäume weiter hinten links/rechts
+        BuildTree(root, new Vector3(-8f, 0f, 12f), trunkMat, leavesMat);
+        BuildTree(root, new Vector3( 8f, 0f, 14f), trunkMat, leavesAlt);
+        BuildTree(root, new Vector3(-11f, 0f, 18f), trunkMat, leavesAlt);
+        BuildTree(root, new Vector3( 10f, 0f, 17f), trunkMat, leavesMat);
+
+        // Hügel im Mittelgrund (sanfte Erhebungen)
+        BuildHill(root, new Vector3(-9f, 0f, 22f), new Vector3(8f, 1.6f, 6f), hillMat);
+        BuildHill(root, new Vector3( 9f, 0f, 22f), new Vector3(8f, 1.6f, 6f), hillMat);
+        BuildHill(root, new Vector3( 0f, 0f, 26f), new Vector3(10f, 2.2f, 6f), hillMat);
+
+        // Berge im Hintergrund (dahinter, größer)
+        BuildHill(root, new Vector3(-14f, 0f, 33f), new Vector3(14f, 4.5f, 6f), mountainMat);
+        BuildHill(root, new Vector3( 14f, 0f, 33f), new Vector3(14f, 4.0f, 6f), mountainMat);
+        BuildHill(root, new Vector3(  0f, 0f, 36f), new Vector3(18f, 5.0f, 6f), mountainMat);
+
+        // Himmels-Backdrop (große flache Fläche weit hinten, emissive damit sie immer hell ist)
+        Box("Himmel_Hinten", new Vector3(0f, 15f, 40f), new Vector3(80f, 35f, 0.2f),
+            skyMat, root, col: false);
+        Box("Himmel_Links",  new Vector3(-22f, 15f, 18f), new Vector3(0.2f, 35f, 50f),
+            skyMat, root, col: false);
+        Box("Himmel_Rechts", new Vector3( 22f, 15f, 18f), new Vector3(0.2f, 35f, 50f),
+            skyMat, root, col: false);
+
+        // Sonne (leuchtende Kugel hoch im Hintergrund)
+        var sunGO = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        sunGO.name = "Sonne";
+        sunGO.transform.SetParent(root);
+        sunGO.transform.position = new Vector3(8f, 12f, 35f);
+        sunGO.transform.localScale = new Vector3(2.5f, 2.5f, 2.5f);
+        UnityEngine.Object.DestroyImmediate(sunGO.GetComponent<Collider>());
+        sunGO.GetComponent<Renderer>().sharedMaterial = sunMat;
+
+        // Wolken (helle flache Flecken hoch oben)
+        var cloudMat = Emit(new Color(0.95f, 0.95f, 0.98f),
+                            new Color(1.0f, 1.0f, 1.0f), 0.4f);
+        Box("Wolke1", new Vector3(-6f, 13f, 28f), new Vector3(5f, 0.6f, 2.5f), cloudMat, root, col: false);
+        Box("Wolke2", new Vector3( 7f, 14f, 30f), new Vector3(6f, 0.6f, 3.0f), cloudMat, root, col: false);
+        Box("Wolke3", new Vector3( 0f, 15f, 25f), new Vector3(4f, 0.5f, 2.0f), cloudMat, root, col: false);
+    }
+
+    /// <summary>Einfacher Baum: brauner Stamm + grüne Kugel-Kuppel als Laub.</summary>
+    void BuildTree(Transform root, Vector3 pos, Material trunk, Material leaves)
+    {
+        var tree = new GameObject("Tree");
+        tree.transform.SetParent(root);
+        tree.transform.position = pos;
+
+        Box("Stamm", pos + new Vector3(0f, 1.2f, 0f), new Vector3(0.40f, 2.4f, 0.40f), trunk, tree.transform, col: false);
+
+        var crown = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        crown.name = "Krone";
+        crown.transform.SetParent(tree.transform);
+        crown.transform.position = pos + new Vector3(0f, 3.0f, 0f);
+        crown.transform.localScale = new Vector3(2.4f, 2.2f, 2.4f);
+        UnityEngine.Object.DestroyImmediate(crown.GetComponent<Collider>());
+        crown.GetComponent<Renderer>().sharedMaterial = leaves;
+
+        // Zweite kleinere Krone obendrauf für mehr Form
+        var crown2 = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        crown2.name = "Krone2";
+        crown2.transform.SetParent(tree.transform);
+        crown2.transform.position = pos + new Vector3(0f, 3.8f, 0f);
+        crown2.transform.localScale = new Vector3(1.6f, 1.5f, 1.6f);
+        UnityEngine.Object.DestroyImmediate(crown2.GetComponent<Collider>());
+        crown2.GetComponent<Renderer>().sharedMaterial = leaves;
+    }
+
+    /// <summary>Sanfter Hügel/Berg als breite, flache Halbkugel.</summary>
+    void BuildHill(Transform root, Vector3 pos, Vector3 scale, Material mat)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        go.name = "Hill";
+        go.transform.SetParent(root);
+        go.transform.position   = pos + new Vector3(0f, scale.y * 0.0f, 0f);
+        go.transform.localScale = new Vector3(scale.x, scale.y * 2f, scale.z);
+        UnityEngine.Object.DestroyImmediate(go.GetComponent<Collider>());
+        go.GetComponent<Renderer>().sharedMaterial = mat;
+    }
+
+    Material Emit(Color baseCol, Color glow, float intensity)
+    {
+        var m = new Material(Shader.Find("Standard")) { color = baseCol };
+        m.SetFloat("_Metallic",   0f);
+        m.SetFloat("_Glossiness", 0.1f);
+        m.EnableKeyword("_EMISSION");
+        m.SetColor("_EmissionColor", glow * intensity);
+        return m;
     }
 
     // =========================================================================

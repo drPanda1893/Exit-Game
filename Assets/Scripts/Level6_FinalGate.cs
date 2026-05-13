@@ -45,7 +45,7 @@ public class Level6_FinalGate : MonoBehaviour
     [Tooltip("Befehls-ID des Temperatursensors (Standard 0x60).")]
     [SerializeField] private byte arduinoCmdId = 0x60;
     [Tooltip("Schwelle in Grad Celsius, ab der der Föhn als 'aktiv' zählt.")]
-    [SerializeField] private float heatThresholdC = 35f;
+    [SerializeField] private float heatThresholdC = 32f;
     [Tooltip("Sekunden Karenz nach letztem Sensor-Wert, bevor wieder abgekühlt wird.")]
     [SerializeField] private float arduinoTimeoutSec = 0.6f;
 
@@ -245,15 +245,33 @@ public class Level6_FinalGate : MonoBehaviour
         Cursor.visible   = false;
         Cursor.lockState = CursorLockMode.Locked;
 
-        if (gateBarsGO) gateBarsGO.SetActive(false);
+        // Tor klappt animiert nach oben weg (Stäbe sind am Sturz aufgehängt)
+        if (gateBarsGO != null)
+        {
+            // Kollider sofort aus, damit der Spieler gleich durchlaufen könnte
+            foreach (var c in gateBarsGO.GetComponentsInChildren<Collider>())
+                c.enabled = false;
 
-        yield return new WaitForSeconds(0.7f);
+            Quaternion start = gateBarsGO.transform.localRotation;
+            Quaternion end   = start * Quaternion.Euler(-95f, 0f, 0f);  // hoch klappen
+            float t = 0f;
+            while (t < 1f)
+            {
+                t += Time.deltaTime * 0.9f;
+                gateBarsGO.transform.localRotation =
+                    Quaternion.Slerp(start, end, Mathf.SmoothStep(0f, 1f, t));
+                yield return null;
+            }
+        }
+
+        // Kurzer Moment, den Blick in die Freiheit genießen lassen
+        yield return new WaitForSeconds(1.2f);
 
         if (BigYahuDialogSystem.Instance)
             BigYahuDialogSystem.Instance.ShowDialog(new[]
             {
+                "Big Yahu: Das Tor ist offen … ich kann die Wiese riechen!",
                 "Big Yahu: WIR SIND FREI!!!",
-                "Big Yahu: Ich kann's kaum glauben – nach all dem haben wir es wirklich geschafft!",
                 "Big Yahu: Du warst der beste Komplize den man sich wünschen kann. Danke!"
             }, ShowWinScreen);
         else
