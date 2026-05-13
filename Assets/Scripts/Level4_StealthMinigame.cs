@@ -3,8 +3,10 @@ using UnityEngine.UI;
 using TMPro;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 
 /// <summary>
 /// Level 4 – Wärter-Stealth-Minigame.
@@ -17,7 +19,7 @@ public class Level4_StealthMinigame : MonoBehaviour
 {
     [Header("Spieler")]
     [SerializeField] private RectTransform player;
-    [SerializeField] private float playerSpeed = 155f;
+    [SerializeField] private float playerSpeed = 185f;
 
     [Header("Wärter")]
     [SerializeField] private List<RectTransform> guards;
@@ -34,6 +36,17 @@ public class Level4_StealthMinigame : MonoBehaviour
     [Header("UI")]
     [SerializeField] private TextMeshProUGUI statusText;
     [SerializeField] private RectTransform   playArea;
+
+    [Header("Arduino-Joystick (Freenove A1/A2/A3)")]
+    [SerializeField] private bool  arduinoFallback   = true;
+    [SerializeField] private bool  joystickInvertX   = true;   // Freenove-Joystick auf diesem Board: X gespiegelt
+    [SerializeField] private bool  joystickInvertY   = false;  // VRY: rauf=positiv = Y oben (UI-Koordinaten)
+    [SerializeField] private float joystickDeadzone  = 0.15f;
+
+    private const byte      JOY_CMD = 0x30;
+    private Action<string>  joystickHandler;
+    private Vector2         joystickAxis;
+    private bool            joystickActive;
 
     // ── Patrol-State ─────────────────────────────────────────────────────
     private Vector2[] guardStartPos;
@@ -73,7 +86,10 @@ public class Level4_StealthMinigame : MonoBehaviour
         elapsed       = 0f;
         suspicion     = 0f;
         alarmTimer    = 0f;
+        joystickAxis  = Vector2.zero;
         if (statusText != null) statusText.text = string.Empty;
+
+        EnableJoystickInput();
 
         if (BigYahuDialogSystem.Instance != null)
             BigYahuDialogSystem.Instance.ShowDialog(new[]
@@ -87,6 +103,12 @@ public class Level4_StealthMinigame : MonoBehaviour
             ResetGame();
             active = true;
         }
+    }
+
+    void OnDisable()
+    {
+        DisableJoystickInput();
+        joystickAxis = Vector2.zero;
     }
 
     void Start()
@@ -149,21 +171,115 @@ public class Level4_StealthMinigame : MonoBehaviour
 
     void MovePlayer()
     {
-        var kb = Keyboard.current;
-        if (kb == null) return;
-
         float h = 0f, v = 0f;
-        if (kb.aKey.isPressed || kb.leftArrowKey.isPressed)  h = -1f;
-        if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) h =  1f;
-        if (kb.wKey.isPressed || kb.upArrowKey.isPressed)    v =  1f;
-        if (kb.sKey.isPressed || kb.downArrowKey.isPressed)  v = -1f;
 
-        Vector2 delta = new Vector2(h, v).normalized * playerSpeed * Time.deltaTime;
+        var kb = Keyboard.current;
+        if (kb != null)
+        {
+            if (kb.aKey.isPressed || kb.leftArrowKey.isPressed)  h = -1f;
+            if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) h =  1f;
+            if (kb.wKey.isPressed || kb.upArrowKey.isPressed)    v =  1f;
+            if (kb.sKey.isPressed || kb.downArrowKey.isPressed)  v = -1f;
+        }
+
+        // Joystick übersteuert Tastatur, sobald er außerhalb der Deadzone steht.
+        // Analoge Auslenkung → langsamer bei Teil-Ausschlag.
+        if (joystickAxis.sqrMagnitude > joystickDeadzone * joystickDeadzone)
+        {
+            h = Mathf.Clamp(joystickAxis.x, -1f, 1f);
+            v = Mathf.Clamp(joystickAxis.y, -1f, 1f);
+        }
+
+        Vector2 dir = new Vector2(h, v);
+        if (dir.sqrMagnitude > 1f) dir.Normalize();   // Diagonale nicht schneller als 1 Achse
+        Vector2 delta = dir * playerSpeed * Time.deltaTime;
+
+        // Axis-separated Kollision: nach X-Bewegung NUR in X zurueckschieben,
+        // nach Y-Bewegung NUR in Y. Sonst kann der Minimum-Overlap-Pushout
+        // den Spieler an Ecken seitlich durch die Wand schieben.
         player.anchoredPosition += new Vector2(delta.x, 0f);
-        PushOutWalls(player);
+        ResolvePlayerWallsAxis(true);
         player.anchoredPosition += new Vector2(0f, delta.y);
-        PushOutWalls(player);
+        ResolvePlayerWallsAxis(false);
         ClampToArea(player);
+    }
+
+    void ResolvePlayerWallsAxis(bool axisX)
+    {
+        if (walls == null) return;
+        Rect rr = GetRect(player);
+        foreach (var wall in walls)
+        {
+            if (wall == null) continue;
+            Rect wr = GetRect(wall);
+            if (!rr.Overlaps(wr)) continue;
+
+            Vector2 pos = player.anchoredPosition;
+            if (axisX)
+            {
+                float pushLeft  = rr.xMax - wr.xMin;  // rechts in Wand -> nach links zurueck
+                float pushRight = wr.xMax - rr.xMin;  // links in Wand -> nach rechts zurueck
+                if (pushLeft < pushRight) pos.x -= pushLeft;
+                else                      pos.x += pushRight;
+            }
+            else
+            {
+                float pushDown = rr.yMax - wr.yMin;   // oben in Wand -> nach unten zurueck
+                float pushUp   = wr.yMax - rr.yMin;   // unten in Wand -> nach oben zurueck
+                if (pushDown < pushUp) pos.y -= pushDown;
+                else                   pos.y += pushUp;
+            }
+            player.anchoredPosition = pos;
+            rr = GetRect(player);
+        }
+    }
+
+    // ── Arduino-Joystick (Freenove A1/A2/A3) ─────────────────────────────
+    // Nur aktiv, solange dieses Level-Panel an ist. OnEnable/OnDisable
+    // registriert/entfernt den Handler und schickt "30:START"/"30:STOP",
+    // damit der Sketch A1/A2/A3 nicht spammt, wenn ein anderes Level laeuft.
+
+    void EnableJoystickInput()
+    {
+        if (!arduinoFallback) return;
+        if (joystickActive) return;
+        var bridge = ArduinoBridge.Instance;
+        if (bridge == null) return;
+
+        joystickHandler = OnJoystickMessage;
+        bridge.RegisterHandler(JOY_CMD, joystickHandler);
+        bridge.Send(JOY_CMD, "START");
+        joystickActive = true;
+    }
+
+    void DisableJoystickInput()
+    {
+        if (!joystickActive) return;
+        var bridge = ArduinoBridge.Instance;
+        if (bridge != null)
+        {
+            if (joystickHandler != null) bridge.UnregisterHandler(JOY_CMD, joystickHandler);
+            bridge.Send(JOY_CMD, "STOP");
+        }
+        joystickHandler = null;
+        joystickActive  = false;
+    }
+
+    void OnJoystickMessage(string payload)
+    {
+        // erwartet "JOY:<x>,<y>,<btn>" – Button wird hier (noch) nicht genutzt
+        if (string.IsNullOrEmpty(payload)) return;
+        if (!payload.StartsWith("JOY:", StringComparison.Ordinal)) return;
+
+        var parts = payload.Substring(4).Split(',');
+        if (parts.Length < 2) return;
+
+        if (!float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x)) return;
+        if (!float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y)) return;
+
+        if (joystickInvertX) x = -x;
+        if (joystickInvertY) y = -y;
+        joystickAxis = new Vector2(x, y);
     }
 
     // ── Wärter ───────────────────────────────────────────────────────────

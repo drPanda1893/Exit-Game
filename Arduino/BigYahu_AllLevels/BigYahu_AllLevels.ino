@@ -14,12 +14,14 @@
  *   Farbsensor TCS3200 (Level 3)        -> S0=D4, S1=D5, S2=D6, S3=D7, OUT=D11
  *                                          (kein OE, Frequenz-Skalierung 20 %)
  *   Reset-Taster (Level 3, optional)    -> D12 gegen GND (INPUT_PULLUP)
+ *   Joystick Freenove (Level 4)         -> VRX=A1, VRY=A2, SW=A3 (INPUT_PULLUP)
  *
  * Unity -> Arduino:
- *   LV:0 / LV:1 / LV:2 / LV:3   explizit Level setzen (optional)
+ *   LV:0 / LV:1 / LV:2 / LV:3 / LV:4   explizit Level setzen (optional)
  *   FF:START / FF:STOP     Level1-Keypad aktivieren/deaktivieren (impliziert LV:1 / LV:0)
  *   10:START / 10:STOP     Level2-Thermistor aktivieren/deaktivieren (impliziert LV:2 / LV:0)
  *   20:START / 20:STOP     Level3-Farbsensor aktivieren/deaktivieren (impliziert LV:3 / LV:0)
+ *   30:START / 30:STOP     Level4-Joystick aktivieren/deaktivieren (impliziert LV:4 / LV:0)
  *   FF:ping                Health-Check, Antwort: FF:pong
  *
  * Arduino -> Unity:
@@ -31,12 +33,14 @@
  *                                      Level3 laufende Scanner-Werte zum Testen/Kalibrieren
  *   COLOR:RED|GREEN|BLUE   Level3 erkannte Farbe – NUR bei echter Aenderung (1 Farbe = 1 Eingabe)
  *   COLOR:RESET            Level3 physischer Reset-Taster gedrueckt
+ *   30:JOY:<x>,<y>,<btn>   Level4 normierter Joystick-Stream (~20 Hz) –
+ *                          x,y in [-1.00..+1.00] (Deadzone schon angewandt), btn = 0|1
  *   FF:ready               einmal nach Setup
  *   FF:pong                Antwort auf FF:ping
  */
 
 // ── Level-State ────────────────────────────────────────────────────────────
-enum Level : uint8_t { LV_NONE = 0, LV_KEYPAD = 1, LV_TEMP = 2, LV_COLOR = 3 };
+enum Level : uint8_t { LV_NONE = 0, LV_KEYPAD = 1, LV_TEMP = 2, LV_COLOR = 3, LV_JOYSTICK = 4 };
 Level currentLevel = LV_NONE;
 
 // Vom Farbsensor (Level 3) erkannte Farbe. MUSS hier oben stehen: die Arduino-IDE
@@ -98,10 +102,11 @@ void loop() {
   handleSerial();
 
   switch (currentLevel) {
-    case LV_KEYPAD: tickKeypad(); break;
-    case LV_TEMP:   tickTemp();   break;
-    case LV_COLOR:  tickColor();  break;
-    case LV_NONE:   default:      break;  // bewusst still
+    case LV_KEYPAD:   tickKeypad();   break;
+    case LV_TEMP:     tickTemp();     break;
+    case LV_COLOR:    tickColor();    break;
+    case LV_JOYSTICK: tickJoystick(); break;
+    case LV_NONE:     default:        break;  // bewusst still
   }
 }
 
@@ -113,16 +118,18 @@ void setLevel(Level newLevel) {
   if (newLevel == currentLevel) return;
 
   // Aufraeumen des alten Levels
-  if (currentLevel == LV_KEYPAD) silenceKeypad();
-  if (currentLevel == LV_TEMP)   resetTempState();
-  if (currentLevel == LV_COLOR)  resetColorState();
+  if (currentLevel == LV_KEYPAD)   silenceKeypad();
+  if (currentLevel == LV_TEMP)     resetTempState();
+  if (currentLevel == LV_COLOR)    resetColorState();
+  if (currentLevel == LV_JOYSTICK) resetJoystickState();
 
   currentLevel = newLevel;
 
   // Initialisierung des neuen Levels
-  if (currentLevel == LV_KEYPAD) silenceKeypad();   // sicherer Ausgangszustand fuer Scan
-  if (currentLevel == LV_TEMP)   resetTempState();
-  if (currentLevel == LV_COLOR)  initColorSensor();
+  if (currentLevel == LV_KEYPAD)   silenceKeypad();   // sicherer Ausgangszustand fuer Scan
+  if (currentLevel == LV_TEMP)     resetTempState();
+  if (currentLevel == LV_COLOR)    initColorSensor();
+  if (currentLevel == LV_JOYSTICK) initJoystick();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -149,18 +156,21 @@ void handleCommand(const String& raw) {
   cmd.toUpperCase();
 
   // Explizite Level-Auswahl
-  if      (cmd == "LV:0") { setLevel(LV_NONE);   return; }
-  else if (cmd == "LV:1") { setLevel(LV_KEYPAD); return; }
-  else if (cmd == "LV:2") { setLevel(LV_TEMP);   return; }
-  else if (cmd == "LV:3") { setLevel(LV_COLOR);  return; }
+  if      (cmd == "LV:0") { setLevel(LV_NONE);     return; }
+  else if (cmd == "LV:1") { setLevel(LV_KEYPAD);   return; }
+  else if (cmd == "LV:2") { setLevel(LV_TEMP);     return; }
+  else if (cmd == "LV:3") { setLevel(LV_COLOR);    return; }
+  else if (cmd == "LV:4") { setLevel(LV_JOYSTICK); return; }
 
   // Implizite Aktivierung ueber bestehende START/STOP-Kommandos
   if (cmd == "FF:START") { setLevel(LV_KEYPAD); return; }
-  if (cmd == "FF:STOP")  { if (currentLevel == LV_KEYPAD) setLevel(LV_NONE); return; }
-  if (cmd == "10:START") { setLevel(LV_TEMP); Serial.println("10:ready"); return; }
-  if (cmd == "10:STOP")  { if (currentLevel == LV_TEMP)   setLevel(LV_NONE); Serial.println("10:stopped"); return; }
-  if (cmd == "20:START") { setLevel(LV_COLOR); Serial.println("20:ready"); return; }
-  if (cmd == "20:STOP")  { if (currentLevel == LV_COLOR)  setLevel(LV_NONE); Serial.println("20:stopped"); return; }
+  if (cmd == "FF:STOP")  { if (currentLevel == LV_KEYPAD)   setLevel(LV_NONE); return; }
+  if (cmd == "10:START") { setLevel(LV_TEMP);     Serial.println("10:ready"); return; }
+  if (cmd == "10:STOP")  { if (currentLevel == LV_TEMP)     setLevel(LV_NONE); Serial.println("10:stopped"); return; }
+  if (cmd == "20:START") { setLevel(LV_COLOR);    Serial.println("20:ready"); return; }
+  if (cmd == "20:STOP")  { if (currentLevel == LV_COLOR)    setLevel(LV_NONE); Serial.println("20:stopped"); return; }
+  if (cmd == "30:START") { setLevel(LV_JOYSTICK); Serial.println("30:ready"); return; }
+  if (cmd == "30:STOP")  { if (currentLevel == LV_JOYSTICK) setLevel(LV_NONE); Serial.println("30:stopped"); return; }
 
   if (cmd == "FF:PING")  { Serial.println("FF:pong"); return; }
 }
@@ -324,6 +334,9 @@ const int           COL_DOMINANT_THRESHOLD = 100;
 const uint8_t       COL_STABLE_NEED        = 2;     // 2 gleiche Messungen in Folge
 const unsigned long COL_SAMPLE_MS          = 200;   // Loop-Takt (= delay(200) im Test-Sketch)
 const unsigned long COL_RESET_DEBOUNCE_MS  = 30;
+const unsigned long COL_PULSE_TIMEOUT_US   = 50000; // pulseIn-Timeout pro Filter (50 ms),
+                                                    // verhindert 1-Sekunden-Blockaden wenn der
+                                                    // Sensor mal kein Signal liefert
 
 // Live-Werte fuer COLOR:RGB:...
 int  colLastR = 0, colLastG = 0, colLastB = 0;
@@ -377,7 +390,8 @@ void initColorSensor() {
 long readTcsPulse(bool s2, bool s3) {
   digitalWrite(TCS_S2, s2 ? HIGH : LOW);
   digitalWrite(TCS_S3, s3 ? HIGH : LOW);
-  long v = pulseIn(TCS_OUT, LOW);  // Standard-Timeout
+  long v = pulseIn(TCS_OUT, LOW, COL_PULSE_TIMEOUT_US);  // begrenzter Timeout statt 1 s default
+  if (v == 0) v = COL_PULSE_TIMEOUT_US;                  // kein Signal -> "schwarz" (grosser Wert)
   delay(10);                       // Pause nach Messung – wie im Test-Sketch
   return v;
 }
@@ -453,4 +467,90 @@ void tickColor() {
       Serial.println(colorName(c));
     }
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Level 4 – Joystick Freenove (Arcade-Steuerung fuers Waerter-Stealth-Spiel)
+//
+// Aktiv erst ab "30:START". Vorher wird A1/A2/A3 nicht angefasst, damit
+// andere Level (z.B. A0-Thermistor in L2) ungestoert bleiben.
+// VRX = A1, VRY = A2, SW = A3 (Taster gegen GND, INPUT_PULLUP).
+// Sendet ~20 Hz "30:JOY:<x>,<y>,<btn>" mit normierten Achsen in [-1.00..+1.00]
+// und Button = 0|1. Die Mittenposition (~512) wird zu 0, eine kleine Deadzone
+// um die Mitte unterdrueckt Drift.
+// ═══════════════════════════════════════════════════════════════════════════
+
+#define JOY_X_PIN   A1
+#define JOY_Y_PIN   A2
+#define JOY_BTN_PIN A3
+
+const unsigned long JOY_SAMPLE_MS  = 50;     // 20 Hz
+const int           JOY_DEFAULT_C  = 512;
+const float         JOY_DEADZONE   = 0.15f;  // ~15 % – Freenove-Joysticks haben Spiel um Mitte
+const uint8_t       JOY_ZERO_SAMP  = 16;     // Mittelung fuer Auto-Zero
+const uint8_t       JOY_ZERO_DELAY = 4;      // ms zwischen Auto-Zero-Samples
+
+unsigned long joyLastSampleAt = 0;
+int           joyCenterX      = JOY_DEFAULT_C;
+int           joyCenterY      = JOY_DEFAULT_C;
+
+void resetJoystickState() {
+  joyLastSampleAt = 0;
+  joyCenterX      = JOY_DEFAULT_C;
+  joyCenterY      = JOY_DEFAULT_C;
+}
+
+void initJoystick() {
+  pinMode(JOY_BTN_PIN, INPUT_PULLUP);
+  // analogRead-Pins brauchen kein pinMode
+  resetJoystickState();
+
+  // Auto-Zero: aktuelle Ruheposition als Mittelpunkt verwenden.
+  // Annahme: beim Wechsel in Level 4 wird der Joystick nicht beruehrt.
+  // Loest das Problem, dass die Figur ohne Eingabe driftet.
+  long sumX = 0, sumY = 0;
+  // ersten Wert verwerfen (ADC Channel-Switch braucht eine Wandlung zum Setzen)
+  (void)analogRead(JOY_X_PIN);
+  (void)analogRead(JOY_Y_PIN);
+  for (uint8_t i = 0; i < JOY_ZERO_SAMP; i++) {
+    sumX += analogRead(JOY_X_PIN);
+    sumY += analogRead(JOY_Y_PIN);
+    delay(JOY_ZERO_DELAY);
+  }
+  joyCenterX = sumX / JOY_ZERO_SAMP;
+  joyCenterY = sumY / JOY_ZERO_SAMP;
+}
+
+void tickJoystick() {
+  unsigned long now = millis();
+  if (now - joyLastSampleAt < JOY_SAMPLE_MS) return;
+  joyLastSampleAt = now;
+
+  int rawX = analogRead(JOY_X_PIN);
+  int rawY = analogRead(JOY_Y_PIN);
+  int btn  = (digitalRead(JOY_BTN_PIN) == LOW) ? 1 : 0;
+
+  // Range zur kleineren Seite des gemessenen Centers normieren,
+  // damit voller Ausschlag wirklich +/-1.0 erreicht.
+  float spanXNeg = (float)joyCenterX;
+  float spanXPos = (float)(1023 - joyCenterX);
+  float spanYNeg = (float)joyCenterY;
+  float spanYPos = (float)(1023 - joyCenterY);
+  float dx = (float)(rawX - joyCenterX);
+  float dy = (float)(rawY - joyCenterY);
+  float nx = dx >= 0 ? (spanXPos > 0 ? dx / spanXPos : 0) : (spanXNeg > 0 ? dx / spanXNeg : 0);
+  float ny = dy >= 0 ? (spanYPos > 0 ? dy / spanYPos : 0) : (spanYNeg > 0 ? dy / spanYNeg : 0);
+  if (nx >  1.0f) nx =  1.0f;
+  if (nx < -1.0f) nx = -1.0f;
+  if (ny >  1.0f) ny =  1.0f;
+  if (ny < -1.0f) ny = -1.0f;
+  if (fabs(nx) < JOY_DEADZONE) nx = 0.0f;
+  if (fabs(ny) < JOY_DEADZONE) ny = 0.0f;
+
+  Serial.print("30:JOY:");
+  Serial.print(nx, 2);
+  Serial.print(',');
+  Serial.print(ny, 2);
+  Serial.print(',');
+  Serial.println(btn);
 }
