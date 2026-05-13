@@ -2,7 +2,9 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using TMPro;
+using System;
 using System.Collections;
+using System.Globalization;
 using UnityEngine.InputSystem;
 
 /// <summary>
@@ -39,11 +41,23 @@ public class Level6_FinalGate : MonoBehaviour
     [SerializeField] private float heatSpeed = 0.10f;
     [SerializeField] private float coolSpeed = 0.04f;
 
+    [Header("Arduino (Temperatursensor / Föhn)")]
+    [Tooltip("Befehls-ID des Temperatursensors (Standard 0x60).")]
+    [SerializeField] private byte arduinoCmdId = 0x60;
+    [Tooltip("Schwelle in Grad Celsius, ab der der Föhn als 'aktiv' zählt.")]
+    [SerializeField] private float heatThresholdC = 35f;
+    [Tooltip("Sekunden Karenz nach letztem Sensor-Wert, bevor wieder abgekühlt wird.")]
+    [SerializeField] private float arduinoTimeoutSec = 0.6f;
+
     private enum State { Idle, WaitingApproach, Heating, Done }
     private State state = State.Idle;
 
-    private bool holding;
-    private bool won;
+    private bool  holding;
+    private bool  won;
+    private bool  arduinoConnected;
+    private float arduinoLastTempC;
+    private float arduinoLastUpdateTime;
+    private Action<string> tempHandler;
 
     void Awake() => Instance = this;
 
@@ -66,13 +80,53 @@ public class Level6_FinalGate : MonoBehaviour
         SetupHeatButton();
         if (restartButton) restartButton.onClick.AddListener(OnRestartClicked);
 
+        // Arduino-Temperatursensor (Befehl 0x60) – physikalischer Föhn vor Sensor
+        // halten erhitzt das Tor. Wenn kein Arduino vorhanden, greift der
+        // Maus-Fallback ("BRENNER HALTEN").
+        if (ArduinoBridge.Instance != null)
+        {
+            tempHandler = OnTemperatureFromArduino;
+            ArduinoBridge.Instance.RegisterHandler(arduinoCmdId, tempHandler);
+        }
+
         if (BigYahuDialogSystem.Instance)
             BigYahuDialogSystem.Instance.ShowDialog(new[]
             {
                 "Big Yahu: Das ist es – das letzte Tor. Dahinter liegt die Freiheit!",
-                "Big Yahu: Ich hab den Bunsenbrenner dabei...",
-                "Big Yahu: Geh zum Schloss und halt ihn ans Metall!"
+                "Big Yahu: Ich hab den Bunsenbrenner aus der Werkstatt dabei …",
+                "Big Yahu: Halt den Föhn vor den Sensor – oder den Brenner-Button gedrückt!"
             });
+    }
+
+    void OnDisable()
+    {
+        if (ArduinoBridge.Instance != null && tempHandler != null)
+            ArduinoBridge.Instance.UnregisterHandler(arduinoCmdId, tempHandler);
+    }
+
+    // -------------------------------------------------------------------------
+    // Arduino-Eingang: empfängt "TEMP:42" oder rohen Wert "42"
+    // -------------------------------------------------------------------------
+
+    void OnTemperatureFromArduino(string payload)
+    {
+        string val = payload;
+        if (val.StartsWith("TEMP:", StringComparison.Ordinal)) val = val.Substring(5);
+
+        if (float.TryParse(val, NumberStyles.Float, CultureInfo.InvariantCulture, out float tempC))
+        {
+            arduinoConnected      = true;
+            arduinoLastTempC      = tempC;
+            arduinoLastUpdateTime = Time.time;
+        }
+    }
+
+    /// <summary>Wahr wenn ein frischer Föhn-Wert über der Schwelle vorliegt.</summary>
+    bool IsArduinoHeating()
+    {
+        if (!arduinoConnected) return false;
+        if (Time.time - arduinoLastUpdateTime > arduinoTimeoutSec) return false;
+        return arduinoLastTempC >= heatThresholdC;
     }
 
     void Update()
@@ -113,7 +167,10 @@ public class Level6_FinalGate : MonoBehaviour
     {
         if (won) return;
 
-        float delta = holding ? heatSpeed : -coolSpeed;
+        bool arduinoHeating = IsArduinoHeating();
+        bool isHeating      = holding || arduinoHeating;
+
+        float delta = isHeating ? heatSpeed : -coolSpeed;
         temperatureBar.value = Mathf.Clamp01(temperatureBar.value + delta * Time.deltaTime);
 
         float pct = temperatureBar.value * 100f;
@@ -130,11 +187,22 @@ public class Level6_FinalGate : MonoBehaviour
 
         if (statusText)
         {
-            if      (pct <  1f)  statusText.text = string.Empty;
-            else if (pct < 35f)  statusText.text = "Das Metall wird warm...";
-            else if (pct < 65f)  statusText.text = "Das Schloss glüht!";
-            else if (pct < 90f)  statusText.text = "FAST! Nicht aufhören!";
-            else if (pct < 100f) statusText.text = "JETZT! KURZ VOR DEM DURCHBRUCH!";
+            // Eingangsquelle anzeigen, damit klar ist welche Eingabe gerade zählt
+            string src = arduinoHeating ? $"[FÖHN  {arduinoLastTempC:F0}°C]"
+                       : holding        ? "[BRENNER]"
+                       : string.Empty;
+
+            string phase =
+                  pct <  1f  ? string.Empty
+                : pct < 35f  ? "Das Metall wird warm…"
+                : pct < 65f  ? "Das Schloss glüht!"
+                : pct < 90f  ? "FAST! Nicht aufhören!"
+                : pct < 100f ? "JETZT! KURZ VOR DEM DURCHBRUCH!"
+                : string.Empty;
+
+            statusText.text = (src.Length > 0 && phase.Length > 0)
+                ? $"{src}  {phase}"
+                : phase + src;
         }
 
         if (temperatureBar.value >= 1f && !won)

@@ -246,10 +246,10 @@ public class BuildLevel6FinalGate : LevelBuilderBase
         // ── Interaction Prompt ────────────────────────────────────────────────
         var promptGO = UiPanel("InteractionPrompt", canvasGO.transform,
             new Vector2(0.5f,0f), new Vector2(0.5f,0f),
-            new Vector2(0f,80f), new Vector2(400f,60f),
+            new Vector2(0f,80f), new Vector2(460f,60f),
             new Vector2(0.5f,0f), new Color(0f,0f,0f,0.72f));
         promptGO.SetActive(false);
-        AddPromptText(promptGO.transform, "[E] Schloss erhitzen");
+        AddPromptText(promptGO.transform, "[E]  Bunsenbrenner ans Schloss halten");
 
         // ── Heat Panel ────────────────────────────────────────────────────────
         var heatPanelGO = UiPanel("HeatPanel", canvasGO.transform,
@@ -273,19 +273,21 @@ public class BuildLevel6FinalGate : LevelBuilderBase
         hpTitleRT.anchoredPosition = new Vector2(0f,-18f);
         hpTitleRT.sizeDelta = new Vector2(0f, 48f);
 
-        // Instruction
+        // Instruction (zwei Zeilen: Föhn primär, Brenner-Button als Fallback)
         var instrGO = new GameObject("Instruction");
         instrGO.transform.SetParent(heatPanelGO.transform, false);
         var instrTMP = instrGO.AddComponent<TextMeshProUGUI>();
-        instrTMP.text      = "Halte den Brenner gedrückt!";
+        instrTMP.text      = "Föhn vor den Temperatursensor halten\n" +
+                             "<size=18><color=#888888>oder: Brenner-Button gedrückt halten</color></size>";
         instrTMP.fontSize  = 22f;
-        instrTMP.color     = new Color(0.8f, 0.8f, 0.8f);
+        instrTMP.color     = new Color(0.85f, 0.85f, 0.85f);
         instrTMP.alignment = TextAlignmentOptions.Center;
+        instrTMP.richText  = true;
         var instrRT = instrGO.GetComponent<RectTransform>();
         instrRT.anchorMin = new Vector2(0f,1f); instrRT.anchorMax = new Vector2(1f,1f);
         instrRT.pivot = new Vector2(0.5f,1f);
         instrRT.anchoredPosition = new Vector2(0f,-75f);
-        instrRT.sizeDelta = new Vector2(0f, 34f);
+        instrRT.sizeDelta = new Vector2(0f, 64f);
 
         // Temperatur-Prozent Label
         var tempLabelGO = new GameObject("TemperatureLabel");
