@@ -11,9 +11,8 @@
  *   Thermistor                          -> A0
  *   Buzzer                              -> Pin 8 (geteilt mit Keypad-Spalte)
  *   Relay                               -> Pin 4 (geteilt mit Keypad-Reihe)
- *   Farbsensor TCS3200 (Level 3)        -> S0=D4, S1=D5, S2=D6, S3=D7, OUT=D8, OE=D13
- *                                          (OE aktiv-LOW; teilt sich Pins mit Keypad –
- *                                           es ist immer nur ein Level aktiv, daher ok)
+ *   Farbsensor TCS3200 (Level 3)        -> S0=D4, S1=D5, S2=D6, S3=D7, OUT=D11
+ *                                          (kein OE, Frequenz-Skalierung 20 %)
  *   Reset-Taster (Level 3, optional)    -> D12 gegen GND (INPUT_PULLUP)
  *
  * Unity -> Arduino:
@@ -292,9 +291,11 @@ void tickTemp() {
 // Level 3 – Farbsensor TCS3200 (Login-Terminal in der Bibliothek)
 //
 // Aktiv erst ab "20:START" (Unity sendet das direkt nach der Bibel-Auswahl).
-// Verkabelung: S0=D4, S1=D5, S2=D6, S3=D7, OUT=D8, OE=D13 (OE aktiv-LOW).
-// Logik nach dem Test-Sketch des Spielers: Rohwerte messen, kalibrieren,
-// auf 0..255 mappen und die staerkste Komponente als Farbe werten.
+// Verkabelung: S0=D4, S1=D5, S2=D6, S3=D7, OUT=D11 (kein OE).
+// Logik 1:1 nach dem Test-Sketch des Spielers:
+//   1) Rohwerte fuer R/G/B per pulseIn() messen (jeweils delay(10) zur Stabilisierung)
+//   2) per map() mit Weiss/Schwarz-Referenz auf 0..255 normieren + constrain()
+//   3) staerkste Komponente > COL_DOMINANT_THRESHOLD wird zur Farbe
 // Sendet jeden Takt "COLOR:RGB:r,g,b,NAME,rawR,rawG,rawB" (Live-Werte fuers Terminal).
 //
 // WICHTIG: Es wird genau EIN bestaetigter Input pro echter Farbaenderung gemeldet:
@@ -305,99 +306,48 @@ void tickTemp() {
 // zuletzt gemeldeten Wert wieder "frei", sodass dieselbe Farbe danach erneut zaehlt.
 // ═══════════════════════════════════════════════════════════════════════════
 
-#define TCS_S0              4
-#define TCS_S1              5
-#define TCS_S2              6
-#define TCS_S3              7
-#define TCS_OUT             8
-#define TCS_OE              13   // Output-Enable, aktiv-LOW (LOW = Sensor-Ausgang an).
-                                 // Falls D13 bei dir die Beleuchtungs-LED steuert:
-                                 // Logik invertieren (HIGH = an).
-#define COLOR_RESET_BTN_PIN 12
+// --- Pin-Konfiguration TCS3200 (entspricht dem neuen Test-Sketch) ---
+#define TCS_S0          4
+#define TCS_S1          5
+#define TCS_S2          6
+#define TCS_S3          7
+#define TCS_OUT         11
+#define COL_RESET_PIN   12   // optionaler Reset-Taster gegen GND
 
-// Kalibrierung: Rohwerte -> 0..255  (Weiss = kleiner Rohwert, Schwarz = grosser).
-// Bei Bedarf an die echte Umgebung anpassen (siehe Original-Test-Sketch).
+// Kalibrierungswerte (aus dem Test-Sketch: map(Wert, Min_Weiss, Max_Schwarz, 255, 0))
 const long COL_R_MIN = 25,  COL_R_MAX = 150;
 const long COL_G_MIN = 30,  COL_G_MAX = 160;
 const long COL_B_MIN = 25,  COL_B_MAX = 140;
-const int  COL_THRESHOLD    = 100;   // ab hier gilt eine Komponente als "Farbe"
-const byte COL_STABLE_NEED  = 2;     // so viele gleiche Messungen in Folge = bestaetigt
-const unsigned long COL_SAMPLE_MS = 500;
-const unsigned long COL_PULSE_TIMEOUT_US = 8000;
 
-// (enum DetColor steht weiter oben bei enum Level – Arduino-Prototyp-Reihenfolge)
+// Erkennung: dominanter Kanal muss diese Schwelle ueberschreiten (Test-Sketch: > 100)
+const int           COL_DOMINANT_THRESHOLD = 100;
+const uint8_t       COL_STABLE_NEED        = 2;     // 2 gleiche Messungen in Folge
+const unsigned long COL_SAMPLE_MS          = 200;   // Loop-Takt (= delay(200) im Test-Sketch)
+const unsigned long COL_RESET_DEBOUNCE_MS  = 30;
+
+// Live-Werte fuer COLOR:RGB:...
+int  colLastR = 0, colLastG = 0, colLastB = 0;
+long colLastRawR = 0, colLastRawG = 0, colLastRawB = 0;
+
+// Wiederholfilter-State
+DetColor      colCandidate    = COL_NONE;
+uint8_t       colStableCnt    = 0;
+DetColor      colConfirmed    = COL_NONE;
 unsigned long colLastSampleAt = 0;
-DetColor      colCandidate    = COL_NONE;   // aktuelle Mess-Serie
-byte          colStableCnt    = 0;          // Laenge der aktuellen Serie
-DetColor      colConfirmed    = COL_NONE;   // zuletzt an Unity gemeldete Farbe
-bool          colBtnLast      = HIGH;       // Reset-Taster Entprellung
-bool          colBtnHandled   = false;
-unsigned long colBtnChangedAt = 0;
-int           colLastR = 0, colLastG = 0, colLastB = 0;          // letzte gemappten 0..255-Werte
-long          colLastRawR = 0, colLastRawG = 0, colLastRawB = 0;  // letzte Roh-Pulswerte (zum Kalibrieren)
 
-void initColorSensor() {
-  pinMode(TCS_S0, OUTPUT);
-  pinMode(TCS_S1, OUTPUT);
-  pinMode(TCS_S2, OUTPUT);
-  pinMode(TCS_S3, OUTPUT);
-  pinMode(TCS_OUT, INPUT);
-  pinMode(TCS_OE, OUTPUT);
-  digitalWrite(TCS_OE, LOW);             // Sensor-Ausgang aktivieren (OE aktiv-LOW)
-  pinMode(COLOR_RESET_BTN_PIN, INPUT_PULLUP);
-  // Frequenz-Skalierung 20 % (Standard fuer den TCS3200)
-  digitalWrite(TCS_S0, HIGH);
-  digitalWrite(TCS_S1, LOW);
-
-  colLastSampleAt = 0;
-  colCandidate    = COL_NONE;
-  colStableCnt    = 0;
-  colConfirmed    = COL_NONE;
-  colBtnLast      = digitalRead(COLOR_RESET_BTN_PIN);
-  colBtnHandled   = (colBtnLast == LOW);   // beim Eintritt gedrueckt? -> nicht sofort feuern
-  colBtnChangedAt = millis();
-}
+// Reset-Taster-State
+int           colResetLastRaw    = HIGH;
+unsigned long colResetLastEdgeAt = 0;
 
 void resetColorState() {
-  colLastSampleAt = 0;
-  colCandidate    = COL_NONE;
-  colStableCnt    = 0;
-  colConfirmed    = COL_NONE;
-  colBtnLast      = HIGH;
-  colBtnHandled   = false;
-  // Sensor-Pins freigeben, damit Keypad/None sie ungestoert nutzen koennen
-  pinMode(TCS_S0, INPUT);
-  pinMode(TCS_S1, INPUT);
-  pinMode(TCS_S2, INPUT);
-  pinMode(TCS_S3, INPUT);
-  pinMode(TCS_OUT, INPUT);
-}
-
-long readTcsPulse(bool s2, bool s3) {
-  digitalWrite(TCS_S2, s2 ? HIGH : LOW);
-  digitalWrite(TCS_S3, s3 ? HIGH : LOW);
-  delayMicroseconds(200);                       // Photodioden-Filter umschalten lassen
-  return pulseIn(TCS_OUT, LOW, COL_PULSE_TIMEOUT_US);
-}
-
-DetColor measureColorOnce() {
-  long redRaw   = readTcsPulse(false, false);   // S2=L S3=L -> Rot
-  long greenRaw = readTcsPulse(true,  true);    // S2=H S3=H -> Gruen
-  long blueRaw  = readTcsPulse(false, true);    // S2=L S3=H -> Blau
-
-  colLastRawR = redRaw;
-  colLastRawG = greenRaw;
-  colLastRawB = blueRaw;
-
-  long r = constrain(map(redRaw,   COL_R_MIN, COL_R_MAX, 255, 0), 0, 255);
-  long g = constrain(map(greenRaw, COL_G_MIN, COL_G_MAX, 255, 0), 0, 255);
-  long b = constrain(map(blueRaw,  COL_B_MIN, COL_B_MAX, 255, 0), 0, 255);
-  colLastR = (int)r; colLastG = (int)g; colLastB = (int)b;
-
-  if (r > g && r > b && r > COL_THRESHOLD) return COL_RED;
-  if (g > r && g > b && g > COL_THRESHOLD) return COL_GREEN;
-  if (b > r && b > g && b > COL_THRESHOLD) return COL_BLUE;
-  return COL_NONE;
+  colCandidate       = COL_NONE;
+  colStableCnt       = 0;
+  colConfirmed       = COL_NONE;
+  colLastSampleAt    = 0;
+  colLastR = colLastG = colLastB = 0;
+  colLastRawR = colLastRawG = colLastRawB = 0;
+  colResetLastRaw    = HIGH;
+  colResetLastEdgeAt = 0;
 }
 
 const char* colorName(DetColor c) {
@@ -409,38 +359,86 @@ const char* colorName(DetColor c) {
   }
 }
 
-void tickColor() {
+void initColorSensor() {
+  pinMode(TCS_S0,        OUTPUT);
+  pinMode(TCS_S1,        OUTPUT);
+  pinMode(TCS_S2,        OUTPUT);
+  pinMode(TCS_S3,        OUTPUT);
+  pinMode(TCS_OUT,       INPUT);
+  pinMode(COL_RESET_PIN, INPUT_PULLUP);
+
+  // Frequenz-Skalierung 20 % (S0=HIGH, S1=LOW)
+  digitalWrite(TCS_S0, HIGH);
+  digitalWrite(TCS_S1, LOW);
+
+  resetColorState();
+}
+
+long readTcsPulse(bool s2, bool s3) {
+  digitalWrite(TCS_S2, s2 ? HIGH : LOW);
+  digitalWrite(TCS_S3, s3 ? HIGH : LOW);
+  long v = pulseIn(TCS_OUT, LOW);  // Standard-Timeout
+  delay(10);                       // Pause nach Messung – wie im Test-Sketch
+  return v;
+}
+
+DetColor measureColorOnce() {
+  // Filter-Auswahl exakt wie im Test-Sketch
+  long rawR = readTcsPulse(false, false); // ROT:   S2=LOW,  S3=LOW
+  long rawG = readTcsPulse(true,  true);  // GRUEN: S2=HIGH, S3=HIGH
+  long rawB = readTcsPulse(false, true);  // BLAU:  S2=LOW,  S3=HIGH
+
+  long r = constrain(map(rawR, COL_R_MIN, COL_R_MAX, 255, 0), 0, 255);
+  long g = constrain(map(rawG, COL_G_MIN, COL_G_MAX, 255, 0), 0, 255);
+  long b = constrain(map(rawB, COL_B_MIN, COL_B_MAX, 255, 0), 0, 255);
+
+  colLastR    = (int)r;
+  colLastG    = (int)g;
+  colLastB    = (int)b;
+  colLastRawR = rawR;
+  colLastRawG = rawG;
+  colLastRawB = rawB;
+
+  if (r > g && r > b && r > COL_DOMINANT_THRESHOLD) return COL_RED;
+  if (g > r && g > b && g > COL_DOMINANT_THRESHOLD) return COL_GREEN;
+  if (b > r && b > g && b > COL_DOMINANT_THRESHOLD) return COL_BLUE;
+  return COL_NONE;
+}
+
+void pollColorResetButton() {
+  int raw = digitalRead(COL_RESET_PIN);
   unsigned long now = millis();
-
-  // ── Reset-Taster (entprellt, gegen GND) ──────────────────────────────────
-  bool btn = digitalRead(COLOR_RESET_BTN_PIN);
-  if (btn != colBtnLast) { colBtnLast = btn; colBtnChangedAt = now; }
-  if (btn == LOW && !colBtnHandled && (now - colBtnChangedAt) >= 30) {
-    colBtnHandled = true;
-    colConfirmed  = COL_NONE;            // dieselbe Farbe danach wieder zaehlbar
-    colCandidate  = COL_NONE;
-    colStableCnt  = 0;
-    Serial.println("COLOR:RESET");
+  if (raw != colResetLastRaw && (now - colResetLastEdgeAt) >= COL_RESET_DEBOUNCE_MS) {
+    colResetLastEdgeAt = now;
+    if (colResetLastRaw == HIGH && raw == LOW) {
+      // fallende Flanke = Taster gedrueckt -> letzte bestaetigte Farbe freigeben
+      colConfirmed = COL_NONE;
+      Serial.println("COLOR:RESET");
+    }
+    colResetLastRaw = raw;
   }
-  if (btn == HIGH) colBtnHandled = false;
+}
 
-  // ── Farbmessung im festen Takt ───────────────────────────────────────────
+void tickColor() {
+  pollColorResetButton();
+
+  unsigned long now = millis();
   if (now - colLastSampleAt < COL_SAMPLE_MS) return;
   colLastSampleAt = now;
 
   DetColor c = measureColorOnce();
 
-  // Live-Werte des Scanners ans Terminal melden (jeder Mess-Takt)
+  // Live-Werte (Unity rendert sie im Login-Terminal)
   Serial.print("COLOR:RGB:");
-  Serial.print(colLastR); Serial.print(',');
-  Serial.print(colLastG); Serial.print(',');
-  Serial.print(colLastB); Serial.print(',');
-  Serial.print(colorName(c)); Serial.print(',');
+  Serial.print(colLastR);    Serial.print(',');
+  Serial.print(colLastG);    Serial.print(',');
+  Serial.print(colLastB);    Serial.print(',');
+  Serial.print(colorName(c));Serial.print(',');
   Serial.print(colLastRawR); Serial.print(',');
   Serial.print(colLastRawG); Serial.print(',');
   Serial.println(colLastRawB);
 
-  // Stabilitaets-Serie verlaengern oder neu starten
+  // Wiederholfilter
   if (c == colCandidate) {
     if (colStableCnt < 255) colStableCnt++;
   } else {
@@ -448,11 +446,11 @@ void tickColor() {
     colStableCnt = 1;
   }
 
-  if (colStableCnt != COL_STABLE_NEED) return;   // genau einmal beim Bestaetigen
-  if (c == COL_NONE)        return;              // "kein/schwarz" loest nichts aus
-  if (c == colConfirmed)    return;              // unveraendert -> kein neuer Input
-
-  colConfirmed = c;
-  Serial.print("COLOR:");
-  Serial.println(colorName(c));
+  if (colStableCnt == COL_STABLE_NEED) {
+    if (c != COL_NONE && c != colConfirmed) {
+      colConfirmed = c;
+      Serial.print("COLOR:");
+      Serial.println(colorName(c));
+    }
+  }
 }
