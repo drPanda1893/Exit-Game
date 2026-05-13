@@ -1,5 +1,7 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.UI;
 using UnityEngine.SceneManagement;
 using System.Collections;
 
@@ -103,10 +105,23 @@ public class Level5_SceneFlow : MonoBehaviour
     {
         CurrentState = State.Solving;
         if (doorPrompt       != null) doorPrompt.SetActive(false);
+
+        // Ohne EventSystem werden Maus-Klicks von Buttons nie verarbeitet.
+        // Falls die Szene ohne eines gebaut wurde, hier nachholen.
+        EnsureEventSystem();
+
         if (breadboardCanvas != null) breadboardCanvas.SetActive(true);
 
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible   = true;
+    }
+
+    private static void EnsureEventSystem()
+    {
+        if (EventSystem.current != null) return;
+        var go = new GameObject("EventSystem");
+        go.AddComponent<EventSystem>();
+        go.AddComponent<InputSystemUIInputModule>();
     }
 
     // ── Phase 2 → 3: Puzzle gelöst → Schuppentür öffnen ──────────────────

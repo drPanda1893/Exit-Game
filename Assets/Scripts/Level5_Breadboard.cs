@@ -104,6 +104,32 @@ public class Level5_Breadboard : MonoBehaviour
     void Start()
     {
         if (curRot == null) StartPuzzle();
+        WireUpTileClicks();
+    }
+
+    // Build-Skript registriert Lambda-Listener auf den Tile-Buttons. Lambdas
+    // werden aber NICHT als persistente UnityEvent-Calls in die Szene serialisiert
+    // – nach dem Speichern/Laden sind die Buttons "leer" und reagieren nicht.
+    // Deshalb hier zur Laufzeit verbinden.
+    private bool tileClicksWired;
+    void WireUpTileClicks()
+    {
+        if (tileClicksWired || tileRoots == null) return;
+        for (int i = 0; i < tileRoots.Length; i++)
+        {
+            if (tileRoots[i] == null) continue;
+            int t = TILE_TYPES[i];
+            if (t == 0 || t == 3 || t == 4) continue;
+
+            var btn = tileRoots[i].GetComponent<Button>();
+            if (btn == null) continue;
+
+            int capturedRow = i / COLS;
+            int capturedCol = i % COLS;
+            btn.onClick.RemoveAllListeners();    // falls aus Editor noch was hängt
+            btn.onClick.AddListener(() => RotateTile(capturedRow, capturedCol));
+        }
+        tileClicksWired = true;
     }
 
     void StartPuzzle()
