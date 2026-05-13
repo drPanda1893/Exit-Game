@@ -1,0 +1,122 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="Sektor03Terminal.uss" />
+
+    <ui:VisualElement name="screen" class="screen">
+
+        <!-- ============ HEADER ============ -->
+        <ui:VisualElement class="header">
+            <ui:VisualElement class="header-left">
+                <ui:Label class="brand" text="SEKTOR_03 // BIBLIOTHEK" />
+                <ui:Label class="sub" text="YAHU_SECURITY_SYSTEM  v3.14  —  UNAUTHORIZED ACCESS WILL BE LOGGED" />
+            </ui:VisualElement>
+            <ui:VisualElement class="header-right">
+                <ui:Label name="time" class="clock-big" text="00:00:00" />
+                <ui:Label class="clock-sub" text="UPLINK: SECURE   NODE: 03A" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- ============ BODY ============ -->
+        <ui:VisualElement class="body">
+
+            <!-- ===== MAIN PANEL ===== -->
+            <ui:VisualElement class="main">
+                <ui:Label class="panel-tag" text="[ AUTHENTICATION_REQUIRED ]" />
+
+                <ui:VisualElement class="prompt-block">
+                    <ui:Label class="prompt" text="&gt; FARBSEQUENZ_EINGEBEN" />
+                    <ui:VisualElement name="cursor" class="cursor" />
+                </ui:VisualElement>
+
+                <ui:Label class="instructions" text="Drei Farben in der korrekten Reihenfolge eingeben um Zugang zu erhalten. Hinweis: Die Antwort liegt in den Büchern. Lies sorgfältig." />
+
+                <!-- ===== SEQUENCE SLOTS ===== -->
+                <ui:VisualElement class="sequence">
+                    <ui:VisualElement name="slot-0" class="slot empty">
+                        <ui:Label class="slot-index" text="01" />
+                        <ui:VisualElement name="fill-0" class="fill" />
+                    </ui:VisualElement>
+
+                    <ui:Label class="arrow" text="&gt;&gt;" />
+
+                    <ui:VisualElement name="slot-1" class="slot empty">
+                        <ui:Label class="slot-index" text="02" />
+                        <ui:VisualElement name="fill-1" class="fill" />
+                    </ui:VisualElement>
+
+                    <ui:Label class="arrow" text="&gt;&gt;" />
+
+                    <ui:VisualElement name="slot-2" class="slot empty">
+                        <ui:Label class="slot-index" text="03" />
+                        <ui:VisualElement name="fill-2" class="fill" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- ===== PALETTE ===== -->
+                <ui:VisualElement class="palette-section">
+                    <ui:Label class="palette-label" text="VERFÜGBARE_FARBEN  //  klick zum hinzufügen" />
+
+                    <ui:VisualElement class="palette">
+                        <ui:Button name="btn-red"    class="color-btn color-red"    text="RED" />
+                        <ui:Button name="btn-orange" class="color-btn color-orange" text="ORANGE" />
+                        <ui:Button name="btn-yellow" class="color-btn color-yellow" text="YELLOW" />
+                        <ui:Button name="btn-green"  class="color-btn color-green"  text="GREEN" />
+                        <ui:Button name="btn-blue"   class="color-btn color-blue"   text="BLUE" />
+                        <ui:Button name="btn-purple" class="color-btn color-purple" text="PURPLE" />
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="actions">
+                        <ui:Button name="submit-btn" class="btn" text="&gt; AUTHENTICATE" />
+                        <ui:Button name="reset-btn"  class="btn danger" text="&gt; RESET" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- ===== SIDEBAR ===== -->
+            <ui:VisualElement class="aside">
+                <ui:Label class="panel-tag" text="[ SYSTEM_LOG ]" />
+
+                <ui:VisualElement class="stat">
+                    <ui:Label class="stat-lbl" text="CPU_LOAD" />
+                    <ui:Label class="stat-val" text="42%" />
+                    <ui:VisualElement class="bar">
+                        <ui:VisualElement class="bar-fill" style="width: 42%;" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement class="stat">
+                    <ui:Label class="stat-lbl" text="SENSOR_TCS230" />
+                    <ui:Label class="stat-val" text="CONNECTED" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="stat">
+                    <ui:Label class="stat-lbl" text="FIREWALL" />
+                    <ui:Label class="stat-val warn" text="PARTIAL" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="stat">
+                    <ui:Label class="stat-lbl" text="VERSUCHE_VERBLEIBEND" />
+                    <ui:Label name="attempts" class="stat-val err" text="∞" />
+                </ui:VisualElement>
+
+                <ui:ScrollView name="log" class="log" />
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+
+        <!-- ============ FOOTER ============ -->
+        <ui:VisualElement class="footer">
+            <ui:Label text="BIG_YAHU_CORP © 1984 — ALL RIGHTS RESERVED" />
+            <ui:Label class="footer-right" text="&gt; ESCAPE THE MATRIX" />
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+
+    <!-- ============ OVERLAYS ============ -->
+    <ui:VisualElement name="ok-overlay" class="overlay overlay-ok hidden">
+        <ui:Label text="ACCESS GRANTED" />
+    </ui:VisualElement>
+    <ui:VisualElement name="err-overlay" class="overlay overlay-err hidden">
+        <ui:Label text="ACCESS DENIED" />
+    </ui:VisualElement>
+
+</ui:UXML>

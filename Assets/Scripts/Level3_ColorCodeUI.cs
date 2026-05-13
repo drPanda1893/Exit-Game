@@ -1,9 +1,11 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.UIElements;
 using TMPro;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using EscapeTheMatrix.Sektor03;
 
 /// <summary>
 /// Login-Terminal der Bibliothek (Level 3, Phase B).
@@ -29,7 +31,7 @@ using System.Collections.Generic;
 /// </summary>
 public class Level3_ColorCodeUI : MonoBehaviour
 {
-    [Header("UI References")]
+    [Header("UI References (Legacy Canvas — Fallback)")]
     public Canvas overlayCanvas;
     public Button   redButton;
     public Button   blueButton;
@@ -41,6 +43,15 @@ public class Level3_ColorCodeUI : MonoBehaviour
     public TextMeshProUGUI titleText;    // Status-Zeile ("ZUGANG GESPERRT" / ...)
     public TextMeshProUGUI messageText;  // Terminal-Hinweistext (auf die echte Bibel)
     public TextMeshProUGUI promptText;   // Blinkender Terminal-Cursor "> _"
+
+    [Header("Sektor03 Terminal (UI Toolkit) — bevorzugt wenn gesetzt")]
+    [Tooltip("Wenn beide Felder gesetzt sind, wird das UI-Toolkit-Terminal benutzt und das Legacy-Canvas oben ignoriert.")]
+    public UIDocument                 terminalDocument;
+    public Sektor03TerminalController terminalController;
+
+    private bool UseSektor => terminalDocument != null && terminalController != null;
+    private int  sektorInputCount;
+    private bool sektorResetHooked;
 
     [Header("Lösung (3-stellig)")]
     [Tooltip("Reihenfolge der Farbnamen wie in der echten Bibel markiert.")]
@@ -82,16 +93,33 @@ public class Level3_ColorCodeUI : MonoBehaviour
 
     void Awake()
     {
-        if (overlayCanvas != null) overlayCanvas.gameObject.SetActive(false);
+        if (UseSektor)
+        {
+            if (terminalDocument != null) terminalDocument.gameObject.SetActive(false);
+        }
+        else if (overlayCanvas != null) overlayCanvas.gameObject.SetActive(false);
     }
 
     void Start()
     {
-        if (redButton   != null) redButton.onClick.AddListener(()   => OnButton("Red"));
-        if (blueButton  != null) blueButton.onClick.AddListener(()  => OnButton("Blue"));
-        if (greenButton != null) greenButton.onClick.AddListener(() => OnButton("Green"));
-        if (resetButton != null) resetButton.onClick.AddListener(ResetInput);
-        if (closeButton != null) closeButton.onClick.AddListener(Hide);
+        if (UseSektor)
+        {
+            if (terminalController.OnAuthenticationSuccess == null)
+                terminalController.OnAuthenticationSuccess = new UnityEngine.Events.UnityEvent();
+            if (terminalController.OnAuthenticationFailure == null)
+                terminalController.OnAuthenticationFailure = new UnityEngine.Events.UnityEvent();
+
+            terminalController.OnAuthenticationSuccess.AddListener(OnSektorSuccess);
+            terminalController.OnAuthenticationFailure.AddListener(OnSektorFailure);
+        }
+        else
+        {
+            if (redButton   != null) redButton.onClick.AddListener(()   => OnButton("Red"));
+            if (blueButton  != null) blueButton.onClick.AddListener(()  => OnButton("Blue"));
+            if (greenButton != null) greenButton.onClick.AddListener(() => OnButton("Green"));
+            if (resetButton != null) resetButton.onClick.AddListener(ResetInput);
+            if (closeButton != null) closeButton.onClick.AddListener(Hide);
+        }
     }
 
     void OnDisable()
@@ -100,20 +128,38 @@ public class Level3_ColorCodeUI : MonoBehaviour
         StopPromptBlink();
     }
 
+    void OnDestroy()
+    {
+        if (terminalController != null)
+        {
+            terminalController.OnAuthenticationSuccess?.RemoveListener(OnSektorSuccess);
+            terminalController.OnAuthenticationFailure?.RemoveListener(OnSektorFailure);
+        }
+    }
+
     // ══════════════════════════════════════════════════════════
     // Show / Hide
     // ══════════════════════════════════════════════════════════
 
     public void Show()
     {
-        if (overlayCanvas == null) return;
-        overlayCanvas.gameObject.SetActive(true);
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible   = true;
 
         ResetInput();
         locked = false;
         sensorReadout = "";
+
+        if (UseSektor)
+        {
+            terminalDocument.gameObject.SetActive(true);
+            StartCoroutine(HookSektorResetButtonNextFrame());
+            SubscribeArduino(resetSensor: true);
+            return;
+        }
+
+        if (overlayCanvas == null) return;
+        overlayCanvas.gameObject.SetActive(true);
 
         if (titleText   != null) { titleText.text   = "ZUGANG GESPERRT"; titleText.color   = TermRed;   }
         if (messageText != null) { messageText.text = MessageBody;        messageText.color = TermGreen; }
@@ -125,7 +171,12 @@ public class Level3_ColorCodeUI : MonoBehaviour
 
     public void Hide()
     {
-        if (overlayCanvas != null) overlayCanvas.gameObject.SetActive(false);
+        if (UseSektor)
+        {
+            if (terminalDocument != null) terminalDocument.gameObject.SetActive(false);
+        }
+        else if (overlayCanvas != null) overlayCanvas.gameObject.SetActive(false);
+
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible   = false;
 
@@ -272,6 +323,18 @@ public class Level3_ColorCodeUI : MonoBehaviour
 
     private void Press(string color)
     {
+        if (UseSektor)
+        {
+            if (locked) return;
+            if (sektorInputCount >= solution.Length) return;
+            if (!TryMapToSektor(color, out var sc)) return;
+            terminalController.AddColor(sc);
+            sektorInputCount++;
+            if (sektorInputCount >= solution.Length)
+                StartCoroutine(SektorAutoSubmit());
+            return;
+        }
+
         if (locked || input.Count >= solution.Length) return;
 
         input.Add(color);
@@ -279,6 +342,68 @@ public class Level3_ColorCodeUI : MonoBehaviour
 
         if (input.Count == solution.Length)
             StartCoroutine(Evaluate());
+    }
+
+    // Auto-Submit damit Arduino-Scans wie früher direkt geprüft werden,
+    // ohne dass der Spieler den AUTHENTICATE-Button drücken muss.
+    private IEnumerator SektorAutoSubmit()
+    {
+        locked = true;
+        yield return new WaitForSeconds(0.4f);
+        if (terminalController != null) terminalController.SubmitSequence();
+        locked = false;
+    }
+
+    private static bool TryMapToSektor(string color,
+        out Sektor03TerminalController.ColorCode sc)
+    {
+        switch (color)
+        {
+            case "Red":   sc = Sektor03TerminalController.ColorCode.RED;   return true;
+            case "Blue":  sc = Sektor03TerminalController.ColorCode.BLUE;  return true;
+            case "Green": sc = Sektor03TerminalController.ColorCode.GREEN; return true;
+            default:      sc = default;                                    return false;
+        }
+    }
+
+    // Sektor-Events
+    private void OnSektorSuccess()
+    {
+        StartCoroutine(SektorSuccessRoutine());
+    }
+
+    private IEnumerator SektorSuccessRoutine()
+    {
+        // 1.6s = etwas länger als das ACCESS_GRANTED-Overlay des Terminals,
+        // damit der Spieler den Erfolg sieht bevor das UI ausblendet.
+        yield return new WaitForSeconds(1.6f);
+        Hide();
+        OnCodeAccepted?.Invoke();
+    }
+
+    private void OnSektorFailure()
+    {
+        // Sektor setzt seine Slots intern nach ~1.9s zurück – also auch
+        // unseren Eingabe-Counter wieder freigeben.
+        sektorInputCount = 0;
+        locked           = false;
+    }
+
+    // Wenn der Spieler den RESET-Button im Sektor-Terminal direkt klickt,
+    // bekommt unsere Logik das sonst nicht mit. Beim ersten Show klemmen
+    // wir uns einmalig dran.
+    private IEnumerator HookSektorResetButtonNextFrame()
+    {
+        if (sektorResetHooked) yield break;
+        yield return null;   // ein Frame, bis UIDocument die VisualTree erstellt hat
+        var root = terminalDocument != null ? terminalDocument.rootVisualElement : null;
+        if (root == null) yield break;
+        var btn = root.Q<UnityEngine.UIElements.Button>("reset-btn");
+        if (btn != null)
+        {
+            btn.clicked += () => { sektorInputCount = 0; locked = false; };
+            sektorResetHooked = true;
+        }
     }
 
     private IEnumerator Evaluate()
@@ -326,6 +451,14 @@ public class Level3_ColorCodeUI : MonoBehaviour
 
     public void ResetInput()
     {
+        if (UseSektor)
+        {
+            sektorInputCount = 0;
+            if (terminalController != null) terminalController.ResetSequence();
+            locked = false;
+            return;
+        }
+
         input.Clear();
         UpdateSlots();
         if (feedbackText != null) feedbackText.text = string.Empty;

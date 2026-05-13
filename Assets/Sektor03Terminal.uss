@@ -1,0 +1,401 @@
+/* ============================================================
+   SEKTOR_03 // BIBLIOTHEK TERMINAL  —  USS Stylesheet
+   Für Unity UI Toolkit (Unity 2022.3 LTS / Unity 6)
+
+   HINWEIS: USS ist nicht 1:1 wie CSS. Folgendes ist nicht
+   unterstützt und wurde angepasst oder ersetzt:
+     - linear-gradient / radial-gradient  -> einfarbig + Border
+     - box-shadow                          -> Border + Opacity
+     - ::before / ::after                  -> echte VisualElements im UXML
+     - CSS-Animationen (@keyframes)        -> via C# Coroutine
+     - display: grid                       -> flexbox
+   ============================================================ */
+
+:root {
+    --bg:        rgb(5, 7, 6);
+    --panel:     rgb(10, 15, 12);
+    --glow:      rgb(74, 222, 128);
+    --glow-dim:  rgb(22, 163, 74);
+    --amber:     rgb(251, 191, 36);
+    --red:       rgb(239, 68, 68);
+    --text-dim:  rgba(74, 222, 128, 0.55);
+
+    /* Sequenz-Farben */
+    --c-red:    rgb(230, 57, 70);
+    --c-orange: rgb(244, 162, 97);
+    --c-yellow: rgb(244, 211, 94);
+    --c-green:  rgb(74, 222, 128);
+    --c-blue:   rgb(58, 134, 255);
+    --c-purple: rgb(157, 78, 221);
+}
+
+/* ============ SCREEN ============ */
+.screen {
+    flex-grow: 1;
+    background-color: var(--bg);
+    padding: 28px 36px;
+    flex-direction: column;
+}
+
+/* ============ HEADER ============ */
+.header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--glow-dim);
+    padding-bottom: 14px;
+    margin-bottom: 24px;
+}
+
+.header-left { flex-direction: column; }
+.header-right { flex-direction: column; align-items: flex-end; }
+
+.brand {
+    font-size: 32px;
+    letter-spacing: 4px;
+    color: var(--glow);
+    -unity-text-outline-width: 0.5px;
+    -unity-text-outline-color: rgba(74, 222, 128, 0.6);
+    -unity-font-style: bold;
+}
+
+.sub {
+    font-size: 13px;
+    color: var(--glow-dim);
+    margin-top: 6px;
+    letter-spacing: 2px;
+}
+
+.clock-big {
+    font-size: 28px;
+    color: var(--glow);
+    letter-spacing: 1px;
+    -unity-text-outline-width: 0.5px;
+    -unity-text-outline-color: rgba(74, 222, 128, 0.5);
+}
+
+.clock-sub {
+    font-size: 13px;
+    color: var(--glow-dim);
+    margin-top: 4px;
+}
+
+/* ============ BODY (main + aside) ============ */
+.body {
+    flex-direction: row;
+    flex-grow: 1;
+}
+
+/* ============ MAIN PANEL ============ */
+.main {
+    flex-grow: 1;
+    border-width: 1px;
+    border-color: var(--glow-dim);
+    background-color: var(--panel);
+    padding: 32px 40px;
+    margin-right: 24px;
+    flex-direction: column;
+}
+
+.aside {
+    width: 280px;
+    border-width: 1px;
+    border-color: var(--glow-dim);
+    background-color: var(--panel);
+    padding: 22px;
+    flex-direction: column;
+}
+
+.panel-tag {
+    font-size: 12px;
+    color: var(--amber);
+    letter-spacing: 3px;
+    background-color: var(--bg);
+    align-self: flex-start;
+    padding: 0 12px;
+    margin-top: -38px;
+    margin-bottom: 18px;
+    margin-left: -12px;
+}
+
+/* ============ PROMPT ============ */
+.prompt-block {
+    flex-direction: row;
+    align-items: center;
+}
+
+.prompt {
+    font-size: 42px;
+    letter-spacing: 2px;
+    color: var(--glow);
+    -unity-text-outline-width: 0.8px;
+    -unity-text-outline-color: rgba(74, 222, 128, 0.5);
+}
+
+.cursor {
+    width: 14px;
+    height: 32px;
+    background-color: var(--glow);
+    margin-left: 6px;
+}
+
+.instructions {
+    font-size: 14px;
+    color: var(--glow-dim);
+    margin-top: 14px;
+    max-width: 640px;
+    white-space: normal;
+}
+
+/* ============ SEQUENCE SLOTS ============ */
+.sequence {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 28px;
+}
+
+.slot {
+    width: 110px;
+    height: 110px;
+    border-width: 2px;
+    border-color: var(--glow-dim);
+    background-color: rgba(74, 222, 128, 0.03);
+    justify-content: center;
+    align-items: center;
+}
+
+.slot.filled {
+    border-color: var(--glow);
+    background-color: rgba(74, 222, 128, 0.08);
+}
+
+.slot-index {
+    position: absolute;
+    top: -10px;
+    left: -2px;
+    background-color: var(--bg);
+    color: var(--glow-dim);
+    padding: 0 8px;
+    font-size: 11px;
+    letter-spacing: 2px;
+}
+
+.fill {
+    width: 70%;
+    height: 70%;
+    background-color: rgba(0, 0, 0, 0);
+    /* Hatch-Pattern für leeren Slot: in USS nicht möglich,
+       wird über .slot.empty .fill border simuliert */
+    border-width: 1px;
+    border-color: rgba(74, 222, 128, 0.15);
+}
+
+.slot.filled .fill {
+    border-width: 0;
+}
+
+.arrow {
+    color: var(--glow-dim);
+    font-size: 32px;
+    margin: 0 22px;
+    -unity-font-style: bold;
+}
+
+/* ============ PALETTE ============ */
+.palette-section {
+    margin-top: 28px;
+    padding-top: 24px;
+    border-top-width: 1px;
+    border-top-color: var(--glow-dim);
+    flex-direction: column;
+}
+
+.palette-label {
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: var(--glow-dim);
+    margin-bottom: 14px;
+}
+
+.palette {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.color-btn {
+    width: 72px;
+    height: 72px;
+    border-width: 2px;
+    border-color: var(--glow-dim);
+    margin-right: 14px;
+    margin-bottom: 8px;
+    font-size: 10px;
+    color: rgba(0, 0, 0, 0.75);
+    letter-spacing: 1px;
+    -unity-text-align: lower-center;
+    padding-bottom: 4px;
+    -unity-font-style: bold;
+    transition: translate 0.15s, border-color 0.15s;
+}
+
+.color-btn:hover {
+    border-color: var(--glow);
+    translate: 0 -3px;
+}
+
+.color-btn:active {
+    translate: 0 0;
+}
+
+.color-red    { background-color: var(--c-red); }
+.color-orange { background-color: var(--c-orange); }
+.color-yellow { background-color: var(--c-yellow); }
+.color-green  { background-color: var(--c-green); }
+.color-blue   { background-color: var(--c-blue); }
+.color-purple { background-color: var(--c-purple); }
+
+/* ============ ACTION BUTTONS ============ */
+.actions {
+    flex-direction: row;
+    margin-top: 22px;
+}
+
+.btn {
+    font-size: 22px;
+    letter-spacing: 3px;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--glow);
+    border-width: 2px;
+    border-color: var(--glow-dim);
+    padding: 12px 32px;
+    margin-right: 16px;
+    -unity-font-style: bold;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.btn:hover {
+    background-color: var(--glow);
+    color: var(--bg);
+    border-color: var(--glow);
+}
+
+.btn:disabled {
+    opacity: 0.35;
+}
+
+.btn.danger {
+    color: var(--red);
+    border-color: var(--red);
+}
+
+.btn.danger:hover {
+    background-color: var(--red);
+    color: var(--bg);
+    border-color: var(--red);
+}
+
+/* ============ SIDEBAR STATS ============ */
+.stat {
+    margin-bottom: 16px;
+    flex-direction: column;
+}
+
+.stat-lbl {
+    font-size: 11px;
+    color: var(--glow-dim);
+    letter-spacing: 2px;
+}
+
+.stat-val {
+    font-size: 13px;
+    color: var(--glow);
+    margin-top: 2px;
+}
+
+.stat-val.warn { color: var(--amber); }
+.stat-val.err  { color: var(--red); }
+
+.bar {
+    height: 6px;
+    background-color: rgba(74, 222, 128, 0.1);
+    border-width: 1px;
+    border-color: var(--glow-dim);
+    margin-top: 6px;
+}
+
+.bar-fill {
+    height: 100%;
+    background-color: var(--glow);
+}
+
+/* ============ LOG ============ */
+.log {
+    flex-grow: 1;
+    border-top-width: 1px;
+    border-top-color: var(--glow-dim);
+    padding-top: 12px;
+    margin-top: 8px;
+}
+
+.log-line {
+    font-size: 11px;
+    color: var(--glow-dim);
+    margin-bottom: 3px;
+    white-space: normal;
+}
+
+.log-line.ok   { color: var(--glow); }
+.log-line.warn { color: var(--amber); }
+.log-line.err  { color: var(--red); }
+
+/* ============ FOOTER ============ */
+.footer {
+    flex-direction: row;
+    justify-content: space-between;
+    border-top-width: 1px;
+    border-top-color: var(--glow-dim);
+    padding-top: 12px;
+    margin-top: 24px;
+}
+
+.footer Label {
+    font-size: 11px;
+    color: var(--glow-dim);
+    letter-spacing: 2px;
+}
+
+.footer-right {
+    color: var(--amber);
+}
+
+/* ============ OVERLAYS ============ */
+.overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(5, 7, 6, 0.88);
+    justify-content: center;
+    align-items: center;
+}
+
+.overlay Label {
+    font-size: 96px;
+    letter-spacing: 6px;
+    -unity-font-style: bold;
+}
+
+.overlay-ok Label {
+    color: var(--glow);
+    -unity-text-outline-width: 1.5px;
+    -unity-text-outline-color: rgba(74, 222, 128, 0.8);
+}
+
+.overlay-err Label {
+    color: var(--red);
+    -unity-text-outline-width: 1.5px;
+    -unity-text-outline-color: rgba(239, 68, 68, 0.8);
+}
+
+.hidden {
+    display: none;
+}

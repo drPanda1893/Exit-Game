@@ -5,7 +5,9 @@ using UnityEditor.SceneManagement;
 using UnityEngine.SceneManagement;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
+using UnityEngine.UIElements;
 using TMPro;
+using EscapeTheMatrix.Sektor03;
 
 /// <summary>
 /// Baut Level 3 – Gefängnis-Bibliothek.
@@ -1277,6 +1279,11 @@ public class BuildLevel3Library : EditorWindow
         // kein zusätzlicher Lauf-Trigger nötig.
         var pcHintGO = BuildPcHintUI(scene);
         var codeUI   = BuildColorCodeUI(scene);
+
+        // SEKTOR_03 // BIBLIOTHEK Terminal (UI-Toolkit) – ersetzt visuell die Canvas-UI.
+        // Wenn die Assets fehlen, läuft die alte Canvas-UI als Fallback weiter.
+        BuildSektorTerminalAndAttach(scene, codeUI);
+
         var pcInter  = BuildComputerDeskAndInteraction(envRoot, scene, dark, mid, brass,
                                                         codeUI, pcHintGO);
 
@@ -1725,6 +1732,68 @@ public class BuildLevel3Library : EditorWindow
         MoveToScene(canvasGO, scene);
         MoveToScene(uiGO,     scene);
         return ui;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Sektor03 Terminal (UI-Toolkit) – visuell hochwertige Version der ColorCode-UI.
+    // UXML/USS + Controller liegen bereits unter Assets/Sektor03Terminal.* —
+    // hier werden sie zur Laufzeit als UIDocument in die Szene gehängt und
+    // an die existierende Level3_ColorCodeUI-Logik angebunden.
+    // ─────────────────────────────────────────────────────────────────────────
+    private void BuildSektorTerminalAndAttach(Scene scene, Level3_ColorCodeUI codeUI)
+    {
+        var uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>("Assets/Sektor03Terminal.uxml");
+        if (uxml == null)
+        {
+            Debug.LogWarning("[Level3] Assets/Sektor03Terminal.uxml fehlt – fallback auf alte Canvas-UI.");
+            return;
+        }
+
+        // PanelSettings sicherstellen (als Asset persistieren, damit die Scene-Reference hält)
+        const string panelPath = "Assets/Sektor03PanelSettings.asset";
+        var panelSettings = AssetDatabase.LoadAssetAtPath<PanelSettings>(panelPath);
+        if (panelSettings == null)
+        {
+            panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            panelSettings.scaleMode          = PanelScaleMode.ScaleWithScreenSize;
+            panelSettings.referenceResolution = new Vector2Int(1920, 1080);
+            panelSettings.match              = 0.5f;
+            panelSettings.sortingOrder       = 50;
+            AssetDatabase.CreateAsset(panelSettings, panelPath);
+            AssetDatabase.SaveAssets();
+            panelSettings = AssetDatabase.LoadAssetAtPath<PanelSettings>(panelPath);
+        }
+
+        // GameObject mit UIDocument + Controller anlegen
+        var go  = new GameObject("Sektor03Terminal");
+        var doc = go.AddComponent<UIDocument>();
+        doc.panelSettings   = panelSettings;
+        doc.visualTreeAsset = uxml;
+
+        var ctrl = go.AddComponent<Sektor03TerminalController>();
+
+        // Lösungssequenz auf GREEN → BLUE → GREEN setzen (passt zur echten Bibel).
+        var ctrlSo = new SerializedObject(ctrl);
+        var seq    = ctrlSo.FindProperty("correctSequence");
+        seq.arraySize = 3;
+        seq.GetArrayElementAtIndex(0).enumValueIndex =
+            (int)Sektor03TerminalController.ColorCode.GREEN;
+        seq.GetArrayElementAtIndex(1).enumValueIndex =
+            (int)Sektor03TerminalController.ColorCode.BLUE;
+        seq.GetArrayElementAtIndex(2).enumValueIndex =
+            (int)Sektor03TerminalController.ColorCode.GREEN;
+        var maxAttempts = ctrlSo.FindProperty("maxAttempts");
+        if (maxAttempts != null) maxAttempts.intValue = 0;  // unbegrenzt
+        ctrlSo.ApplyModifiedPropertiesWithoutUndo();
+
+        // Verkabelung an die bestehende Level3_ColorCodeUI-Logik
+        var uiSo = new SerializedObject(codeUI);
+        uiSo.FindProperty("terminalDocument").objectReferenceValue   = doc;
+        uiSo.FindProperty("terminalController").objectReferenceValue = ctrl;
+        uiSo.ApplyModifiedPropertiesWithoutUndo();
+
+        go.SetActive(false);
+        MoveToScene(go, scene);
     }
 
     // Dünne Akzent-/Trennlinie (einfarbiges Image-Band).
