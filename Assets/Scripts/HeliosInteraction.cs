@@ -59,8 +59,10 @@ public class HeliosInteraction : MonoBehaviour
         inRange = false;
         if (hintGO != null) hintGO.SetActive(false);
 
-        // PC scharf schalten und das Login-Terminal direkt als Popup öffnen
-        // (mit kurzer Verzögerung, bis die Buch-Auswahl-UI ausgeblendet ist).
-        if (computer != null) computer.OpenLoginScreen();
+        // Nur den PC scharf schalten (Monitor leuchtet, Spot geht an), damit der
+        // Spieler ihn im Raum findet. Das Terminal selbst oeffnet sich erst,
+        // wenn der Spieler zum PC laeuft und dort [E] drueckt – siehe
+        // Level3_ComputerInteraction.Update().
+        if (computer != null) computer.ActivateComputer();
     }
 }
