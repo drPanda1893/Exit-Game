@@ -19,7 +19,7 @@ public class Level4_StealthMinigame : MonoBehaviour
 {
     [Header("Spieler")]
     [SerializeField] private RectTransform player;
-    [SerializeField] private float playerSpeed = 185f;
+    [SerializeField] private float playerSpeed = 200f;   // = max. Waerter-Speed (100 * 1.9 mit Eskalation + Alarm)
 
     [Header("Wärter")]
     [SerializeField] private List<RectTransform> guards;
@@ -183,11 +183,13 @@ public class Level4_StealthMinigame : MonoBehaviour
         }
 
         // Joystick übersteuert Tastatur, sobald er außerhalb der Deadzone steht.
-        // Analoge Auslenkung → langsamer bei Teil-Ausschlag.
+        // Wir nehmen NUR die Richtung (normiert) – Teil-Ausschlag soll nicht
+        // langsamer machen, sondern bei jedem Druck volle Geschwindigkeit fahren.
         if (joystickAxis.sqrMagnitude > joystickDeadzone * joystickDeadzone)
         {
-            h = Mathf.Clamp(joystickAxis.x, -1f, 1f);
-            v = Mathf.Clamp(joystickAxis.y, -1f, 1f);
+            Vector2 jdir = joystickAxis.normalized;
+            h = jdir.x;
+            v = jdir.y;
         }
 
         Vector2 dir = new Vector2(h, v);

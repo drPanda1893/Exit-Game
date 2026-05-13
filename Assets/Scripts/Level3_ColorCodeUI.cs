@@ -6,6 +6,9 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using EscapeTheMatrix.Sektor03;
+using Button = UnityEngine.UI.Button;   // Legacy-Canvas-Buttons; UIElements.Button kollidiert sonst
+using Image  = UnityEngine.UI.Image;    // analog: UIElements.Image existiert ebenfalls
+using Cursor = UnityEngine.Cursor;      // UIElements.Cursor existiert ebenfalls -> Engine-Cursor erzwingen
 
 /// <summary>
 /// Login-Terminal der Bibliothek (Level 3, Phase B).
@@ -93,33 +96,102 @@ public class Level3_ColorCodeUI : MonoBehaviour
 
     void Awake()
     {
-        if (UseSektor)
+        // Alte Canvas-UI in jedem Fall verstecken – sie wird nie wieder aktiviert.
+        // Das Sektor-Terminal ist die einzige sichtbare Login-Oberflaeche.
+        if (overlayCanvas != null) overlayCanvas.gameObject.SetActive(false);
+
+        // Falls die Szene das Sektor-Terminal bereits vom Editor-Build hat,
+        // sicherheitshalber inaktiv schalten. Es wird erst in Show() aktiviert
+        // (= nach Bibel-Wahl ueber Level3_ComputerInteraction.OpenLoginScreen()).
+        if (terminalDocument != null) terminalDocument.gameObject.SetActive(false);
+    }
+
+    // Versucht das Sektor-Terminal aus Resources/ zu instanziieren, falls die Szene
+    // noch die alte Canvas-UI hat. Setzt terminalDocument + terminalController, sodass
+    // UseSektor anschliessend true ist und alle Eingabe-Pfade ueber das neue Terminal laufen.
+    private void TryCreateSektorTerminalAtRuntime()
+    {
+        var uxml = Resources.Load<VisualTreeAsset>("Sektor03Terminal");
+        if (uxml == null)
         {
-            if (terminalDocument != null) terminalDocument.gameObject.SetActive(false);
+            Debug.LogWarning("[Level3] Resources/Sektor03Terminal.uxml nicht gefunden – Sektor-Terminal kann nicht zur Laufzeit erstellt werden.");
+            return;
         }
-        else if (overlayCanvas != null) overlayCanvas.gameObject.SetActive(false);
+
+        var go  = new GameObject("Sektor03Terminal (Runtime)");
+        go.SetActive(false);   // erst aktivieren, wenn Show() aufgerufen wird
+        var doc = go.AddComponent<UIDocument>();
+        doc.visualTreeAsset = uxml;
+
+        // PanelSettings: zuerst versuchen, vorhandene aus Resources zu laden; sonst eine
+        // schlanke Default-Instanz erzeugen.
+        var panel = Resources.Load<PanelSettings>("Sektor03PanelSettings");
+        if (panel == null)
+        {
+            panel = ScriptableObject.CreateInstance<PanelSettings>();
+            panel.scaleMode           = PanelScaleMode.ScaleWithScreenSize;
+            panel.referenceResolution = new Vector2Int(1920, 1080);
+            panel.match               = 0.5f;
+            panel.sortingOrder        = 50;
+        }
+        doc.panelSettings = panel;
+
+        var ctrl = go.AddComponent<Sektor03TerminalController>();
+        // Loesungsfolge passend zur Bibel: GRUEN -> BLAU -> GRUEN
+        SetSektorSolutionViaReflection(ctrl,
+            Sektor03TerminalController.ColorCode.GREEN,
+            Sektor03TerminalController.ColorCode.BLUE,
+            Sektor03TerminalController.ColorCode.GREEN);
+
+        terminalDocument   = doc;
+        terminalController = ctrl;
+    }
+
+    private static void SetSektorSolutionViaReflection(
+        Sektor03TerminalController ctrl,
+        params Sektor03TerminalController.ColorCode[] seq)
+    {
+        // correctSequence ist [SerializeField] private – per Reflection setzen,
+        // damit wir keine Public API auf dem Controller brauchen.
+        var field = typeof(Sektor03TerminalController)
+            .GetField("correctSequence",
+                System.Reflection.BindingFlags.NonPublic |
+                System.Reflection.BindingFlags.Instance);
+        if (field != null) field.SetValue(ctrl, seq);
     }
 
     void Start()
     {
         if (UseSektor)
         {
-            if (terminalController.OnAuthenticationSuccess == null)
-                terminalController.OnAuthenticationSuccess = new UnityEngine.Events.UnityEvent();
-            if (terminalController.OnAuthenticationFailure == null)
-                terminalController.OnAuthenticationFailure = new UnityEngine.Events.UnityEvent();
-
-            terminalController.OnAuthenticationSuccess.AddListener(OnSektorSuccess);
-            terminalController.OnAuthenticationFailure.AddListener(OnSektorFailure);
+            // Editor-build hat das Sektor-Terminal bereits angelegt – Events jetzt verkabeln.
+            WireSektorEvents();
         }
         else
         {
+            // Falls Szene noch alte Canvas-Felder hat: onClick fuer Fallback-Buttons.
+            // Awake() hat das Canvas bereits versteckt; die Listener bleiben harmlos.
             if (redButton   != null) redButton.onClick.AddListener(()   => OnButton("Red"));
             if (blueButton  != null) blueButton.onClick.AddListener(()  => OnButton("Blue"));
             if (greenButton != null) greenButton.onClick.AddListener(() => OnButton("Green"));
             if (resetButton != null) resetButton.onClick.AddListener(ResetInput);
             if (closeButton != null) closeButton.onClick.AddListener(Hide);
         }
+    }
+
+    private void WireSektorEvents()
+    {
+        if (terminalController == null) return;
+        if (terminalController.OnAuthenticationSuccess == null)
+            terminalController.OnAuthenticationSuccess = new UnityEngine.Events.UnityEvent();
+        if (terminalController.OnAuthenticationFailure == null)
+            terminalController.OnAuthenticationFailure = new UnityEngine.Events.UnityEvent();
+        // RemoveListener davor verhindert Doppel-Subscriptions, wenn WireSektorEvents
+        // mehrfach gerufen wird (Start + nach lazy TryCreate).
+        terminalController.OnAuthenticationSuccess.RemoveListener(OnSektorSuccess);
+        terminalController.OnAuthenticationFailure.RemoveListener(OnSektorFailure);
+        terminalController.OnAuthenticationSuccess.AddListener(OnSektorSuccess);
+        terminalController.OnAuthenticationFailure.AddListener(OnSektorFailure);
     }
 
     void OnDisable()
@@ -146,17 +218,31 @@ public class Level3_ColorCodeUI : MonoBehaviour
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible   = true;
 
-        ResetInput();
-        locked = false;
+        locked        = false;
         sensorReadout = "";
+
+        // Lazy-Create: das Sektor-Terminal entsteht erst hier (= nach Bibel-Wahl),
+        // sodass es weder auf der Szene noch im Speicher liegt, bevor der Spieler
+        // tatsaechlich am PC steht und das Login-Popup ausloest.
+        if (!UseSektor)
+        {
+            TryCreateSektorTerminalAtRuntime();
+            if (UseSektor) WireSektorEvents();   // Events nach erfolgreichem Lazy-Create
+        }
 
         if (UseSektor)
         {
+            // Erst aktivieren, dann reseten: BindUI() im Controller laeuft in
+            // OnEnable(); vorher waeren slots/fills/submitBtn null und
+            // ResetSequence() -> OnReset() wuerde mit NullReferenceException knallen.
             terminalDocument.gameObject.SetActive(true);
+            ResetInput();
             StartCoroutine(HookSektorResetButtonNextFrame());
             SubscribeArduino(resetSensor: true);
             return;
         }
+
+        ResetInput();
 
         if (overlayCanvas == null) return;
         overlayCanvas.gameObject.SetActive(true);

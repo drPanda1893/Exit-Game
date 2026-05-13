@@ -1565,172 +1565,19 @@ public class BuildLevel3Library : EditorWindow
     // dünne Akzentlinien statt klobiger Rahmen, viel Negativraum, gespreizte Caps.
     // Hinweistext verweist auf die echte Bibel. Drei Farben (ROT/BLAU/GRÜN),
     // 3-stelliger Code: GRÜN → BLAU → GRÜN.
+    // Legt nur noch den Logik-Controller fuer Level 3 an. Das eigentliche
+    // Login-UI ist das Sektor_03-Terminal (UI-Toolkit, Sektor03Terminal.uxml).
+    // BuildSektorTerminalAndAttach() weiter unten verkabelt die UIDocument-
+    // und Controller-Referenzen. Damit gibt es nur EIN Terminal in der Szene –
+    // sauber, ohne tote Legacy-Canvas.
     private Level3_ColorCodeUI BuildColorCodeUI(Scene scene)
     {
-        // ── Palette ───────────────────────────────────────────────────────────
-        Color cBg      = new Color(0.020f, 0.030f, 0.055f, 0.965f);  // Backdrop
-        Color cPanel   = new Color(0.040f, 0.058f, 0.085f, 0.992f);  // Fenster
-        Color cAccent  = new Color(0.180f, 0.850f, 0.910f, 1.000f);  // Cyan-Akzent
-        Color cAccentD = new Color(0.180f, 0.850f, 0.910f, 0.280f);  // Cyan gedimmt (Linien)
-        Color cText    = new Color(0.880f, 0.940f, 0.965f, 1.000f);  // Primärtext
-        Color cTextDim = new Color(0.470f, 0.585f, 0.660f, 1.000f);  // Sekundärtext / Caps
-        Color cAlert   = new Color(1.000f, 0.380f, 0.360f, 1.000f);  // "Gesperrt"
-        Color cSlot    = new Color(0.055f, 0.085f, 0.120f, 1.000f);  // leerer Slot
-        Color cCyanT   = new Color(cAccent.r, cAccent.g, cAccent.b, 0.92f);
-
-        var canvasGO = new GameObject("ColorCodeCanvas");
-        var canvas   = canvasGO.AddComponent<Canvas>();
-        canvas.renderMode   = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 12;
-        canvasGO.AddComponent<UnityEngine.UI.CanvasScaler>().uiScaleMode =
-            UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        canvasGO.AddComponent<UnityEngine.UI.GraphicRaycaster>();
-
-        // Vollbild-Verdunkelung
-        var backdrop = MakeUIBox(canvasGO.transform, "Backdrop", Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-        backdrop.AddComponent<UnityEngine.UI.Image>().color = cBg;
-
-        // ── Fenster ───────────────────────────────────────────────────────────
-        var win = MakeUIPanel(canvasGO.transform, "LoginWindow",
-            new Vector2(0.215f, 0.10f), new Vector2(0.785f, 0.90f));
-        win.AddComponent<UnityEngine.UI.Image>().color = cPanel;
-        var winGlow = win.AddComponent<UnityEngine.UI.Outline>();
-        winGlow.effectColor    = new Color(cAccent.r, cAccent.g, cAccent.b, 0.16f);
-        winGlow.effectDistance = new Vector2(1.5f, 1.5f);
-        var winT = win.transform;
-
-        // dünne Akzentlinien oben/unten
-        MakeBar(winT, "AccentTop",    new Vector2(0f, 0.987f), new Vector2(1f, 1.000f), cAccent);
-        MakeBar(winT, "AccentBottom", new Vector2(0f, 0.000f), new Vector2(1f, 0.009f),
-                new Color(cAccent.r, cAccent.g, cAccent.b, 0.55f));
-
-        // ── Kopf ──────────────────────────────────────────────────────────────
-        var subGO  = MakeUIPanel(winT, "SubLabel", new Vector2(0.055f, 0.932f), new Vector2(0.62f, 0.972f));
-        var subTxt = subGO.AddComponent<TextMeshProUGUI>();
-        subTxt.text             = "BIBLIOTHEK  ·  ZUGANGSTERMINAL";
-        subTxt.fontSize         = 16;
-        subTxt.characterSpacing = 12f;
-        subTxt.alignment        = TextAlignmentOptions.MidlineLeft;
-        subTxt.color            = cTextDim;
-
-        var headGO  = MakeUIPanel(winT, "Header", new Vector2(0.055f, 0.872f), new Vector2(0.70f, 0.932f));
-        var headTxt = headGO.AddComponent<TextMeshProUGUI>();
-        headTxt.text             = "AUTHENTIFIZIERUNG";
-        headTxt.fontSize         = 38;
-        headTxt.fontStyle        = FontStyles.Bold;
-        headTxt.characterSpacing = 3f;
-        headTxt.alignment        = TextAlignmentOptions.MidlineLeft;
-        headTxt.color            = cText;
-
-        // Status (rechts oben) – Inhalt setzt Level3_ColorCodeUI ("ZUGANG GESPERRT"/"ZUGANG FREI")
-        var titleGO  = MakeUIPanel(winT, "Status", new Vector2(0.50f, 0.900f), new Vector2(0.945f, 0.952f));
-        var titleTxt = titleGO.AddComponent<TextMeshProUGUI>();
-        titleTxt.text             = "ZUGANG GESPERRT";
-        titleTxt.fontSize         = 19;
-        titleTxt.fontStyle        = FontStyles.Bold;
-        titleTxt.characterSpacing = 6f;
-        titleTxt.alignment        = TextAlignmentOptions.MidlineRight;
-        titleTxt.color            = cAlert;
-
-        MakeBar(winT, "DividerTop", new Vector2(0.055f, 0.860f), new Vector2(0.945f, 0.864f), cAccentD);
-
-        // ── Hinweistext (Terminal) – Inhalt setzt Level3_ColorCodeUI.Show() ──
-        var msgGO  = MakeUIPanel(winT, "Message", new Vector2(0.065f, 0.515f), new Vector2(0.935f, 0.848f));
-        var msgTxt = msgGO.AddComponent<TextMeshProUGUI>();
-        msgTxt.text        = "> ...";
-        msgTxt.fontSize    = 21;
-        msgTxt.lineSpacing = 8f;
-        msgTxt.alignment   = TextAlignmentOptions.TopLeft;
-        msgTxt.color       = new Color(0.62f, 0.92f, 1.0f);
-
-        // ── Code-Slots ────────────────────────────────────────────────────────
-        var seqLblGO = MakeUIPanel(winT, "SeqLabel", new Vector2(0.065f, 0.475f), new Vector2(0.935f, 0.505f));
-        var seqLbl   = seqLblGO.AddComponent<TextMeshProUGUI>();
-        seqLbl.text             = "FARBSEQUENZ";
-        seqLbl.fontSize         = 15;
-        seqLbl.characterSpacing = 14f;
-        seqLbl.alignment        = TextAlignmentOptions.Center;
-        seqLbl.color            = cTextDim;
-
-        const int   slotCount = 3;
-        var slotImages = new UnityEngine.UI.Image[slotCount];
-        const float slotW = 0.085f, slotGap = 0.045f;
-        float totalW = slotCount * slotW + (slotCount - 1) * slotGap;
-        float startX = 0.5f - totalW * 0.5f;
-        for (int i = 0; i < slotCount; i++)
-        {
-            float x0   = startX + i * (slotW + slotGap);
-            var   slot = MakeUIPanel(winT, $"Slot_{i}",
-                new Vector2(x0, 0.385f), new Vector2(x0 + slotW, 0.468f));
-            var img    = slot.AddComponent<UnityEngine.UI.Image>();
-            img.color  = cSlot;
-            slotImages[i] = img;
-            var o = slot.AddComponent<UnityEngine.UI.Outline>();
-            o.effectColor    = new Color(cAccent.r, cAccent.g, cAccent.b, 0.45f);
-            o.effectDistance = new Vector2(1.2f, 1.2f);
-        }
-
-        // ── Live-Scannerzeile (R/G/B + blinkender Cursor) – setzt Level3_ColorCodeUI ──
-        var promptGO  = MakeUIPanel(winT, "Prompt", new Vector2(0.065f, 0.330f), new Vector2(0.935f, 0.378f));
-        var promptTxt = promptGO.AddComponent<TextMeshProUGUI>();
-        promptTxt.text      = "> _";
-        promptTxt.fontSize  = 19;
-        promptTxt.alignment = TextAlignmentOptions.MidlineLeft;
-        promptTxt.color     = cCyanT;
-
-        // ── Manuelle Eingabe (Fallback) ───────────────────────────────────────
-        var manLblGO = MakeUIPanel(winT, "ManLabel", new Vector2(0.065f, 0.305f), new Vector2(0.935f, 0.330f));
-        var manLbl   = manLblGO.AddComponent<TextMeshProUGUI>();
-        manLbl.text             = "MANUELLE EINGABE";
-        manLbl.fontSize         = 15;
-        manLbl.characterSpacing = 14f;
-        manLbl.alignment        = TextAlignmentOptions.Center;
-        manLbl.color            = cTextDim;
-
-        Color cRed   = new Color(0.92f, 0.26f, 0.24f);
-        Color cBlue  = new Color(0.26f, 0.52f, 1.00f);
-        Color cGreen = new Color(0.26f, 0.86f, 0.46f);
-        const float btY0 = 0.205f, btY1 = 0.295f;
-        var redBtn   = MakeColorTile(winT, "RedBtn",   0.115f, 0.355f, btY0, btY1, cRed,   "ROT",  cAccent);
-        var blueBtn  = MakeColorTile(winT, "BlueBtn",  0.380f, 0.620f, btY0, btY1, cBlue,  "BLAU", cAccent);
-        var greenBtn = MakeColorTile(winT, "GreenBtn", 0.645f, 0.885f, btY0, btY1, cGreen, "GRÜN", cAccent);
-
-        // ── Feedback-Zeile ────────────────────────────────────────────────────
-        var fbGO  = MakeUIPanel(winT, "Feedback", new Vector2(0.065f, 0.135f), new Vector2(0.935f, 0.195f));
-        var fbTxt = fbGO.AddComponent<TextMeshProUGUI>();
-        fbTxt.fontSize         = 22;
-        fbTxt.characterSpacing = 2f;
-        fbTxt.alignment        = TextAlignmentOptions.MidlineLeft;
-        fbTxt.color            = cCyanT;
-
-        MakeBar(winT, "DividerBottom", new Vector2(0.055f, 0.118f), new Vector2(0.945f, 0.122f), cAccentD);
-
-        // ── Footer (dezente Ghost-Buttons, rechtsbündig) ──────────────────────
-        var resetBtn = MakeGhostButton(winT, "ResetBtn",
-            new Vector2(0.555f, 0.035f), new Vector2(0.745f, 0.100f), "ZURÜCKSETZEN", cAccent, cTextDim);
-        var closeBtn = MakeGhostButton(winT, "CloseBtn",
-            new Vector2(0.755f, 0.035f), new Vector2(0.945f, 0.100f), "SCHLIESSEN",   cAccent, cTextDim);
-
-        // ── Logik-Komponente ──────────────────────────────────────────────────
         var uiGO = new GameObject("ColorCodeUI");
         var ui   = uiGO.AddComponent<Level3_ColorCodeUI>();
-        ui.overlayCanvas   = canvas;
-        ui.redButton       = redBtn;
-        ui.blueButton      = blueBtn;
-        ui.greenButton     = greenBtn;
-        ui.resetButton     = resetBtn;
-        ui.closeButton     = closeBtn;
-        ui.slotImages      = slotImages;
-        ui.feedbackText    = fbTxt;
-        ui.titleText       = titleTxt;
-        ui.messageText     = msgTxt;
-        ui.promptText      = promptTxt;
         ui.arduinoFallback = true;
-        ui.solution        = new[] { "Green", "Blue", "Green" };  // 3-stelliger Code
+        ui.solution        = new[] { "Green", "Blue", "Green" };  // 3-stelliger Code (Bibel-Hinweis)
 
-        canvasGO.SetActive(false);
-        MoveToScene(canvasGO, scene);
-        MoveToScene(uiGO,     scene);
+        MoveToScene(uiGO, scene);
         return ui;
     }
 
@@ -1742,10 +1589,10 @@ public class BuildLevel3Library : EditorWindow
     // ─────────────────────────────────────────────────────────────────────────
     private void BuildSektorTerminalAndAttach(Scene scene, Level3_ColorCodeUI codeUI)
     {
-        var uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>("Assets/Sektor03Terminal.uxml");
+        var uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>("Assets/Resources/Sektor03Terminal.uxml");
         if (uxml == null)
         {
-            Debug.LogWarning("[Level3] Assets/Sektor03Terminal.uxml fehlt – fallback auf alte Canvas-UI.");
+            Debug.LogWarning("[Level3] Assets/Resources/Sektor03Terminal.uxml fehlt – Sektor-Terminal wird zur Laufzeit aus Resources geladen.");
             return;
         }
 
