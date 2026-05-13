@@ -99,7 +99,9 @@ public class Level3_ComputerInteraction : MonoBehaviour
     public void OpenLoginScreen(float delay = 1.7f)
     {
         ActivateComputer();
-        codeUI?.BeginArduinoScan();
+        // Den Arduino-Farbsensor NICHT hier schon scharf schalten:
+        // das Sektor-Terminal wird erst in Show() lazy erzeugt – frueh empfangene
+        // COLOR:GREEN-Messages wuerden sonst in den Legacy-Pfad fallen und verloren gehen.
         if (isSolved) return;
         StartCoroutine(ShowLoginAfter(delay));
     }

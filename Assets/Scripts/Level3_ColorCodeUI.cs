@@ -232,13 +232,12 @@ public class Level3_ColorCodeUI : MonoBehaviour
 
         if (UseSektor)
         {
-            // Erst aktivieren, dann reseten: BindUI() im Controller laeuft in
-            // OnEnable(); vorher waeren slots/fills/submitBtn null und
-            // ResetSequence() -> OnReset() wuerde mit NullReferenceException knallen.
+            // Aktivieren -> einen Frame warten -> reseten + Arduino starten.
+            // UIDocument baut die VisualTree erst nach OnEnable fertig auf;
+            // BindUI() im Controller braucht den naechsten Frame, sonst sind
+            // slots/fills/submitBtn null und AddColor/ResetSequence crashen.
             terminalDocument.gameObject.SetActive(true);
-            ResetInput();
-            StartCoroutine(HookSektorResetButtonNextFrame());
-            SubscribeArduino(resetSensor: true);
+            StartCoroutine(InitSektorTerminalNextFrame());
             return;
         }
 
@@ -473,6 +472,17 @@ public class Level3_ColorCodeUI : MonoBehaviour
         // unseren Eingabe-Counter wieder freigeben.
         sektorInputCount = 0;
         locked           = false;
+    }
+
+    // Wartet einen Frame nach SetActive(true), damit UIDocument die VisualTree
+    // fertig aufgebaut und der Controller in BindUI() die Slot/Fill/Button-
+    // Referenzen gesetzt hat. Erst danach ResetSequence + Arduino subscriben.
+    private IEnumerator InitSektorTerminalNextFrame()
+    {
+        yield return null;             // 1 Frame warten – Pflicht fuer UIDocument
+        ResetInput();
+        StartCoroutine(HookSektorResetButtonNextFrame());
+        SubscribeArduino(resetSensor: true);
     }
 
     // Wenn der Spieler den RESET-Button im Sektor-Terminal direkt klickt,
