@@ -25,6 +25,12 @@ public class Level6_FinalGate : MonoBehaviour
     [Header("3D Gate Visual")]
     [SerializeField] private GameObject gateBarsGO;
 
+    [Header("Card Reader (RFID, vorgeschaltet)")]
+    [SerializeField] private GameObject        cardPanel;
+    [SerializeField] private TextMeshProUGUI   cardStatusText;
+    [Tooltip("Befehls-ID des RFID-Lesers – muss mit Arduino-Sketch (0x80) uebereinstimmen.")]
+    [SerializeField] private byte arduinoRfidCmdId = 0x80;
+
     [Header("Heat Panel")]
     [SerializeField] private GameObject        heatPanel;
     [SerializeField] private Slider            temperatureBar;
@@ -49,7 +55,7 @@ public class Level6_FinalGate : MonoBehaviour
     [Tooltip("Sekunden Karenz nach letztem Sensor-Wert, bevor wieder abgekühlt wird.")]
     [SerializeField] private float arduinoTimeoutSec = 0.6f;
 
-    private enum State { Idle, WaitingApproach, Heating, Done }
+    private enum State { Idle, WaitingApproach, CardCheck, Heating, Done }
     private State state = State.Idle;
 
     private bool  holding;
@@ -59,7 +65,9 @@ public class Level6_FinalGate : MonoBehaviour
     private float arduinoLastTempC;
     private float arduinoLastUpdateTime;
     private Action<string> tempHandler;
+    private Action<string> rfidHandler;
     private Coroutine arduinoStartRoutine;
+    private float cardDeniedHideAt;
 
     void Awake() => Instance = this;
 
@@ -70,11 +78,13 @@ public class Level6_FinalGate : MonoBehaviour
         state   = State.WaitingApproach;
 
         if (interactionPrompt) interactionPrompt.SetActive(false);
+        if (cardPanel)         cardPanel.SetActive(false);
         if (heatPanel)         heatPanel.SetActive(false);
         if (winOverlay)        winOverlay.SetActive(false);
         if (gateBarsGO)        gateBarsGO.SetActive(true);
         if (temperatureBar)    temperatureBar.value = 0f;
         if (statusText)        statusText.text = string.Empty;
+        if (cardStatusText)    cardStatusText.text = string.Empty;
     }
 
     void Start()
@@ -91,6 +101,8 @@ public class Level6_FinalGate : MonoBehaviour
         {
             tempHandler = OnTemperatureFromArduino;
             ArduinoBridge.Instance.RegisterHandler(arduinoCmdId, tempHandler);
+            rfidHandler = OnRfidFromArduino;
+            ArduinoBridge.Instance.RegisterHandler(arduinoRfidCmdId, rfidHandler);
             ArduinoBridge.Instance.OnConnectionChanged += HandleArduinoConnectionChanged;
             arduinoSubscribed = true;
         }
@@ -110,12 +122,15 @@ public class Level6_FinalGate : MonoBehaviour
             }
             if (tempHandler != null)
                 ArduinoBridge.Instance.UnregisterHandler(arduinoCmdId, tempHandler);
+            if (rfidHandler != null)
+                ArduinoBridge.Instance.UnregisterHandler(arduinoRfidCmdId, rfidHandler);
             if (arduinoSubscribed)
                 ArduinoBridge.Instance.OnConnectionChanged -= HandleArduinoConnectionChanged;
             arduinoSubscribed = false;
-            // Thermistor abschalten, damit andere Level (z.B. spaeter Level 2)
-            // den Sensor wieder sauber initialisieren koennen.
+            // Thermistor + RFID abschalten, damit andere Level den Sensor wieder
+            // sauber initialisieren koennen.
             ArduinoBridge.Instance.Send(arduinoCmdId, "STOP");
+            ArduinoBridge.Instance.Send(arduinoRfidCmdId, "STOP");
         }
     }
 
@@ -210,6 +225,10 @@ public class Level6_FinalGate : MonoBehaviour
                 HandleApproach();
                 break;
 
+            case State.CardCheck:
+                HandleCardCheck();
+                break;
+
             case State.Heating:
                 HandleHeat();
                 break;
@@ -220,11 +239,65 @@ public class Level6_FinalGate : MonoBehaviour
 
     void HandleApproach()
     {
-        // Kein [E] mehr – sobald der Spieler am Tor steht, geht das Heat-Panel
-        // automatisch auf und der Thermistor wird aktiviert.
+        // Sobald der Spieler am Tor ist, oeffnet sich ZUERST der Karten-Check.
         bool near = gateSpot != null && gateSpot.PlayerNearby;
         if (interactionPrompt) interactionPrompt.SetActive(near);
-        if (near) OpenHeatPanel();
+        if (near) OpenCardCheck();
+    }
+
+    void OpenCardCheck()
+    {
+        state = State.CardCheck;
+        if (interactionPrompt) interactionPrompt.SetActive(false);
+        if (cardPanel)         cardPanel.SetActive(true);
+        if (cardStatusText)    cardStatusText.text = "Zugangskarte am Leser scannen…";
+        Cursor.visible   = true;
+        Cursor.lockState = CursorLockMode.None;
+        EventSystem.current?.SetSelectedGameObject(null);
+
+        // RFID-Leser aktivieren – erst hier, damit andere Level vorher nicht
+        // ungewollt SPI-Pins greifen.
+        ArduinoBridge.Instance?.Send(arduinoRfidCmdId, "START");
+    }
+
+    void HandleCardCheck()
+    {
+        // Verzoegerung fuer das Ausblenden des "Falsche Karte"-Hinweises:
+        // nach kurzer Zeit zurueck auf "Zugangskarte am Leser scannen".
+        if (cardDeniedHideAt > 0f && Time.time >= cardDeniedHideAt)
+        {
+            cardDeniedHideAt = 0f;
+            if (cardStatusText) cardStatusText.text = "Zugangskarte am Leser scannen…";
+        }
+    }
+
+    void OnRfidFromArduino(string payload)
+    {
+        if (state != State.CardCheck) return;
+
+        if (payload.Equals("OK", StringComparison.OrdinalIgnoreCase))
+        {
+            if (cardStatusText) cardStatusText.text = "Zugang gewährt.";
+            ArduinoBridge.Instance?.Send(arduinoRfidCmdId, "STOP");
+            StartCoroutine(CardAcceptedThenOpenHeat());
+        }
+        else if (payload.StartsWith("DENIED", StringComparison.OrdinalIgnoreCase))
+        {
+            if (cardStatusText) cardStatusText.text = "FALSCHE KARTE – Zugang verweigert.";
+            cardDeniedHideAt = Time.time + 1.6f;
+        }
+        else if (payload.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase))
+        {
+            if (cardStatusText) cardStatusText.text = "Leser-Fehler – Karte erneut auflegen.";
+            cardDeniedHideAt = Time.time + 1.6f;
+        }
+    }
+
+    IEnumerator CardAcceptedThenOpenHeat()
+    {
+        yield return new WaitForSeconds(1.0f);
+        if (cardPanel) cardPanel.SetActive(false);
+        OpenHeatPanel();
     }
 
     void OpenHeatPanel()

@@ -420,6 +420,38 @@ public class BuildLevel6FinalGate : LevelBuilderBase
         promptGO.SetActive(false);
         AddPromptText(promptGO.transform, "[E]  Tor untersuchen");
 
+        // ── Card Panel (RFID-Vorpruefung vor dem Heat Panel) ──────────────────
+        var cardPanelGO = UiPanel("CardPanel", canvasGO.transform,
+            new Vector2(0.5f,0.5f), new Vector2(0.5f,0.5f),
+            Vector2.zero, new Vector2(640f, 260f),
+            new Vector2(0.5f,0.5f), new Color(0.03f,0.04f,0.06f,0.96f));
+        cardPanelGO.SetActive(false);
+
+        var cardTitleGO = new GameObject("CardTitle");
+        cardTitleGO.transform.SetParent(cardPanelGO.transform, false);
+        var cardTitleTMP = cardTitleGO.AddComponent<TextMeshProUGUI>();
+        cardTitleTMP.text      = "ZUGANGSKONTROLLE";
+        cardTitleTMP.fontSize  = 32f;
+        cardTitleTMP.fontStyle = FontStyles.Bold;
+        cardTitleTMP.color     = new Color(0.95f, 0.78f, 0.10f);
+        cardTitleTMP.alignment = TextAlignmentOptions.Center;
+        var cardTitleRT = cardTitleGO.GetComponent<RectTransform>();
+        cardTitleRT.anchorMin = new Vector2(0f,1f); cardTitleRT.anchorMax = new Vector2(1f,1f);
+        cardTitleRT.pivot = new Vector2(0.5f,1f);
+        cardTitleRT.anchoredPosition = new Vector2(0f,-20f);
+        cardTitleRT.sizeDelta = new Vector2(0f, 50f);
+
+        var cardStatusGO = new GameObject("CardStatus");
+        cardStatusGO.transform.SetParent(cardPanelGO.transform, false);
+        var cardStatusTMP = cardStatusGO.AddComponent<TextMeshProUGUI>();
+        cardStatusTMP.text      = "Zugangskarte am Leser scannen…";
+        cardStatusTMP.fontSize  = 22f;
+        cardStatusTMP.color     = new Color(0.90f, 0.90f, 0.92f);
+        cardStatusTMP.alignment = TextAlignmentOptions.Center;
+        var cardStatusRT = cardStatusGO.GetComponent<RectTransform>();
+        cardStatusRT.anchorMin = new Vector2(0f, 0f); cardStatusRT.anchorMax = new Vector2(1f, 1f);
+        cardStatusRT.offsetMin = new Vector2(20f, 20f); cardStatusRT.offsetMax = new Vector2(-20f, -80f);
+
         // ── Heat Panel ────────────────────────────────────────────────────────
         var heatPanelGO = UiPanel("HeatPanel", canvasGO.transform,
             new Vector2(0.5f,0.5f), new Vector2(0.5f,0.5f),
@@ -584,6 +616,8 @@ public class BuildLevel6FinalGate : LevelBuilderBase
             gateTrigger?.GetComponent<DustyWallSpot>();
         l6so.FindProperty("interactionPrompt").objectReferenceValue = promptGO;
         l6so.FindProperty("gateBarsGO").objectReferenceValue        = gateBarsGO;
+        l6so.FindProperty("cardPanel").objectReferenceValue         = cardPanelGO;
+        l6so.FindProperty("cardStatusText").objectReferenceValue    = cardStatusTMP;
         l6so.FindProperty("heatPanel").objectReferenceValue         = heatPanelGO;
         l6so.FindProperty("temperatureBar").objectReferenceValue    = slider;
         l6so.FindProperty("temperatureLabel").objectReferenceValue  = tempLabelTMP;

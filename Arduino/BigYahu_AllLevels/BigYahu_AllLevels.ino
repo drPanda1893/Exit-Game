@@ -46,8 +46,22 @@
 LiquidCrystal_I2C lcd(0x27, 16, 2);   // 16x2-Modul; Adresse 0x27 (manche 0x3F)
 bool lcdReady = false;
 
+// ── RFID (MFRC522, SPI: SS=10, RST=9) ──────────────────────────────────────
+// Benoetigt Library "MFRC522" (Miguel Balboa) im Library-Manager.
+// Pin 9 wird hier wieder von der Keypad-Spalte uebernommen; in Level 6 ist das
+// Keypad eh aus, sodass es keine Kollision gibt.
+#include <SPI.h>
+#include <MFRC522.h>
+#define RFID_RST_PIN 9
+#define RFID_SS_PIN  10
+MFRC522 mfrc522(RFID_SS_PIN, RFID_RST_PIN);
+bool rfidInitialized = false;
+
 // ── Level-State ────────────────────────────────────────────────────────────
-enum Level : uint8_t { LV_NONE = 0, LV_KEYPAD = 1, LV_TEMP = 2, LV_COLOR = 3, LV_JOYSTICK = 4 };
+enum Level : uint8_t {
+  LV_NONE = 0, LV_KEYPAD = 1, LV_TEMP = 2, LV_COLOR = 3, LV_JOYSTICK = 4,
+  LV_RFID = 5
+};
 Level currentLevel = LV_NONE;
 
 // Vom Farbsensor (Level 3) erkannte Farbe. MUSS hier oben stehen: die Arduino-IDE
@@ -152,6 +166,7 @@ void loop() {
     case LV_TEMP:     tickTemp();     break;
     case LV_COLOR:    tickColor();    break;
     case LV_JOYSTICK: tickJoystick(); break;
+    case LV_RFID:     tickRfid();     break;
     case LV_NONE:     default:        break;  // bewusst still
   }
 }
@@ -168,6 +183,7 @@ void setLevel(Level newLevel) {
   if (currentLevel == LV_TEMP)     resetTempState();
   if (currentLevel == LV_COLOR)    resetColorState();
   if (currentLevel == LV_JOYSTICK) resetJoystickState();
+  if (currentLevel == LV_RFID)     resetRfidState();
 
   currentLevel = newLevel;
 
@@ -176,6 +192,7 @@ void setLevel(Level newLevel) {
   if (currentLevel == LV_TEMP)     resetTempState();
   if (currentLevel == LV_COLOR)    initColorSensor();
   if (currentLevel == LV_JOYSTICK) initJoystick();
+  if (currentLevel == LV_RFID)     initRfid();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -221,6 +238,11 @@ void handleCommand(const String& raw) {
   if (cmd == "20:STOP")  { if (currentLevel == LV_COLOR)    setLevel(LV_NONE); Serial.println("20:stopped"); return; }
   if (cmd == "30:START") { setLevel(LV_JOYSTICK); Serial.println("30:ready"); return; }
   if (cmd == "30:STOP")  { if (currentLevel == LV_JOYSTICK) setLevel(LV_NONE); Serial.println("30:stopped"); return; }
+
+  // Level 6 – RFID-Zugangskarte: 80:START aktiviert den Reader,
+  //                              80:STOP  schaltet ihn wieder aus.
+  if (cmd == "80:START") { setLevel(LV_RFID); Serial.println("80:ready"); return; }
+  if (cmd == "80:STOP")  { if (currentLevel == LV_RFID) setLevel(LV_NONE); Serial.println("80:stopped"); return; }
 
   if (cmd == "FF:PING")  { Serial.println("FF:pong"); return; }
 }
@@ -603,4 +625,90 @@ void tickJoystick() {
   Serial.print(ny, 2);
   Serial.print(',');
   Serial.println(btn);
+}
+// ═══════════════════════════════════════════════════════════════════════════
+// Level 6 – RFID-Zugangskarte (MFRC522)
+//
+// Antworten an Unity ueber Command-ID 0x80:
+//   80:OK           gueltige Karte erkannt (MEDDLER CARD)
+//   80:DENIED:<txt> falsche Karte – <txt> ist die ersten 16 Bytes aus Block 4
+//   80:ERROR:<msg>  Auth- oder Lesefehler
+// ═══════════════════════════════════════════════════════════════════════════
+
+unsigned long rfidLastScanMs = 0;
+const unsigned long RFID_SCAN_COOLDOWN_MS = 1000;   // wie im User-Skript
+const byte BLOCK_FOR_RFID = 4;                       // Block 4 – tuned zur Karte
+
+void initRfid() {
+  if (!rfidInitialized) {
+    SPI.begin();
+    mfrc522.PCD_Init();
+    rfidInitialized = true;
+  }
+  // Bei Wiedereintritt einen sauberen Antennen-Reset machen, damit alte
+  // ausgelesene Karten-Sessions nicht haengenbleiben.
+  mfrc522.PCD_AntennaOff();
+  delay(50);
+  mfrc522.PCD_AntennaOn();
+  rfidLastScanMs = 0;
+}
+
+void resetRfidState() {
+  if (!rfidInitialized) return;
+  mfrc522.PICC_HaltA();
+  mfrc522.PCD_StopCrypto1();
+}
+
+void tickRfid() {
+  // Throttle: nach jeder erkannten Karte 1 s Pause, damit Unity die Antwort
+  // verarbeiten kann (entspricht dem delay(1000) im User-Standalone-Sketch).
+  unsigned long now = millis();
+  if (now - rfidLastScanMs < RFID_SCAN_COOLDOWN_MS && rfidLastScanMs != 0) return;
+
+  // Karten-Suche – exakt wie im uebernommenen User-Skript.
+  if (!mfrc522.PICC_IsNewCardPresent() || !mfrc522.PICC_ReadCardSerial()) return;
+  rfidLastScanMs = now;
+
+  MFRC522::MIFARE_Key key;
+  for (byte i = 0; i < 6; i++) key.keyByte[i] = 0xFF;
+
+  byte buffer[18];
+  byte size = sizeof(buffer);
+  MFRC522::StatusCode status;
+
+  // 1. Authentifizierung
+  status = mfrc522.PCD_Authenticate(
+      MFRC522::PICC_CMD_MF_AUTH_KEY_A, BLOCK_FOR_RFID, &key, &(mfrc522.uid));
+  if (status != MFRC522::STATUS_OK) {
+    Serial.println("80:ERROR:auth");
+    rfidEndSession();
+    return;
+  }
+
+  // 2. Block auslesen
+  status = mfrc522.MIFARE_Read(BLOCK_FOR_RFID, buffer, &size);
+  if (status == MFRC522::STATUS_OK) {
+    // Buffer null-terminieren, damit strstr nicht ueber das Ende laeuft.
+    buffer[16] = 0;
+    if (strstr((char*)buffer, "MEDDLER") != NULL) {
+      Serial.println("80:OK");
+    } else {
+      Serial.print("80:DENIED:");
+      for (uint8_t i = 0; i < 16; i++) {
+        char c = (char)buffer[i];
+        if (c >= 32 && c < 127) Serial.write(c);
+        else                    Serial.write('?');
+      }
+      Serial.println();
+    }
+  } else {
+    Serial.println("80:ERROR:read");
+  }
+
+  rfidEndSession();
+}
+
+void rfidEndSession() {
+  mfrc522.PICC_HaltA();
+  mfrc522.PCD_StopCrypto1();
 }
