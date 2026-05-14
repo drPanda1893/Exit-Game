@@ -428,42 +428,42 @@ public class BuildLevel5Workshop : EditorWindow
         var flameMat  = Emit(new Color(1.0f, 0.55f, 0.10f),
                              new Color(1.0f, 0.65f, 0.15f), 2.5f);
 
-        // Werkbank an der Rückwand
+        // Werkbank an der Rückwand des Schuppens (Inneres: z ≈ 4..9)
+        // Box() setzt Weltpositionen, daher alle z-Coords um 8.4 (Bench-Weltpos) versetzen.
+        const float bz = 8.4f;
+
         var bench = new GameObject("Workbench");
         bench.transform.SetParent(root);
-        bench.transform.position = new Vector3(0f, 0f, 8.4f);
+        bench.transform.position = new Vector3(0f, 0f, bz);
 
-        Box("BenchTop",   new Vector3(0f, 0.85f, 0f),  new Vector3(3.0f, 0.10f, 0.9f), woodMid,  bench.transform);
-        Box("BenchLegFL", new Vector3(-1.3f, 0.45f, -0.35f), new Vector3(0.10f, 0.85f, 0.10f), woodDark, bench.transform);
-        Box("BenchLegFR", new Vector3( 1.3f, 0.45f, -0.35f), new Vector3(0.10f, 0.85f, 0.10f), woodDark, bench.transform);
-        Box("BenchLegBL", new Vector3(-1.3f, 0.45f,  0.35f), new Vector3(0.10f, 0.85f, 0.10f), woodDark, bench.transform);
-        Box("BenchLegBR", new Vector3( 1.3f, 0.45f,  0.35f), new Vector3(0.10f, 0.85f, 0.10f), woodDark, bench.transform);
+        Box("BenchTop",   new Vector3(0f,   0.85f, bz       ), new Vector3(3.0f, 0.10f, 0.9f), woodMid,  bench.transform);
+        Box("BenchLegFL", new Vector3(-1.3f, 0.45f, bz - 0.35f), new Vector3(0.10f, 0.85f, 0.10f), woodDark, bench.transform);
+        Box("BenchLegFR", new Vector3( 1.3f, 0.45f, bz - 0.35f), new Vector3(0.10f, 0.85f, 0.10f), woodDark, bench.transform);
+        Box("BenchLegBL", new Vector3(-1.3f, 0.45f, bz + 0.35f), new Vector3(0.10f, 0.85f, 0.10f), woodDark, bench.transform);
+        Box("BenchLegBR", new Vector3( 1.3f, 0.45f, bz + 0.35f), new Vector3(0.10f, 0.85f, 0.10f), woodDark, bench.transform);
 
         // Werkzeug-Deko links auf der Bank
-        Box("Hammer",      new Vector3(-0.9f, 0.92f, -0.05f), new Vector3(0.32f, 0.05f, 0.08f), metal, bench.transform, col: false);
-        Box("Wrench",      new Vector3(-1.0f, 0.93f,  0.20f), new Vector3(0.45f, 0.04f, 0.06f), metal, bench.transform, col: false);
-        Box("Screwdriver", new Vector3(-0.5f, 0.92f,  0.30f), new Vector3(0.25f, 0.03f, 0.03f), brass, bench.transform, col: false);
+        Box("Hammer",      new Vector3(-0.9f, 0.92f, bz - 0.05f), new Vector3(0.32f, 0.05f, 0.08f), metal, bench.transform, col: false);
+        Box("Wrench",      new Vector3(-1.0f, 0.93f, bz + 0.20f), new Vector3(0.45f, 0.04f, 0.06f), metal, bench.transform, col: false);
+        Box("Screwdriver", new Vector3(-0.5f, 0.92f, bz + 0.30f), new Vector3(0.25f, 0.03f, 0.03f), brass, bench.transform, col: false);
 
         // ── BUNSENBRENNER ──────────────────────────────────────────────────
-        Vector3 brennerPos = new Vector3(0.5f, 0.92f, 0f);
+        // Weltposition des Brenners auf der Werkbank
+        Vector3 brennerPos = new Vector3(0.5f, 0.92f, bz);
         var brenner = new GameObject("BunsenBrenner");
         brenner.transform.SetParent(bench.transform);
         brenner.transform.position = brennerPos;
 
-        // Fuß (breit, niedrig)
-        Cyl("Foot",   new Vector3(0f, 0.03f, 0f),  new Vector3(0.18f, 0.025f, 0.18f),
+        float bwx = brennerPos.x, bwy = brennerPos.y, bwz = brennerPos.z;
+        Cyl("Foot",    new Vector3(bwx, bwy + 0.03f, bwz), new Vector3(0.18f, 0.025f, 0.18f),
             metal, brenner.transform, rot: Quaternion.identity, col: false);
-        // Rohr (vertikal)
-        Cyl("Tube",   new Vector3(0f, 0.27f, 0f),  new Vector3(0.06f, 0.25f, 0.06f),
+        Cyl("Tube",    new Vector3(bwx, bwy + 0.27f, bwz), new Vector3(0.06f, 0.25f,  0.06f),
             metal, brenner.transform, rot: Quaternion.identity, col: false);
-        // Luftregulierung
-        Cyl("AirRing",new Vector3(0f, 0.10f, 0f),  new Vector3(0.08f, 0.02f, 0.08f),
+        Cyl("AirRing", new Vector3(bwx, bwy + 0.10f, bwz), new Vector3(0.08f, 0.02f,  0.08f),
             brass, brenner.transform, rot: Quaternion.identity, col: false);
-        // Düse oben
-        Cyl("Nozzle", new Vector3(0f, 0.52f, 0f),  new Vector3(0.05f, 0.03f, 0.05f),
+        Cyl("Nozzle",  new Vector3(bwx, bwy + 0.52f, bwz), new Vector3(0.05f, 0.03f,  0.05f),
             brass, brenner.transform, rot: Quaternion.identity, col: false);
-        // Flamme (dekorativ, leicht emittierend)
-        Cyl("Flame",  new Vector3(0f, 0.70f, 0f),  new Vector3(0.05f, 0.12f, 0.05f),
+        Cyl("Flame",   new Vector3(bwx, bwy + 0.70f, bwz), new Vector3(0.05f, 0.12f,  0.05f),
             flameMat, brenner.transform, rot: Quaternion.identity, col: false);
 
         // Glow-Spot leuchtet den Brenner an, sobald die Tür offen ist
@@ -480,7 +480,7 @@ public class BuildLevel5Workshop : EditorWindow
 
         // Werkzeugwand hinter der Bank
         var pegboard = M(new Color(0.20f, 0.13f, 0.07f), 0.02f, 0.10f);
-        Box("PegBoard", new Vector3(0f, 1.8f, 0.42f), new Vector3(2.8f, 1.0f, 0.05f),
+        Box("PegBoard", new Vector3(0f, 1.8f, bz + 0.42f), new Vector3(2.8f, 1.0f, 0.05f),
             pegboard, bench.transform, col: false);
 
         return new InteriorParts
