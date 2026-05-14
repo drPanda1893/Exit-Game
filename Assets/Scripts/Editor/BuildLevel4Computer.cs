@@ -106,8 +106,9 @@ public class BuildLevel4Computer : EditorWindow
         // BigYahuDialogSystem (Intro-Dialog + Caught-Feedback)
         BuildBigYahuDialog(canvasGO.transform, scene);
 
-        // Hintergrundmusik
-        AddBackgroundMusic(scene);
+        // KEINE Hintergrundmusik mehr in Level 4 erzeugen – das BackgroundMusic-
+        // Singleton aus Level 1 laeuft per DontDestroyOnLoad sowieso schon weiter.
+        // Eine zweite Instanz hier hat den Sound verdoppelt.
 
         EditorSceneManager.SaveScene(scene);
         Debug.Log("[Level4] Gefängnishof fertig gebaut.");
@@ -854,8 +855,12 @@ public class BuildLevel4Computer : EditorWindow
         var clip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Big Yahu/Untitled.mp3");
         if (clip == null) return;
         var go  = new GameObject("BackgroundMusic");
-        var src = go.gameObject.AddComponent<AudioSource>();
+        var src = go.AddComponent<AudioSource>();
         src.clip = clip; src.loop = true; src.playOnAwake = true; src.volume = 0.5f;
+        // WICHTIG: BackgroundMusic-Komponente macht das GO zum DontDestroyOnLoad-
+        // Singleton. Ohne sie spielte hier eine zweite Instanz parallel zum
+        // bereits laufenden Singleton aus Level 1 → doppelte Musik.
+        go.AddComponent<BackgroundMusic>();
         SceneManager.MoveGameObjectToScene(go, scene);
     }
 

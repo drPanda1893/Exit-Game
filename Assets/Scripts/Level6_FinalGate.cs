@@ -95,13 +95,8 @@ public class Level6_FinalGate : MonoBehaviour
             arduinoSubscribed = true;
         }
 
-        if (BigYahuDialogSystem.Instance)
-            BigYahuDialogSystem.Instance.ShowDialog(new[]
-            {
-                "Big Yahu: Das ist es – das letzte Tor. Dahinter liegt die Freiheit!",
-                "Big Yahu: Ich hab den Bunsenbrenner aus der Werkstatt dabei …",
-                "Big Yahu: Halt die Flamme an den Sensor – ab 40 °C schmilzt das Schloss!"
-            });
+        // Intro-Dialog mit Hinweisen zum Bunsenbrenner/Schloss-Erhitzen entfernt –
+        // der Spieler soll die Mechanik selbst entdecken.
     }
 
     void OnDisable()
@@ -254,9 +249,6 @@ public class Level6_FinalGate : MonoBehaviour
         float delta = isHeating ? heatSpeed : -coolSpeed;
         temperatureBar.value = Mathf.Clamp01(temperatureBar.value + delta * Time.deltaTime);
 
-        float pct = temperatureBar.value * 100f;
-        if (temperatureLabel) temperatureLabel.text = $"{Mathf.RoundToInt(pct)} %";
-
         if (temperatureBar.fillRect)
         {
             var fill = temperatureBar.fillRect.GetComponent<Image>();
@@ -266,31 +258,10 @@ public class Level6_FinalGate : MonoBehaviour
                 temperatureBar.value);
         }
 
-        if (statusText)
-        {
-            // Live-Temperatur immer anzeigen, sobald ein frischer Sensor-Wert vorliegt –
-            // auch unterhalb der 40-Grad-Schwelle. Brennt der Brenner aktiv, wird der
-            // Wert hervorgehoben.
-            bool freshTemp = arduinoConnected
-                          && (Time.time - arduinoLastUpdateTime) <= arduinoTimeoutSec;
-            string src = freshTemp
-                       ? (arduinoHeating
-                            ? $"[BRENNER  {arduinoLastTempC:F1}°C]"
-                            : $"[SENSOR  {arduinoLastTempC:F1}°C]")
-                       : holding ? "[FALLBACK]" : string.Empty;
-
-            string phase =
-                  pct <  1f  ? string.Empty
-                : pct < 35f  ? "Das Metall wird warm…"
-                : pct < 65f  ? "Das Schloss glüht!"
-                : pct < 90f  ? "FAST! Nicht aufhören!"
-                : pct < 100f ? "JETZT! KURZ VOR DEM DURCHBRUCH!"
-                : string.Empty;
-
-            statusText.text = (src.Length > 0 && phase.Length > 0)
-                ? $"{src}  {phase}"
-                : phase + src;
-        }
+        // Temperatur-Anzeige (Prozent + Sensor-Wert) komplett entfernt –
+        // nur noch der reine Balken zeigt den Fortschritt.
+        if (temperatureLabel) temperatureLabel.text = string.Empty;
+        if (statusText)       statusText.text       = string.Empty;
 
         if (temperatureBar.value >= 1f && !won)
             StartCoroutine(Win());
@@ -354,18 +325,23 @@ public class Level6_FinalGate : MonoBehaviour
         // Kurzer Moment, den Blick in die Freiheit genießen lassen
         yield return new WaitForSeconds(1.2f);
 
+        // Win-Screen erst NACH dem Schluss-Dialog mit Rene Redo zeigen.
+        // Hier nur den Freiheits-Dialog von Big Yahu spielen – ShowWinScreen()
+        // wird von ReneRedoInteraction aufgerufen, sobald Rene fertig gesprochen hat.
         if (BigYahuDialogSystem.Instance)
             BigYahuDialogSystem.Instance.ShowDialog(new[]
             {
                 "Big Yahu: Das Tor ist offen … ich kann die Wiese riechen!",
                 "Big Yahu: WIR SIND FREI!!!",
-                "Big Yahu: Du warst der beste Komplize den man sich wünschen kann. Danke!"
-            }, ShowWinScreen);
-        else
-            ShowWinScreen();
+                "Big Yahu: Da vorne steht jemand … sprich mit ihm."
+            });
     }
 
-    void ShowWinScreen()
+    /// <summary>
+    /// Vom Schluss-NPC (Rene Redo) aufgerufen, nachdem sein Dialog beendet ist.
+    /// Stoppt den Timer und blendet den Win-Screen ein.
+    /// </summary>
+    public void ShowWinScreen()
     {
         GameManager.Instance?.StopTimer();
         if (timerText && GameManager.Instance != null)

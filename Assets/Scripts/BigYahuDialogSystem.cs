@@ -317,4 +317,20 @@ public class BigYahuDialogSystem : MonoBehaviour
         onComplete?.Invoke();
         onComplete = null;
     }
+
+    /// <summary>
+    /// Forciert das Schliessen des Dialogs ohne den onComplete-Callback aufzurufen.
+    /// Nuetzlich, wenn ein anderer Trigger (z. B. Rene Redos Cinematic) das Panel
+    /// abrupt verstecken will – egal wie viele Zeilen noch in der Queue stehen.
+    /// </summary>
+    public void HideDialog()
+    {
+        if (typingCoroutine != null) StopCoroutine(typingCoroutine);
+        typingCoroutine = null;
+        isTyping = false;
+        queue.Clear();
+        onComplete = null;
+        if (audioSource && audioSource.isPlaying) audioSource.Stop();
+        if (dialogPanel) dialogPanel.SetActive(false);
+    }
 }

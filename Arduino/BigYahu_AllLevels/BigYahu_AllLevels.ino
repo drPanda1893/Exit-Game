@@ -39,6 +39,13 @@
  *   FF:pong                Antwort auf FF:ping
  */
 
+// ── LCD (I2C: SDA=A4, SCL=A5) ──────────────────────────────────────────────
+// Benoetigt Library "LiquidCrystal I2C" (Frank de Brabander) im Library-Manager.
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+LiquidCrystal_I2C lcd(0x27, 16, 2);   // 16x2-Modul; Adresse 0x27 (manche 0x3F)
+bool lcdReady = false;
+
 // ── Level-State ────────────────────────────────────────────────────────────
 enum Level : uint8_t { LV_NONE = 0, LV_KEYPAD = 1, LV_TEMP = 2, LV_COLOR = 3, LV_JOYSTICK = 4 };
 Level currentLevel = LV_NONE;
@@ -95,7 +102,46 @@ void setup() {
   Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
   silenceKeypad();
+  initLcd();
   Serial.println("FF:ready");
+}
+
+// ── LCD-Hilfsfunktionen ────────────────────────────────────────────────────
+void initLcd() {
+  Wire.begin();              // A4=SDA, A5=SCL (UNO/Nano-Standard)
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("   Spielzeit:");
+  lcd.setCursor(0, 1);
+  lcd.print("      00:00");
+  lcdReady = true;
+}
+
+// Schreibt 'text' aufs 16x2-LCD. Erkennt '|' als Zeilen-Separator und schreibt
+// den linken Teil auf Zeile 0, den rechten auf Zeile 1. Beide Zeilen werden
+// zentriert. Ohne '|' geht der ganze String zentriert auf Zeile 0.
+void lcdShow(const String& text) {
+  if (!lcdReady) return;
+  int sep = text.indexOf('|');
+  String line0 = (sep >= 0) ? text.substring(0, sep) : text;
+  String line1 = (sep >= 0) ? text.substring(sep + 1) : String("");
+  lcdWriteLine(0, line0);
+  lcdWriteLine(1, line1);
+}
+
+void lcdWriteLine(uint8_t row, const String& text) {
+  int len = text.length();
+  if (len > 16) len = 16;
+  int col = (16 - len) / 2;
+
+  // Erst die ganze Zeile mit Leerzeichen leeren, dann zentriert ueberschreiben.
+  lcd.setCursor(0, row);
+  for (int i = 0; i < 16; i++) lcd.print(' ');
+  if (len <= 0) return;
+  lcd.setCursor(col, row);
+  for (int i = 0; i < len; i++) lcd.print(text[i]);
 }
 
 void loop() {
@@ -154,6 +200,10 @@ void handleSerial() {
 void handleCommand(const String& raw) {
   String cmd = raw;
   cmd.toUpperCase();
+
+  // LCD-Update von Unity: "70:<text>" – kommt mehrmals pro Spiel,
+  // wir halten den Pfad bewusst kurz und ohne weiteres Parsing.
+  if (cmd.startsWith("70:")) { lcdShow(raw.substring(3)); return; }
 
   // Explizite Level-Auswahl
   if      (cmd == "LV:0") { setLevel(LV_NONE);     return; }

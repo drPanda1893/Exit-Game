@@ -29,11 +29,26 @@ public class GameManager : MonoBehaviour
     private float startRealTime = -1f;
     private float elapsedAtWin  = -1f;
 
-    public float ElapsedSeconds =>
-        elapsedAtWin >= 0 ? elapsedAtWin :
-        startRealTime >= 0 ? Time.realtimeSinceStartup - startRealTime : 0f;
+    public float ElapsedSeconds
+    {
+        get
+        {
+            if (GameTimerLcd.Instance != null) return GameTimerLcd.Instance.ElapsedSeconds;
+            if (elapsedAtWin >= 0) return elapsedAtWin;
+            return startRealTime >= 0 ? Time.realtimeSinceStartup - startRealTime : 0f;
+        }
+    }
 
-    public void StopTimer() { if (elapsedAtWin < 0) elapsedAtWin = ElapsedSeconds; }
+    public void StopTimer()
+    {
+        if (elapsedAtWin < 0) elapsedAtWin = ElapsedSeconds;
+        GameTimerLcd.Instance?.Stop();
+    }
+
+    void EnsureTimerComponent()
+    {
+        if (GameTimerLcd.Instance == null) gameObject.AddComponent<GameTimerLcd>();
+    }
 
     bool PanelMode => levelPanels != null && levelPanels.Length > 0;
 
@@ -45,6 +60,7 @@ public class GameManager : MonoBehaviour
         Instance = this;
         DontDestroyOnLoad(gameObject);
         SceneManager.sceneLoaded += OnSceneLoaded;
+        EnsureTimerComponent();
     }
 
     void OnDestroy()
@@ -70,7 +86,13 @@ public class GameManager : MonoBehaviour
             if (levelSceneNames[i] == scene.name)
             {
                 CurrentLevel = i + 1;
-                if (CurrentLevel == 1) { startRealTime = Time.realtimeSinceStartup; elapsedAtWin = -1f; }
+                if (CurrentLevel == 1)
+                {
+                    startRealTime = Time.realtimeSinceStartup;
+                    elapsedAtWin  = -1f;
+                    EnsureTimerComponent();
+                    GameTimerLcd.Instance?.Begin();
+                }
                 OnLevelLoaded?.Invoke(CurrentLevel);
                 Debug.Log($"[GameManager] Szene '{scene.name}' → Level {CurrentLevel}");
                 return;
@@ -118,5 +140,11 @@ public class GameManager : MonoBehaviour
 
     public void CompleteCurrentLevel() => LoadLevel(CurrentLevel + 1);
 
-    public void RestartGame() { startRealTime = -1f; elapsedAtWin = -1f; LoadLevel(1); }
+    public void RestartGame()
+    {
+        startRealTime = -1f;
+        elapsedAtWin  = -1f;
+        GameTimerLcd.Instance?.ResetTimer();
+        LoadLevel(1);
+    }
 }

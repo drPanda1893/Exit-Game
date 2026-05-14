@@ -8,6 +8,15 @@ using UnityEngine;
 public class BackgroundMusic : MonoBehaviour
 {
     private static BackgroundMusic instance;
+    public static BackgroundMusic Instance => instance;
+
+    public AudioSource Source => GetComponent<AudioSource>();
+
+    public static void StopAll()
+    {
+        if (instance != null && instance.Source != null && instance.Source.isPlaying)
+            instance.Source.Stop();
+    }
 
     void Awake()
     {

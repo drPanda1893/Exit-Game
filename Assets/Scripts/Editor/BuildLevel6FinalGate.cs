@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEditor;
+using UnityEditor.Animations;
 using UnityEditor.SceneManagement;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -105,6 +106,10 @@ public class BuildLevel6FinalGate : LevelBuilderBase
 
         // ── Gate-Trigger ──────────────────────────────────────────────────────
         var gateTrigger = BuildGateTrigger(root.transform);
+
+        // ── Rene Redo (Freiheit hinter dem Tor) ───────────────────────────────
+        var reneHintGO = BuildReneHintUI(scene);
+        BuildReneRedo(root.transform, scene, reneHintGO);
 
         // ── Hintergrundmusik ──────────────────────────────────────────────────
         AddBackgroundMusic(scene);
@@ -413,7 +418,7 @@ public class BuildLevel6FinalGate : LevelBuilderBase
             new Vector2(0f,80f), new Vector2(460f,60f),
             new Vector2(0.5f,0f), new Color(0f,0f,0f,0.72f));
         promptGO.SetActive(false);
-        AddPromptText(promptGO.transform, "[E]  Bunsenbrenner ans Schloss halten");
+        AddPromptText(promptGO.transform, "[E]  Tor untersuchen");
 
         // ── Heat Panel ────────────────────────────────────────────────────────
         var heatPanelGO = UiPanel("HeatPanel", canvasGO.transform,
@@ -426,7 +431,7 @@ public class BuildLevel6FinalGate : LevelBuilderBase
         var hpTitle = new GameObject("Title");
         hpTitle.transform.SetParent(heatPanelGO.transform, false);
         var hpTitleTMP = hpTitle.AddComponent<TextMeshProUGUI>();
-        hpTitleTMP.text      = "SCHLOSS ERHITZEN";
+        hpTitleTMP.text      = "Wie bekomme ich dieses Schloss auf?";
         hpTitleTMP.fontSize  = 30f;
         hpTitleTMP.fontStyle = FontStyles.Bold;
         hpTitleTMP.color     = new Color(1f, 0.65f, 0.10f);
@@ -441,8 +446,7 @@ public class BuildLevel6FinalGate : LevelBuilderBase
         var instrGO = new GameObject("Instruction");
         instrGO.transform.SetParent(heatPanelGO.transform, false);
         var instrTMP = instrGO.AddComponent<TextMeshProUGUI>();
-        instrTMP.text      = "Föhn vor den Temperatursensor halten\n" +
-                             "<size=18><color=#888888>oder: Brenner-Button gedrückt halten</color></size>";
+        instrTMP.text      = string.Empty;
         instrTMP.fontSize  = 22f;
         instrTMP.color     = new Color(0.85f, 0.85f, 0.85f);
         instrTMP.alignment = TextAlignmentOptions.Center;
@@ -674,6 +678,466 @@ public class BuildLevel6FinalGate : LevelBuilderBase
         rt.anchoredPosition = anchoredPos; rt.sizeDelta = sizeDelta;
         return go;
     }
+
+    // =========================================================================
+    // Rene Redo – Schluss-NPC in der Freiheit
+    // =========================================================================
+
+    void BuildReneRedo(Transform envRoot, Scene scene, GameObject hintGO)
+    {
+        const string fbxPath = "Assets/Big Yahu/Rene Redo/Materials/Untitled@Talking.fbx";
+
+        // FBX auf Generic – sonst kein Skinned-Mesh-Renderer im Editor
+        var modelImp = AssetImporter.GetAtPath(fbxPath) as ModelImporter;
+        if (modelImp != null && modelImp.animationType != ModelImporterAnimationType.Generic)
+        {
+            modelImp.animationType = ModelImporterAnimationType.Generic;
+            modelImp.SaveAndReimport();
+        }
+
+        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
+        GameObject rene;
+        if (prefab != null)
+        {
+            rene = Object.Instantiate(prefab);
+            rene.name = "ReneRedo";
+        }
+        else
+        {
+            rene = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            rene.name = "ReneRedo";
+            Debug.LogWarning("[Level6] 'Talking.fbx' nicht gefunden – Capsule als Platzhalter.");
+        }
+        rene.transform.SetParent(envRoot, false);
+
+        foreach (Transform t in rene.GetComponentsInChildren<Transform>(true))
+            t.gameObject.SetActive(true);
+        foreach (var r in rene.GetComponentsInChildren<Renderer>(true))
+            r.enabled = true;
+
+        // Skinned-Mesh-Renderer cullen sonst gerne weg, wenn die Bone-Bounds
+        // nach Scale/Position nicht mehr passen. Damit ist Rene IMMER sichtbar.
+        foreach (var smr in rene.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+        {
+            smr.updateWhenOffscreen = true;
+            smr.localBounds = new Bounds(Vector3.zero, new Vector3(2f, 2f, 2f));
+        }
+
+        // Skalierung auf ~1.7 m (wie Big Yahu)
+        var rens = rene.GetComponentsInChildren<Renderer>(true);
+        float modelH = 1.7f;
+        if (rens.Length > 0)
+        {
+            var b = rens[0].bounds;
+            foreach (var r in rens) b.Encapsulate(r.bounds);
+            if (b.size.y > 0.01f) modelH = b.size.y;
+        }
+        float scale = 1.7f / modelH;
+        rene.transform.localScale = Vector3.one * scale;
+
+        // Füße auf den Boden, in die Mitte des Wegs hinter dem Tor
+        rens = rene.GetComponentsInChildren<Renderer>(true);
+        float groundY = 0f;
+        if (rens.Length > 0)
+        {
+            var b2 = rens[0].bounds;
+            foreach (var r in rens) b2.Encapsulate(r.bounds);
+            if (b2.min.y < 0f) groundY = -b2.min.y;
+        }
+        rene.transform.position = new Vector3(0f, groundY, 12f);
+        // Rene steht mit dem RUECKEN zum Tor – sein Gesicht zeigt also in die
+        // Freiheit (+Z). Cinematic-Kamera bleibt entsprechend in der Wiese hinter
+        // ihm und schaut zurueck Richtung Tor (FaceAnchor.forward = +Z).
+        //
+        // Die FBX hat den Koerper intern leicht nach rechts gedreht – wir
+        // korrigieren das mit einer kleinen Y-Drehung, damit er frontal in
+        // die Kamera spricht und sein Ruecken parallel zum Tor steht.
+        const float reneYawCorrection = 20f;
+        rene.transform.rotation = Quaternion.Euler(0f, reneYawCorrection, 0f);
+
+        // Materialien: das beim FBX-Import auto-extrahierte 'DefaultMaterial.mat' im
+        // Unterordner ist initial leer (keine Texturen). Wir bestuecken es einmal
+        // mit den Tripo-Maps – damit bleibt die FBX-Referenz erhalten und Rene
+        // hat von da an die richtigen Farben. Notfalls: Override per Fallback-Mat.
+        PopulateReneFbxMaterial();
+
+        bool anyStillEmpty = false;
+        foreach (var r in rene.GetComponentsInChildren<Renderer>(true))
+        {
+            var sm = r.sharedMaterial;
+            if (sm == null || !sm.HasProperty("_MainTex") || sm.mainTexture == null)
+            { anyStillEmpty = true; break; }
+        }
+
+        if (anyStillEmpty)
+        {
+            Debug.Log("[Level6] Rene-Material noch ohne Albedo – schreibe Fallback-Material.");
+            var mat = CreateReneRedoMaterial();
+            const string matSavePath = "Assets/Big Yahu/Rene Redo/ReneRedo_Runtime.mat";
+            if (AssetDatabase.LoadAssetAtPath<Material>(matSavePath) != null)
+                AssetDatabase.DeleteAsset(matSavePath);
+            AssetDatabase.CreateAsset(mat, matSavePath);
+            AssetDatabase.SaveAssets();
+            mat = AssetDatabase.LoadAssetAtPath<Material>(matSavePath);
+            foreach (var r in rene.GetComponentsInChildren<Renderer>(true))
+                r.sharedMaterial = mat;
+        }
+        else
+        {
+            Debug.Log("[Level6] Rene-DefaultMaterial mit Tripo-Texturen bestueckt.");
+        }
+
+        // Animation Loop
+        SetupReneAnimation(rene, fbxPath);
+
+        // Warmes Spotlight auf Rene
+        var spotGO = new GameObject("ReneSpot");
+        spotGO.transform.SetParent(envRoot);
+        spotGO.transform.position = new Vector3(0f, 4.5f, 12f);
+        var spot = spotGO.AddComponent<Light>();
+        spot.type      = LightType.Spot;
+        spot.color     = new Color(1.00f, 0.92f, 0.70f);
+        spot.intensity = 2.2f;
+        spot.range     = 7f;
+        spot.spotAngle = 45f;
+        spot.shadows   = LightShadows.Soft;
+        spotGO.transform.LookAt(rene.transform.position + Vector3.up * 1.0f);
+
+        // Face-Anchor: leeres Child von Rene auf Kopfhoehe. Welt-Forward wird
+        // FIX auf +Z gesetzt – Rene schaut in die Freiheit, Kamera steht
+        // hinter ihm in der Wiese und schaut zurueck Richtung Tor.
+        var faceAnchorGO = new GameObject("FaceAnchor");
+        faceAnchorGO.transform.SetParent(rene.transform, false);
+        faceAnchorGO.transform.localPosition = new Vector3(0f, 1.55f / scale, 0f);
+        faceAnchorGO.transform.rotation = Quaternion.LookRotation(Vector3.forward, Vector3.up);
+
+        // Trigger + Interaction
+        var interGO = new GameObject("ReneRedoInteraction");
+        interGO.transform.SetParent(envRoot);
+        interGO.transform.position = new Vector3(0f, 1.0f, 12f);
+        var col = interGO.AddComponent<BoxCollider>();
+        col.isTrigger = true;
+        col.size = new Vector3(3.0f, 2.2f, 3.0f);
+
+        // AudioSource fuer Renes Stimme
+        var src = interGO.AddComponent<AudioSource>();
+        src.playOnAwake = false;
+        src.loop        = false;
+        src.spatialBlend = 0f;
+        src.volume       = 1f;
+
+        const string voicePath = "Assets/Big Yahu/Rene Redo/Rene Redo Dialog.mp3";
+        var voiceClip = AssetDatabase.LoadAssetAtPath<AudioClip>(voicePath);
+        if (voiceClip == null)
+            Debug.LogWarning($"[Level6] Voice-Clip '{voicePath}' nicht gefunden – Rene wird stumm bleiben.");
+
+        var inter = interGO.AddComponent<ReneRedoInteraction>();
+        var so = new SerializedObject(inter);
+        so.FindProperty("hintGO").objectReferenceValue       = hintGO;
+        so.FindProperty("audioSource").objectReferenceValue  = src;
+        so.FindProperty("voiceClip").objectReferenceValue    = voiceClip;
+        so.FindProperty("faceAnchor").objectReferenceValue   = faceAnchorGO.transform;
+        so.FindProperty("loopCount").intValue                = 1;
+        so.ApplyModifiedPropertiesWithoutUndo();
+
+        Debug.Log("[Level6] Rene Redo in der Freiheit platziert.");
+    }
+
+    void PopulateReneFbxMaterial()
+    {
+        // Beim FBX-Import erstellt Unity 'DefaultMaterial.mat' im Materials-Unterordner.
+        // Slot ist initial leer. Wir bestuecken ihn mit den 4 Tripo-Maps, die jetzt
+        // direkt im gleichen Materials-Ordner liegen.
+        const string matPath   = "Assets/Big Yahu/Rene Redo/Materials/DefaultMaterial.mat";
+        const string texFolder = "Assets/Big Yahu/Rene Redo/Materials/";
+        AssetDatabase.Refresh();
+
+        var mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+        if (mat == null)
+        {
+            Debug.LogWarning("[Level6] " + matPath + " nicht gefunden – ueberspringe Material-Populate.");
+            return;
+        }
+
+        var albedo    = LoadTex(texFolder + "actionfigure3dmodel_basecolor");
+        var normal    = LoadTex(texFolder + "actionfigure3dmodel_normal");
+        var metallic  = LoadTex(texFolder + "actionfigure3dmodel_metallic");
+        var roughness = LoadTex(texFolder + "actionfigure3dmodel_roughness");
+
+        // Albedo
+        if (albedo != null)
+        {
+            EnsureTextureSRGB(albedo, true);
+            mat.mainTexture = albedo;
+            mat.color = Color.white;
+            Debug.Log("[Level6] DefaultMaterial._MainTex → " + AssetDatabase.GetAssetPath(albedo));
+        }
+        else
+        {
+            Debug.LogWarning("[Level6] basecolor.JPEG fehlt in " + texFolder);
+        }
+
+        // Normal
+        if (normal != null)
+        {
+            var npath = AssetDatabase.GetAssetPath(normal);
+            var imp   = AssetImporter.GetAtPath(npath) as TextureImporter;
+            if (imp != null && imp.textureType != TextureImporterType.NormalMap)
+            {
+                imp.textureType = TextureImporterType.NormalMap;
+                imp.SaveAndReimport();
+                normal = AssetDatabase.LoadAssetAtPath<Texture2D>(npath);
+            }
+            mat.SetTexture("_BumpMap", normal);
+            mat.EnableKeyword("_NORMALMAP");
+        }
+
+        // Metallic + Roughness zu einer Unity-konformen MetalGloss-Map kombinieren:
+        // R=metallic, A=smoothness=(1-roughness). Standard-Shader braucht diese Form.
+        if (metallic != null && roughness != null)
+        {
+            const string combinedPath = "Assets/Big Yahu/Rene Redo/Materials/ReneRedo_MetalGloss.png";
+            var combined = BuildMetalGlossTexture(metallic, roughness, combinedPath);
+            if (combined != null)
+            {
+                mat.SetTexture("_MetallicGlossMap", combined);
+                mat.EnableKeyword("_METALLICGLOSSMAP");
+                Debug.Log("[Level6] DefaultMaterial._MetallicGlossMap → " + combinedPath);
+            }
+        }
+        else if (metallic != null)
+        {
+            EnsureTextureSRGB(metallic, false);
+            mat.SetTexture("_MetallicGlossMap", metallic);
+            mat.EnableKeyword("_METALLICGLOSSMAP");
+        }
+
+        mat.SetFloat("_Metallic",     1f);   // Skaliert die R-Werte aus der Map
+        mat.SetFloat("_Glossiness",   1f);   // Skaliert die Alpha-Werte (smoothness) aus der Map
+        mat.SetFloat("_GlossMapScale", 1f);
+
+        EditorUtility.SetDirty(mat);
+        AssetDatabase.SaveAssets();
+    }
+
+    /// <summary>
+    /// Kombiniert eine Tripo-Metallic-JPEG (RGB) mit einer Roughness-JPEG zu
+    /// einer Unity-kompatiblen Metal-Gloss-Map (R=metallic, A=1-roughness).
+    /// Wird als PNG neben den Quell-Texturen abgelegt und importiert.
+    /// </summary>
+    Texture2D BuildMetalGlossTexture(Texture2D metallic, Texture2D roughness, string outPath)
+    {
+        try
+        {
+            // Beide Quellen lesbar machen + linear importieren – nur einmal nötig.
+            string mPath = AssetDatabase.GetAssetPath(metallic);
+            string rPath = AssetDatabase.GetAssetPath(roughness);
+            if (EnsureReadableLinear(mPath)) metallic  = AssetDatabase.LoadAssetAtPath<Texture2D>(mPath);
+            if (EnsureReadableLinear(rPath)) roughness = AssetDatabase.LoadAssetAtPath<Texture2D>(rPath);
+
+            int w = Mathf.Min(metallic.width, roughness.width);
+            int h = Mathf.Min(metallic.height, roughness.height);
+            var mPx = metallic.GetPixels(0, 0, w, h);
+            var rPx = roughness.GetPixels(0, 0, w, h);
+
+            var combined = new Texture2D(w, h, TextureFormat.RGBA32, true, true);
+            var px = new Color[w * h];
+            for (int i = 0; i < px.Length; i++)
+            {
+                float m = mPx[i].r;
+                float rough = rPx[i].r;
+                px[i] = new Color(m, m, m, 1f - rough);
+            }
+            combined.SetPixels(px);
+            combined.Apply(true, false);
+
+            System.IO.File.WriteAllBytes(outPath, combined.EncodeToPNG());
+            AssetDatabase.ImportAsset(outPath, ImportAssetOptions.ForceSynchronousImport);
+
+            var imp = AssetImporter.GetAtPath(outPath) as TextureImporter;
+            if (imp != null)
+            {
+                imp.sRGBTexture = false;
+                imp.alphaSource = TextureImporterAlphaSource.FromInput;
+                imp.SaveAndReimport();
+            }
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(outPath);
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning("[Level6] MetalGloss-Combine fehlgeschlagen: " + ex.Message);
+            return null;
+        }
+    }
+
+    bool EnsureReadableLinear(string path)
+    {
+        var imp = AssetImporter.GetAtPath(path) as TextureImporter;
+        if (imp == null) return false;
+        bool changed = false;
+        if (!imp.isReadable)  { imp.isReadable  = true;  changed = true; }
+        if (imp.sRGBTexture)  { imp.sRGBTexture = false; changed = true; }
+        if (changed) imp.SaveAndReimport();
+        return changed;
+    }
+
+    Material CreateReneRedoMaterial()
+    {
+        const string folder    = "Assets/Big Yahu/Rene Redo/Rene Redo material/";
+        const string altFolder = "Assets/Big Yahu/Rene Redo/Textures/";
+
+        // Sicherheitshalber refreshen, damit gerade abgelegte JPEGs einen
+        // Importer + .meta bekommen, bevor wir sie laden.
+        AssetDatabase.Refresh();
+
+        var mat = new Material(Shader.Find("Standard")) { name = "ReneRedo_Material" };
+        mat.color = new Color(0.95f, 0.45f, 0.10f, 1f);
+
+        // Nur Albedo + Normal werden genutzt – Metallic/Roughness liefern bei
+        // diesem Charakter-Modell schlechte Ergebnisse (siehe Hinweis unten).
+        var albedo = LoadTex(folder + "actionfigure3dmodel_basecolor");
+        var normal = LoadTex(folder + "actionfigure3dmodel_normal");
+
+        if (albedo == null) albedo = LoadTex(altFolder + "Rene_Albedo");
+        if (normal == null) normal = LoadTex(altFolder + "Rene_Normal");
+
+        if (albedo == null)
+            Debug.LogWarning("[Level6] Keine Rene-Albedo gefunden – Fallback-Orange wird verwendet. " +
+                             "Erwartet: " + folder + "actionfigure3dmodel_basecolor.JPEG");
+        else
+            Debug.Log("[Level6] Rene-Albedo geladen: " + AssetDatabase.GetAssetPath(albedo));
+
+        if (albedo != null)
+        {
+            // Albedo-Map muss als sRGB importiert sein, sonst kommt die Farbe falsch raus.
+            EnsureTextureSRGB(albedo, true);
+            mat.mainTexture = albedo;
+            mat.color = Color.white;
+        }
+
+        if (normal != null)
+        {
+            var path = AssetDatabase.GetAssetPath(normal);
+            var imp  = AssetImporter.GetAtPath(path) as TextureImporter;
+            if (imp != null && imp.textureType != TextureImporterType.NormalMap)
+            {
+                imp.textureType = TextureImporterType.NormalMap;
+                imp.SaveAndReimport();
+                normal = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            }
+            mat.SetTexture("_BumpMap", normal);
+            mat.EnableKeyword("_NORMALMAP");
+        }
+
+        // BEWUSST KEIN _MetallicGlossMap:
+        // Die Tripo-"metallic"-JPEG bewertet die ganze Figur als hochmetallisch.
+        // Ohne Reflection-Probe / Skybox spiegelt das nur eine dunkle Umgebung
+        // wider → Rene wirkt komplett schwarz. Wir bleiben bei einem nicht-
+        // metallischen Charakter-Material (Haut/Stoff) mit moderater Glossiness.
+        // Roughness/Occlusion-Maps werden ebenfalls absichtlich ignoriert.
+
+        mat.SetFloat("_Metallic",   0.0f);
+        mat.SetFloat("_Glossiness", 0.3f);
+        return mat;
+    }
+
+    void EnsureTextureSRGB(Texture2D tex, bool srgb)
+    {
+        if (tex == null) return;
+        var path = AssetDatabase.GetAssetPath(tex);
+        var imp  = AssetImporter.GetAtPath(path) as TextureImporter;
+        if (imp == null) return;
+        if (imp.sRGBTexture == srgb) return;
+        imp.sRGBTexture = srgb;
+        imp.SaveAndReimport();
+    }
+
+    Texture2D LoadTex(string pathWithoutExt)
+    {
+        string[] exts = { ".png", ".PNG", ".jpg", ".JPG", ".jpeg", ".JPEG", ".tga", ".TGA", ".psd" };
+        foreach (var e in exts)
+        {
+            var t = AssetDatabase.LoadAssetAtPath<Texture2D>(pathWithoutExt + e);
+            if (t != null) return t;
+        }
+        return null;
+    }
+
+    void SetupReneAnimation(GameObject rene, string fbxPath)
+    {
+        AnimationClip src = null;
+        foreach (var a in AssetDatabase.LoadAllAssetsAtPath(fbxPath))
+            if (a is AnimationClip c && !c.name.StartsWith("__preview__")) { src = c; break; }
+        if (src == null) return;
+
+        const string clipPath = "Assets/Big Yahu/Rene Redo/ReneRedo_Talk_Loop.anim";
+        if (AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath) != null)
+            AssetDatabase.DeleteAsset(clipPath);
+        var loop = Object.Instantiate(src);
+        loop.name = "ReneRedo_Talk_Loop";
+        var cfg = AnimationUtility.GetAnimationClipSettings(loop);
+        cfg.loopTime = cfg.loopBlend = true;
+        AnimationUtility.SetAnimationClipSettings(loop, cfg);
+        AssetDatabase.CreateAsset(loop, clipPath);
+        AssetDatabase.SaveAssets();
+        loop = AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath);
+
+        const string ctrlPath = "Assets/Big Yahu/Rene Redo/ReneRedo_Talk.controller";
+        if (AssetDatabase.LoadAssetAtPath<AnimatorController>(ctrlPath) != null)
+            AssetDatabase.DeleteAsset(ctrlPath);
+        var ctrl = AnimatorController.CreateAnimatorControllerAtPath(ctrlPath);
+        var sm   = ctrl.layers[0].stateMachine;
+        var st   = sm.AddState("Talk"); st.motion = loop; sm.defaultState = st;
+        AssetDatabase.SaveAssets();
+
+        var animator = rene.GetComponentInChildren<Animator>(true) ?? rene.AddComponent<Animator>();
+        animator.runtimeAnimatorController = ctrl;
+        animator.enabled = true;
+
+        foreach (var anim in rene.GetComponentsInChildren<Animation>(true))
+            Object.DestroyImmediate(anim);
+    }
+
+    GameObject BuildReneHintUI(Scene scene)
+    {
+        var canvasGO = new GameObject("ReneHintCanvas");
+        SceneManager.MoveGameObjectToScene(canvasGO, scene);
+        var canvas = canvasGO.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 6;
+        var scaler = canvasGO.AddComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920, 1080);
+        canvasGO.AddComponent<GraphicRaycaster>();
+
+        var panelGO = new GameObject("HintPanel");
+        panelGO.transform.SetParent(canvasGO.transform, false);
+        var bg = panelGO.AddComponent<Image>();
+        bg.color = new Color(0f, 0f, 0f, 0.65f);
+        var prt = panelGO.GetComponent<RectTransform>();
+        prt.anchorMin = new Vector2(0.5f, 0f);
+        prt.anchorMax = new Vector2(0.5f, 0f);
+        prt.pivot     = new Vector2(0.5f, 0f);
+        prt.anchoredPosition = new Vector2(0f, 90f);
+        prt.sizeDelta = new Vector2(360f, 64f);
+
+        var txtGO = new GameObject("Text");
+        txtGO.transform.SetParent(panelGO.transform, false);
+        var tmp = txtGO.AddComponent<TextMeshProUGUI>();
+        tmp.text = "[ E ] Mit Rene Redo sprechen";
+        tmp.fontSize = 24f;
+        tmp.color = new Color(1f, 0.88f, 0.45f);
+        tmp.alignment = TextAlignmentOptions.Center;
+        var trt = txtGO.GetComponent<RectTransform>();
+        trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one;
+        trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
+
+        canvasGO.SetActive(true);
+        panelGO.SetActive(false);
+        return panelGO;
+    }
+
+    // =========================================================================
 
     GameObject UiButton(string name, Transform parent,
         Vector2 anchorMin, Vector2 anchorMax,
