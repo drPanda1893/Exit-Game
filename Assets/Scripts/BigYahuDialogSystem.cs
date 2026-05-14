@@ -83,8 +83,7 @@ public class BigYahuDialogSystem : MonoBehaviour
 
     /// <summary>
     /// Public-Read-Only-Zugriff auf das Helios-Portrait, damit andere Skripte
-    /// (z.B. <see cref="Level3_ColorPuzzle"/>) das Portrait holen können,
-    /// ohne ihre eigene Asset-Referenz halten zu müssen.
+    /// das Portrait holen können, ohne ihre eigene Asset-Referenz halten zu müssen.
     /// </summary>
     public Sprite HeliosPortrait => heliosPortrait;
 
