@@ -29,7 +29,7 @@ public static class EnsureLevel2Built
         ("Assets/Scenes/Level2.unity", BuildLevel2MaintenanceRoom.BuildSilent),
         ("Assets/Scenes/Level3.unity", BuildLevel3Library.BuildSilent),
         ("Assets/Scenes/Level4.unity", BuildLevel4Computer.BuildSilent),
-        ("Assets/Scenes/Level5.unity", BuildLevel5Breadboard.BuildSilent),
+        ("Assets/Scenes/Level5.unity", BuildLevel5Workshop.BuildSilent),
         ("Assets/Scenes/Level6.unity", BuildLevel6FinalGate.BuildSilent),
     };
 

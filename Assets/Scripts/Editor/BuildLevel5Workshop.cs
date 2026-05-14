@@ -26,6 +26,8 @@ public class BuildLevel5Workshop : EditorWindow
     [MenuItem("Tools/Build Level 5 Workshop")]
     public static void ShowWindow() => GetWindow<BuildLevel5Workshop>("Level 5 Builder");
 
+    public static void BuildSilent() => new BuildLevel5Workshop().Build();
+
     // Tile-Typen für das Breadboard-Puzzle (5x5, row-major, row 0 = oben)
     private static readonly int[] TILE_TYPES =
     {
