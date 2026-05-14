@@ -126,7 +126,7 @@ public class BuildLevel5Workshop : EditorWindow
 
         // Trigger-Zonen (proximity)
         var doorSpot    = AddSpotTrigger(scene, root.transform,
-                          new Vector3(0f, 1f, 1.2f), new Vector3(3.0f, 2.0f, 2.0f), "DoorSpot");
+                          new Vector3(0f, 1f, 2.8f), new Vector3(3.0f, 2.0f, 2.0f), "DoorSpot");
         var leverSpot   = AddSpotTrigger(scene, root.transform,
                           shedParts.leverPos, new Vector3(1.5f, 2.0f, 1.5f), "LeverSpot");
         var brennerSpot = AddSpotTrigger(scene, root.transform,
