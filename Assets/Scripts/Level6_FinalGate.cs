@@ -132,6 +132,9 @@ public class Level6_FinalGate : MonoBehaviour
             ArduinoBridge.Instance.Send(arduinoCmdId, "STOP");
             ArduinoBridge.Instance.Send(arduinoRfidCmdId, "STOP");
         }
+        // Sicherheitshalber: LCD-Override aufheben, falls Level disabled wird,
+        // bevor der Spieler die Karte vorgezeigt hat.
+        GameTimerLcd.Instance?.ClearLcdMessage();
     }
 
     // -------------------------------------------------------------------------
@@ -255,9 +258,26 @@ public class Level6_FinalGate : MonoBehaviour
         Cursor.lockState = CursorLockMode.None;
         EventSystem.current?.SetSelectedGameObject(null);
 
+        // LCD: Zeitanzeige pausieren und Hinweis aufs Display legen.
+        // 16 Zeichen pro Zeile (Umlaute ersetzen wir, das LCD-Display kann sie
+        // nicht zuverlaessig darstellen).
+        GameTimerLcd.Instance?.PushLcdMessage("Karte um Schloss|zu oeffnen.");
+
         // RFID-Leser aktivieren – erst hier, damit andere Level vorher nicht
         // ungewollt SPI-Pins greifen.
-        ArduinoBridge.Instance?.Send(arduinoRfidCmdId, "START");
+        // Sicherheits-Default: falls die Szene noch mit altem 0-Wert gespeichert
+        // war, fallen wir auf 0x80 zurueck, sonst sendet Unity '00:START'.
+        if (arduinoRfidCmdId == 0) arduinoRfidCmdId = 0x80;
+        var br = ArduinoBridge.Instance;
+        if (br == null)
+            Debug.LogWarning("[Level6] ArduinoBridge fehlt – RFID kann nicht aktiviert werden.");
+        else if (!br.IsConnected)
+            Debug.LogWarning("[Level6] ArduinoBridge nicht verbunden – RFID-START verworfen.");
+        else
+        {
+            br.Send(arduinoRfidCmdId, "START");
+            Debug.Log($"[Level6] RFID-START gesendet (CmdId=0x{arduinoRfidCmdId:X2}).");
+        }
     }
 
     void HandleCardCheck()
@@ -273,23 +293,24 @@ public class Level6_FinalGate : MonoBehaviour
 
     void OnRfidFromArduino(string payload)
     {
+        Debug.Log($"[Level6] RFID-Rueckmeldung: '{payload}' (state={state})");
         if (state != State.CardCheck) return;
 
         if (payload.Equals("OK", StringComparison.OrdinalIgnoreCase))
         {
-            if (cardStatusText) cardStatusText.text = "Zugang gewährt.";
             ArduinoBridge.Instance?.Send(arduinoRfidCmdId, "STOP");
+            // LCD-Override aufheben → Spielzeit laeuft wieder wie gewohnt aufs Display.
+            GameTimerLcd.Instance?.ClearLcdMessage();
             StartCoroutine(CardAcceptedThenOpenHeat());
         }
         else if (payload.StartsWith("DENIED", StringComparison.OrdinalIgnoreCase))
         {
-            if (cardStatusText) cardStatusText.text = "FALSCHE KARTE – Zugang verweigert.";
-            cardDeniedHideAt = Time.time + 1.6f;
+            // Keine On-Screen-Meldung – LCD-Hinweis bleibt stehen,
+            // Spieler kann sofort wieder scannen.
         }
         else if (payload.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase))
         {
-            if (cardStatusText) cardStatusText.text = "Leser-Fehler – Karte erneut auflegen.";
-            cardDeniedHideAt = Time.time + 1.6f;
+            // Auch hier still – nur LCD bleibt sichtbar.
         }
     }
 

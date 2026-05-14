@@ -100,20 +100,36 @@ public class Level3to4Cinematic : MonoBehaviour
         vidRT.offsetMin = Vector2.zero; vidRT.offsetMax = Vector2.zero;
         _videoFitter = fitter;
 
-        // RenderTexture an Bildschirmaufloesung gebunden.
-        int w = Mathf.Max(Screen.width,  1280);
-        int h = Mathf.Max(Screen.height, 720);
+        // RenderTexture passend zur Bildschirmaufloesung. Wir legen sie etwas
+        // grosszuegig an (max 1920x1080), damit Skalierung auf einem grossen
+        // Game-View nicht im Player Ressourcen frisst und ruckelt.
+        int w = Mathf.Clamp(Screen.width,  1280, 1920);
+        int h = Mathf.Clamp(Screen.height, 720,  1080);
         _rt = new RenderTexture(w, h, 0, RenderTextureFormat.Default);
+        _rt.useMipMap = false;
+        _rt.autoGenerateMips = false;
         _rt.Create();
         _videoOut.texture = _rt;
 
-        // VideoPlayer.
+        // VideoPlayer. Audio ueber eigene AudioSource → exaktes Sync und keine
+        // Direct-Mode-Glitches. skipOnDrop verhindert Stotter-Cascades bei
+        // kurzen Frame-Drops, waitForFirstFrame haelt das Video an, bis das
+        // erste Bild da ist (sonst springt es).
+        var audioSrc = gameObject.AddComponent<AudioSource>();
+        audioSrc.playOnAwake  = false;
+        audioSrc.spatialBlend = 0f;
+
         _video = gameObject.AddComponent<VideoPlayer>();
-        _video.renderMode      = VideoRenderMode.RenderTexture;
-        _video.targetTexture   = _rt;
-        _video.playOnAwake     = false;
-        _video.audioOutputMode = VideoAudioOutputMode.Direct;
-        _video.isLooping       = false;
+        _video.renderMode        = VideoRenderMode.RenderTexture;
+        _video.targetTexture     = _rt;
+        _video.playOnAwake       = false;
+        _video.isLooping         = false;
+        _video.skipOnDrop        = true;
+        _video.waitForFirstFrame = true;
+        _video.playbackSpeed     = 1f;
+        _video.timeUpdateMode    = VideoTimeUpdateMode.UnscaledGameTime;
+        _video.audioOutputMode   = VideoAudioOutputMode.AudioSource;
+        _video.SetTargetAudioSource(0, audioSrc);
     }
 
     string FindVideoPath()

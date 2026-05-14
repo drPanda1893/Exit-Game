@@ -1,7 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using System;
 using System.Collections;
@@ -165,18 +164,8 @@ public class Level4_StealthMinigame : MonoBehaviour
     {
         float h = 0f, v = 0f;
 
-        var kb = Keyboard.current;
-        if (kb != null)
-        {
-            if (kb.aKey.isPressed || kb.leftArrowKey.isPressed)  h = -1f;
-            if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) h =  1f;
-            if (kb.wKey.isPressed || kb.upArrowKey.isPressed)    v =  1f;
-            if (kb.sKey.isPressed || kb.downArrowKey.isPressed)  v = -1f;
-        }
-
-        // Joystick übersteuert Tastatur, sobald er außerhalb der Deadzone steht.
-        // Wir nehmen NUR die Richtung (normiert) – Teil-Ausschlag soll nicht
-        // langsamer machen, sondern bei jedem Druck volle Geschwindigkeit fahren.
+        // Bewegung NUR ueber den Arduino-Joystick. WASD / Pfeiltasten sind in
+        // Level 4 bewusst deaktiviert (siehe Hinweis im Spielfeld-Header).
         if (joystickAxis.sqrMagnitude > joystickDeadzone * joystickDeadzone)
         {
             Vector2 jdir = joystickAxis.normalized;

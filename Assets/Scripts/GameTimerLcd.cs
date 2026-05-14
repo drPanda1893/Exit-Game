@@ -112,11 +112,36 @@ public class GameTimerLcd : MonoBehaviour
         while (_running)
         {
             _elapsedSeconds += 1f;
-            _pending = BuildTimerPayload();
+            // Override hat Vorrang. So koennen andere Systeme (z.B. Level 6
+            // RFID-Karten-Check) eine eigene Nachricht aufs LCD legen.
+            _pending = string.IsNullOrEmpty(_overrideText) ? BuildTimerPayload() : _overrideText;
             TryFlushToLcd();
             yield return wait;
         }
         _tickRoutine = null;
+    }
+
+    private string _overrideText;
+
+    /// <summary>
+    /// Unterbricht die Zeitanzeige und zeigt stattdessen <paramref name="text"/>
+    /// im '|'-Zwei-Zeilen-Format aufs LCD. Die Zeit zaehlt intern weiter.
+    /// </summary>
+    public void PushLcdMessage(string text)
+    {
+        _overrideText = text ?? string.Empty;
+        _pending      = _overrideText;
+        _onAir        = string.Empty;   // erzwingt Re-Send
+        TryFlushToLcd();
+    }
+
+    /// <summary>Hebt die Unterbrechung auf und zeigt sofort wieder die Zeit.</summary>
+    public void ClearLcdMessage()
+    {
+        _overrideText = string.Empty;
+        _pending      = BuildTimerPayload();
+        _onAir        = string.Empty;
+        TryFlushToLcd();
     }
 
     IEnumerator CelebrateRoutine()
@@ -163,8 +188,6 @@ public class GameTimerLcd : MonoBehaviour
         return $"Spielzeit:|{mm:00}:{ss:00}";
     }
 
-    private float _lastDisconnectLog;
-
     /// <summary>
     /// Versucht den zuletzt berechneten Wert ans LCD zu schicken. Nur wenn die
     /// ArduinoBridge erreichbar ist UND der Wert sich seit dem letzten Send
@@ -174,20 +197,8 @@ public class GameTimerLcd : MonoBehaviour
     {
         if (string.IsNullOrEmpty(_pending) || _pending == _onAir) return;
         var br = ArduinoBridge.Instance;
-        if (br == null || !br.IsConnected)
-        {
-            // Rate-limited Warnung (1x pro 10 s) damit wir im Log sehen koennen,
-            // wenn die Bridge fehlt – sonst sucht man stundenlang die Ursache.
-            if (Time.realtimeSinceStartup - _lastDisconnectLog > 10f)
-            {
-                Debug.Log("[GameTimerLcd] LCD-Send pending '" + _pending +
-                          "' – ArduinoBridge " + (br == null ? "nicht in Scene" : "nicht verbunden") + ".");
-                _lastDisconnectLog = Time.realtimeSinceStartup;
-            }
-            return;
-        }
+        if (br == null || !br.IsConnected) return;
         br.Send(LCD_CMD_ID, _pending);
-        Debug.Log("[GameTimerLcd] → 70:" + _pending);
         _onAir = _pending;
     }
 }

@@ -116,6 +116,14 @@ public class BigYahuDialogSystem : MonoBehaviour
         if (dialogPanel) dialogPanel.SetActive(false);
     }
 
+    void OnDestroy()
+    {
+        // Wichtig: C#-Referenz nullen, damit '?.'-Aufrufer nicht in einem
+        // zerstoerten Object landen. Sonst MissingReferenceException beim
+        // ShowDialog nach Scene-Change.
+        if (Instance == this) Instance = null;
+    }
+
     /// <summary>
     /// Verkabelt den Continue-Button, setzt das Default-Portrait
     /// (Helios mit Big-Yahu-Fallback), erzwingt den Default-Sprechernamen

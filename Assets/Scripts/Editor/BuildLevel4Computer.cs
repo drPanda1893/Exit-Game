@@ -234,6 +234,22 @@ public class BuildLevel4Computer : EditorWindow
         statusTxt.alignment = TextAlignmentOptions.Center;
         statusTxt.color     = new Color(0.9f, 0.9f, 0.7f);
 
+        // === Joystick-Hinweis als Ueberschrift oben im Spielfeld ===
+        var headerGO = new GameObject("JoystickHeader");
+        var headerRT = headerGO.gameObject.AddComponent<RectTransform>();
+        headerRT.SetParent(floor.transform, false);
+        headerRT.anchorMin = new Vector2(0f, 1f);
+        headerRT.anchorMax = new Vector2(1f, 1f);
+        headerRT.pivot     = new Vector2(0.5f, 1f);
+        headerRT.anchoredPosition = new Vector2(0f, -10f);
+        headerRT.sizeDelta = new Vector2(-40f, 36f);
+        var headerTxt = headerGO.AddComponent<TextMeshProUGUI>();
+        headerTxt.text      = "Steuerung NUR mit Joystick – die Tastatur ist aus!";
+        headerTxt.fontSize  = 22f;
+        headerTxt.fontStyle = FontStyles.Bold;
+        headerTxt.alignment = TextAlignmentOptions.Center;
+        headerTxt.color     = new Color(0.95f, 0.65f, 0.10f);
+
         // === Level4_StealthMinigame ===
         var scriptGO = new GameObject("StealthMinigame");
         var scriptRT = scriptGO.gameObject.AddComponent<RectTransform>();

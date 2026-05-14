@@ -640,17 +640,26 @@ const unsigned long RFID_SCAN_COOLDOWN_MS = 1000;   // wie im User-Skript
 const byte BLOCK_FOR_RFID = 4;                       // Block 4 – tuned zur Karte
 
 void initRfid() {
-  if (!rfidInitialized) {
-    SPI.begin();
-    mfrc522.PCD_Init();
-    rfidInitialized = true;
-  }
-  // Bei Wiedereintritt einen sauberen Antennen-Reset machen, damit alte
-  // ausgelesene Karten-Sessions nicht haengenbleiben.
+  // WICHTIG: bei jedem Eintritt in LV_RFID die SPI-Pins neu beanspruchen.
+  // Level 3 (Farbsensor TCS3200) konfiguriert D11/D12 vorher als digitale
+  // GPIO – ohne erneuten SPI.begin() bleiben sie so, und der MFRC522
+  // bekommt keine korrekten MOSI/MISO-Signale mehr.
+  SPI.begin();
+  // Pin 9 + 10 explizit auf OUTPUT setzen (Keypad-Reste aus Level 1).
+  pinMode(RFID_RST_PIN, OUTPUT);
+  pinMode(RFID_SS_PIN,  OUTPUT);
+  digitalWrite(RFID_SS_PIN, HIGH);
+
+  // Soft-Reset des Readers, damit alte Crypto-Sessions weg sind.
+  mfrc522.PCD_Reset();
+  delay(50);
+  mfrc522.PCD_Init();
   mfrc522.PCD_AntennaOff();
   delay(50);
   mfrc522.PCD_AntennaOn();
-  rfidLastScanMs = 0;
+
+  rfidInitialized = true;
+  rfidLastScanMs  = 0;
 }
 
 void resetRfidState() {
