@@ -98,7 +98,18 @@ public class Level5_SceneFlow : MonoBehaviour
                 break;
 
             case State.LeverReady:
-                // Lever ist im HUD – OnHudLeverPulled übernimmt, kein E-Key nötig.
+                // Lever ist im HUD – OnHudLeverPulled übernimmt. Zusaetzlich
+                // SPACE / ENTER / E als Notausgang, falls der Maus-Klick auf
+                // dem HUD-Hebel-Bereich nicht durchkommt (z.B. weil der
+                // Dialog-Panel ihn ueberdeckt oder kein EventSystem da ist).
+                if (kb != null &&
+                    (kb.spaceKey.wasPressedThisFrame ||
+                     kb.enterKey.wasPressedThisFrame ||
+                     kb.eKey.wasPressedThisFrame))
+                {
+                    OnHudLeverPulled();
+                    CurrentState = State.Pickup;
+                }
                 break;
 
             case State.Pickup:

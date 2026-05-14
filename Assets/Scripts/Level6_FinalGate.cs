@@ -269,15 +269,7 @@ public class Level6_FinalGate : MonoBehaviour
         // war, fallen wir auf 0x80 zurueck, sonst sendet Unity '00:START'.
         if (arduinoRfidCmdId == 0) arduinoRfidCmdId = 0x80;
         var br = ArduinoBridge.Instance;
-        if (br == null)
-            Debug.LogWarning("[Level6] ArduinoBridge fehlt – RFID kann nicht aktiviert werden.");
-        else if (!br.IsConnected)
-            Debug.LogWarning("[Level6] ArduinoBridge nicht verbunden – RFID-START verworfen.");
-        else
-        {
-            br.Send(arduinoRfidCmdId, "START");
-            Debug.Log($"[Level6] RFID-START gesendet (CmdId=0x{arduinoRfidCmdId:X2}).");
-        }
+        if (br != null && br.IsConnected) br.Send(arduinoRfidCmdId, "START");
     }
 
     void HandleCardCheck()
@@ -293,7 +285,6 @@ public class Level6_FinalGate : MonoBehaviour
 
     void OnRfidFromArduino(string payload)
     {
-        Debug.Log($"[Level6] RFID-Rueckmeldung: '{payload}' (state={state})");
         if (state != State.CardCheck) return;
 
         if (payload.Equals("OK", StringComparison.OrdinalIgnoreCase))
