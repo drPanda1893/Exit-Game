@@ -91,18 +91,10 @@ public class Level4_StealthMinigame : MonoBehaviour
 
         EnableJoystickInput();
 
-        if (BigYahuDialogSystem.Instance != null)
-            BigYahuDialogSystem.Instance.ShowDialog(new[]
-            {
-                "Big Yahu: Achtung! Wärter patrouillieren den Hof!",
-                "Big Yahu: Weiche ihren Blicken aus – du hast 3 Leben!"
-            }, () => { InitGuards(); ResetGame(); active = true; });
-        else
-        {
-            InitGuards();
-            ResetGame();
-            active = true;
-        }
+        // Intro-Dialog entfernt – Spiel startet sofort.
+        InitGuards();
+        ResetGame();
+        active = true;
     }
 
     void OnDisable()
@@ -487,6 +479,14 @@ public class Level4_StealthMinigame : MonoBehaviour
         active = false;
         SnapPlayerInFrontOfGoal();
         if (statusText != null) statusText.text = "Schuppen erreicht! Level abgeschlossen!";
+
+        // Rainer-Voice-Loop stoppen, sobald das Ziel erreicht ist.
+        var voiceLoop = FindAnyObjectByType<RainerVoiceLoop>();
+        if (voiceLoop != null) voiceLoop.StopLoop();
+
+        // Hintergrundmusik wieder einschalten (war waehrend Level-3-Cinematic pausiert).
+        BackgroundMusic.ResumeAll();
+
         StartCoroutine(DelayedComplete());
     }
 
@@ -519,9 +519,7 @@ public class Level4_StealthMinigame : MonoBehaviour
         string liveTxt = lives > 0 ? $"Leben: {lives}" : "Alle Leben verloren!";
         if (statusText != null) statusText.text = $"Erwischt!  {liveTxt}  [ALARM]";
 
-        BigYahuDialogSystem.Instance?.ShowDialog(
-            lives > 0 ? "Big Yahu: Autsch! Noch mal!" : "Big Yahu: Alle Leben verloren!");
-
+        // Caught-Dialog entfernt – statusText reicht.
         yield return new WaitForSeconds(1.8f);
 
         if (lives <= 0) lives = 3;
@@ -544,22 +542,8 @@ public class Level4_StealthMinigame : MonoBehaviour
     {
         active = false;
 
-        // ── Dialog: Big Yahu reagiert ──────────────────────────────────
-        bool dialogDone = false;
-        if (BigYahuDialogSystem.Instance != null)
-        {
-            BigYahuDialogSystem.Instance.ShowDialog(new[]
-            {
-                "Big Yahu: Ausgezeichnet! Die Wärter haben dich nicht erwischt!",
-                "Big Yahu: Warte... ich spüre etwas... das System zieht mich rein!",
-                "Big Yahu: Die Werkstatt ruft... Finde den Bunsenbrenner!"
-            }, () => dialogDone = true);
-        }
-        else dialogDone = true;
-
-        // Warte bis Dialog fertig (max 6 s)
-        float wait = 0f;
-        while (!dialogDone && wait < 6f) { wait += Time.deltaTime; yield return null; }
+        // Schluss-Dialog entfernt – sofort weiter in die Cinematic.
+        yield return new WaitForSeconds(0.4f);
 
         // ── Erstelle Fade-Overlay (schwarz) über allem ─────────────────
         Canvas rootCanvas = GetComponentInParent<Canvas>();

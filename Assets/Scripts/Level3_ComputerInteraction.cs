@@ -139,9 +139,9 @@ public class Level3_ComputerInteraction : MonoBehaviour
     {
         yield return new WaitForSeconds(transitionDelay);
 
-        if (GameManager.Instance != null)
-            GameManager.Instance.CompleteCurrentLevel();
-        else if (!string.IsNullOrEmpty(nextScene))
-            SceneManager.LoadScene(nextScene);
+        // Statt direkt Level 4 zu laden, zuerst den Schock-Cinematic abspielen.
+        // Der Cinematic pausiert die Hintergrundmusik, zeigt die Text-Karte,
+        // spielt das Wärter-Video und laedt anschliessend Level 4.
+        Level3to4Cinematic.Play();
     }
 }

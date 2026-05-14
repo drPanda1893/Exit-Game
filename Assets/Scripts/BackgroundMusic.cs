@@ -18,6 +18,22 @@ public class BackgroundMusic : MonoBehaviour
             instance.Source.Stop();
     }
 
+    /// <summary>Pausiert die Hintergrundmusik – Wiedergabezeit bleibt erhalten.</summary>
+    public static void PauseAll()
+    {
+        if (instance != null && instance.Source != null && instance.Source.isPlaying)
+            instance.Source.Pause();
+    }
+
+    /// <summary>Setzt die Hintergrundmusik an der gepausten Stelle fort.</summary>
+    public static void ResumeAll()
+    {
+        if (instance == null || instance.Source == null) return;
+        var s = instance.Source;
+        if (!s.isPlaying) s.UnPause();
+        if (!s.isPlaying) s.Play();
+    }
+
     void Awake()
     {
         if (instance != null)

@@ -83,7 +83,9 @@ public class BuildLevel4Computer : EditorWindow
         canvas.sortingOrder = 0;
         var scaler = canvasGO.gameObject.AddComponent<CanvasScaler>();
         scaler.uiScaleMode        = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920, 1080);
+        // Niedrigere Referenz-Aufloesung = staerker reingezoomt. Die alten 1920x1080
+        // haben das Spielfeld winzig wirken lassen.
+        scaler.referenceResolution = new Vector2(1280, 720);
         scaler.matchWidthOrHeight  = 0.5f;
         canvasGO.gameObject.AddComponent<GraphicRaycaster>();
         SceneManager.MoveGameObjectToScene(canvasGO, scene);
@@ -105,6 +107,9 @@ public class BuildLevel4Computer : EditorWindow
 
         // BigYahuDialogSystem (Intro-Dialog + Caught-Feedback)
         BuildBigYahuDialog(canvasGO.transform, scene);
+
+        // Rainer-Voice-Loop – zufaellige MP3s laufen waehrend Level 4.
+        BuildRainerVoiceLoop(scene);
 
         // KEINE Hintergrundmusik mehr in Level 4 erzeugen – das BackgroundMusic-
         // Singleton aus Level 1 laeuft per DontDestroyOnLoad sowieso schon weiter.
@@ -162,22 +167,11 @@ public class BuildLevel4Computer : EditorWindow
 
     (RectTransform playArea, Level4_StealthMinigame stealth) BuildPlayField(Transform parent)
     {
-        // Äußerer Zierrahmen (Stahl-Optik)
-        var outerFrame = MakeAnchored(parent, "OuterFrame", Vector2.zero, new Vector2(962f, 722f));
-        outerFrame.gameObject.AddComponent<Image>().color = new Color(0.20f, 0.22f, 0.28f);
-
-        // Innerer Rahmen (dunkel)
-        var innerFrame = MakeAnchored(outerFrame, "InnerFrame", Vector2.zero, new Vector2(954f, 714f));
-        innerFrame.gameObject.AddComponent<Image>().color = new Color(0.08f, 0.09f, 0.12f);
-
-        // Eckbolzen (4 Ecken)
-        Color boltCol = new Color(0.35f, 0.38f, 0.45f);
-        foreach (var (bx, by) in new[]{(-465f,-345f),(465f,-345f),(-465f,345f),(465f,345f)})
-            MakeBolt(innerFrame, bx, by, boltCol);
-
-        // Spielfeld-Boden (Beton-Optik)
-        var floor = MakeAnchored(innerFrame, "Floor", Vector2.zero, new Vector2(940f, 700f));
-        floor.gameObject.AddComponent<Image>().color = new Color(0.11f, 0.13f, 0.17f);
+        // Spielfeld = komplette Canvas, KEIN Aussenrahmen + Innenrahmen mehr,
+        // damit der Spieler nicht in einen schwarzen Rand reinlaufen kann.
+        // Halloween-Mode: dunkles violettes Boden-Tuch.
+        var floor = MakeAnchored(parent, "Floor", Vector2.zero, new Vector2(1280f, 720f));
+        floor.gameObject.AddComponent<Image>().color = new Color(0.10f, 0.05f, 0.12f);
 
         // Boden-Steinfliesen-Muster
         BuildFloorTiles(floor.transform);
@@ -193,27 +187,28 @@ public class BuildLevel4Computer : EditorWindow
         var playerRT = playerGO.gameObject.AddComponent<RectTransform>();
         playerRT.SetParent(floor.transform, false);
         playerRT.sizeDelta        = new Vector2(28f, 28f);
-        playerRT.anchoredPosition = new Vector2(-330f, -250f);
+        playerRT.anchoredPosition = new Vector2(-580f, -280f);
         BuildPlayerIcon(playerRT);
 
-        // === Wärter ===
+        // === Wärter ===  – Patrouillen nutzen jetzt das ganze 1280x720-Feld.
         var guards     = new List<RectTransform>();
         var guardData  = new (Vector2 pos, Vector2 dir)[]
         {
-            (new Vector2(  0f,   220f), Vector2.right),   // 0 H – oberer Korridor
-            (new Vector2(-180f,   20f), Vector2.up),      // 1 V – linker Flügel
+            (new Vector2(   0f,  240f), Vector2.right),   // 0 H – oberer Korridor
+            (new Vector2(-380f,   40f), Vector2.up),      // 1 V – linker Korridor
             (new Vector2( 220f,  -80f), Vector2.right),   // 2 Diag – rechte Mitte
-            (new Vector2( 240f, -215f), Vector2.up),      // 3 Ellipse – sperrt rechten Unterkorridor
-            (new Vector2( 310f,  185f), Vector2.right),   // 4 Chase – bewacht den Schuppen
+            (new Vector2( 400f, -230f), Vector2.up),      // 3 Ellipse – unten rechts
+            (new Vector2( 540f,  200f), Vector2.right),   // 4 Chase – bewacht den Schuppen
         };
+        var rainerSprites = LoadRainerSprites();
         for (int i = 0; i < guardData.Length; i++)
         {
             var gGO = new GameObject($"Guard_{i}");
             var gRT = gGO.gameObject.AddComponent<RectTransform>();
             gRT.SetParent(floor.transform, false);
-            gRT.sizeDelta        = new Vector2(40f, 40f);
+            gRT.sizeDelta        = new Vector2(100f, 100f);
             gRT.anchoredPosition = guardData[i].pos;
-            BuildGuardIcon(gRT, i);
+            BuildRainerGuardIcon(gRT, i, rainerSprites);
             guards.Add(gRT);
         }
 
@@ -222,7 +217,7 @@ public class BuildLevel4Computer : EditorWindow
         var goalRT = goalGO.gameObject.AddComponent<RectTransform>();
         goalRT.SetParent(floor.transform, false);
         goalRT.sizeDelta        = new Vector2(48f, 48f);
-        goalRT.anchoredPosition = new Vector2(350f, 260f);
+        goalRT.anchoredPosition = new Vector2(580f, 290f);
         BuildGoalIcon(goalRT);
 
         // === Status-Text im Spielfeld ===
@@ -267,16 +262,17 @@ public class BuildLevel4Computer : EditorWindow
 
     void BuildFloorTiles(Transform parent)
     {
-        // Betonfliesen-Schachbrettmuster (leicht abwechselnd)
-        Color c1 = new Color(0.11f, 0.13f, 0.17f);
-        Color c2 = new Color(0.13f, 0.15f, 0.19f);
-        int cols = 19, rows = 14;
-        float tw = 940f / cols, th = 700f / rows;
+        // Halloween-Boden: dunkles Violett + tiefes Schwarz im Schachbrett.
+        Color c1 = new Color(0.09f, 0.04f, 0.10f);
+        Color c2 = new Color(0.13f, 0.06f, 0.14f);
+        float w = 1280f, h = 720f;
+        int cols = 26, rows = 15;
+        float tw = w / cols, th = h / rows;
         for (int x = 0; x < cols; x++)
         for (int y = 0; y < rows; y++)
         {
-            float px = -470f + x * tw + tw * 0.5f;
-            float py = -350f + y * th + th * 0.5f;
+            float px = -w * 0.5f + x * tw + tw * 0.5f;
+            float py = -h * 0.5f + y * th + th * 0.5f;
             var t = MakeAnchored(parent, $"Tile_{x}_{y}", new Vector2(px, py), new Vector2(tw - 1f, th - 1f));
             t.gameObject.AddComponent<Image>().color = ((x + y) % 2 == 0) ? c1 : c2;
         }
@@ -284,61 +280,62 @@ public class BuildLevel4Computer : EditorWindow
 
     void BuildWallBorder(Transform parent)
     {
-        // Innenrand – Mauer mit Zinnen-Optik
-        Color wallCol  = new Color(0.18f, 0.20f, 0.26f);
-        Color crownCol = new Color(0.22f, 0.25f, 0.32f);
-        float w = 940f, h = 700f;
+        // Halloween-Mauer: tiefschwarz mit gluehend-orangen Zinnen.
+        Color wallCol  = new Color(0.05f, 0.03f, 0.06f);
+        Color crownCol = new Color(0.95f, 0.45f, 0.05f);
+        float w = 1280f, h = 720f;
 
-        // Rahmen-Streifen
+        // Rahmen-Streifen direkt am Canvas-Rand.
         MakeAnchored(parent, "WallTop",    new Vector2(0,     h*0.5f-8),  new Vector2(w, 16f)).gameObject.AddComponent<Image>().color = wallCol;
         MakeAnchored(parent, "WallBottom", new Vector2(0,    -h*0.5f+8),  new Vector2(w, 16f)).gameObject.AddComponent<Image>().color = wallCol;
         MakeAnchored(parent, "WallLeft",   new Vector2(-w*0.5f+8, 0),     new Vector2(16f, h)).gameObject.AddComponent<Image>().color = wallCol;
         MakeAnchored(parent, "WallRight",  new Vector2( w*0.5f-8, 0),     new Vector2(16f, h)).gameObject.AddComponent<Image>().color = wallCol;
 
-        // Zinnen oben
-        for (int i = 0; i < 24; i++)
+        // Orange Zinnen oben und unten, jetzt ueber die volle Breite.
+        int teeth = 30;
+        float step = (w - 40f) / (teeth - 1);
+        float startX = -w * 0.5f + 20f;
+        for (int i = 0; i < teeth; i++)
         {
-            float cx = -460f + i * 40f;
+            float cx = startX + i * step;
             MakeAnchored(parent, $"CrownT_{i}", new Vector2(cx, h*0.5f-4),  new Vector2(18f, 16f)).gameObject.AddComponent<Image>().color = crownCol;
-        }
-        // Zinnen unten
-        for (int i = 0; i < 24; i++)
-        {
-            float cx = -460f + i * 40f;
             MakeAnchored(parent, $"CrownB_{i}", new Vector2(cx, -h*0.5f+4), new Vector2(18f, 16f)).gameObject.AddComponent<Image>().color = crownCol;
         }
     }
 
     List<RectTransform> BuildObstacles(Transform parent)
     {
-        // Betonblöcke – bilden Gänge für das Stealth-Spiel
-        Color blockColor  = new Color(0.22f, 0.24f, 0.30f);
-        Color blockShadow = new Color(0.14f, 0.15f, 0.19f);
-        Color blockLight  = new Color(0.28f, 0.31f, 0.38f);
+        // Halloween-Hindernisse: tiefschwarze Sarkophag-Bloecke mit orangem Glow.
+        Color blockColor  = new Color(0.08f, 0.04f, 0.10f);
+        Color blockShadow = new Color(0.03f, 0.01f, 0.05f);
+        Color blockLight  = new Color(0.95f, 0.45f, 0.05f);
 
+        // Hindernisse jetzt auch in den Seiten-Korridoren, damit das ganze
+        // 1280x720-Feld bespielbar bleibt und nicht nur die Mitte interessant ist.
         var blocks = new (Vector2 pos, Vector2 size, string name)[]
         {
             // Horizontale Mauern (Mitte)
             (new Vector2(-100f,  170f), new Vector2(220f, 30f), "BlockH1"),
             (new Vector2( 130f,  -30f), new Vector2(180f, 30f), "BlockH2"),
-            (new Vector2(-220f, -100f), new Vector2(160f, 30f), "BlockH3"),
+            (new Vector2(-150f, -100f), new Vector2(160f, 30f), "BlockH3"),
             (new Vector2(  60f, -200f), new Vector2(200f, 30f), "BlockH4"),
-            // Vertikale Mauern
-            (new Vector2( 280f,  100f), new Vector2(30f,  170f), "BlockV1"),
-            (new Vector2(-300f,   60f), new Vector2(30f,  160f), "BlockV2"),
+            // Vertikale Mauern – auch im Mittenbereich
+            (new Vector2( 180f,  100f), new Vector2(30f,  170f), "BlockV1"),
+            (new Vector2(-190f,   60f), new Vector2(30f,  160f), "BlockV2"),
             (new Vector2(  10f,   50f), new Vector2(30f,  180f), "BlockV3"),
-            // ── NEUE SPERREN: Unterer-Rechter-Pfad ──────────────────────
-            // Lange horizontale Sperre unten-rechts (sperrt einfachen Bodenpfad)
-            (new Vector2( 220f, -265f), new Vector2(220f,  24f), "BottomBarrier"),
-            // Vertikale Sperre rechte Seite (sperrt direkten Aufstieg)
-            (new Vector2( 340f, -115f), new Vector2(  24f, 175f), "RightBarrier"),
-            // Kleines Hindernis oben-rechts vor Schuppen (erzwingt Kurve)
-            (new Vector2( 390f,  130f), new Vector2(  60f,  24f), "GoalApproach"),
-            // Einzelne Blöcke als Deckung
-            (new Vector2(-180f,  240f), new Vector2(50f,  50f), "Cover1"),
-            (new Vector2( 130f, -285f), new Vector2(45f,  45f), "Cover2"),   // näher an Spieler-Start
-            (new Vector2(-350f, -200f), new Vector2(50f,  50f), "Cover3"),
-            (new Vector2( 350f,  -80f), new Vector2(50f,  50f), "Cover4"),
+            // ── Linker Korridor (-630 < x < -300) – jetzt mit Hindernissen ──
+            (new Vector2(-440f,  150f), new Vector2(120f, 28f), "LeftH1"),
+            (new Vector2(-540f,  -40f), new Vector2( 28f, 160f), "LeftV1"),
+            (new Vector2(-380f, -150f), new Vector2(140f, 28f), "LeftH2"),
+            (new Vector2(-470f, -260f), new Vector2( 80f, 28f), "LeftCover"),
+            // ── Rechter Korridor (300 < x < 630) – Halloween-Sperre ─────────
+            (new Vector2( 440f,  150f), new Vector2(120f, 28f), "RightH1"),
+            (new Vector2( 540f,  -20f), new Vector2( 28f, 160f), "RightV1"),
+            (new Vector2( 380f, -160f), new Vector2(140f, 28f), "RightH2"),
+            (new Vector2( 470f, -270f), new Vector2( 80f, 28f), "RightCover"),
+            // Einzelne Cover-Blöcke (Mitte)
+            (new Vector2(-150f,  240f), new Vector2(50f,  50f), "Cover1"),
+            (new Vector2( 130f, -285f), new Vector2(45f,  45f), "Cover2"),
         };
 
         var wallRTs = new List<RectTransform>();
@@ -392,6 +389,118 @@ public class BuildLevel4Computer : EditorWindow
         // Pfeil (Blickrichtung, nach oben)
         var arrow = MakeAnchored(parent, "Arrow", new Vector2(0, 18f), new Vector2(10f, 10f));
         arrow.gameObject.AddComponent<Image>().color = new Color(0.3f, 1.0f, 0.9f, 0.7f);
+    }
+
+    // ───────────────────────────────────────────────────────────────────────
+    // Rainer-Voice-Loop: zufaellige WhatsApp-Sprachnachrichten laufen ab
+    // Level-Start, eine nach der anderen, bis das Ziel erreicht ist.
+    // ───────────────────────────────────────────────────────────────────────
+
+    void BuildRainerVoiceLoop(Scene scene)
+    {
+        const string folder = "Assets/Scripts/Rainer Wächtler";
+
+        var clips = new List<AudioClip>();
+        foreach (var guid in AssetDatabase.FindAssets("t:AudioClip", new[] { folder }))
+        {
+            var p = AssetDatabase.GUIDToAssetPath(guid);
+            var c = AssetDatabase.LoadAssetAtPath<AudioClip>(p);
+            if (c != null) clips.Add(c);
+        }
+
+        if (clips.Count == 0)
+        {
+            Debug.LogWarning("[Level4] Keine MP3s in '" + folder + "' gefunden – Rainer-Voice-Loop wird leer.");
+            return;
+        }
+
+        var go  = new GameObject("RainerVoiceLoop");
+        go.AddComponent<AudioSource>();   // RequireComponent
+        var loop = go.AddComponent<RainerVoiceLoop>();
+        SceneManager.MoveGameObjectToScene(go, scene);
+
+        var so = new SerializedObject(loop);
+        var arr = so.FindProperty("clips");
+        arr.arraySize = clips.Count;
+        for (int i = 0; i < clips.Count; i++)
+            arr.GetArrayElementAtIndex(i).objectReferenceValue = clips[i];
+        so.ApplyModifiedPropertiesWithoutUndo();
+
+        Debug.Log("[Level4] Rainer-Voice-Loop mit " + clips.Count + " Clips geladen.");
+    }
+
+    // ───────────────────────────────────────────────────────────────────────
+    // Wächter-Embleme: drei Rainer-Wächtler-Fotos im Wechsel.
+    // ───────────────────────────────────────────────────────────────────────
+
+    Sprite[] LoadRainerSprites()
+    {
+        // Akzeptiert .png/.jpg/.jpeg fuer alle drei Wächter-Fotos.
+        string[] bases =
+        {
+            "Assets/Scripts/Rainer Wächtler/Rainer Wächtler 1",
+            "Assets/Scripts/Rainer Wächtler/Rainer Wächtler 2",
+            "Assets/Scripts/Rainer Wächtler/Rainer Wächtler 3",
+        };
+        string[] exts = { ".png", ".PNG", ".jpg", ".JPG", ".jpeg", ".JPEG" };
+
+        var sprites = new List<Sprite>();
+        foreach (var bp in bases)
+        {
+            string p = null;
+            foreach (var e in exts)
+            {
+                if (System.IO.File.Exists(bp + e)) { p = bp + e; break; }
+            }
+            if (p == null) { Debug.LogWarning("[Level4] Rainer-Foto nicht gefunden: " + bp + ".*"); continue; }
+
+            // Importer auf Sprite umstellen, sonst kommt nichts auf das Image.
+            var imp = AssetImporter.GetAtPath(p) as TextureImporter;
+            if (imp != null)
+            {
+                bool dirty = false;
+                if (imp.textureType != TextureImporterType.Sprite) { imp.textureType = TextureImporterType.Sprite; dirty = true; }
+                if (imp.spriteImportMode != SpriteImportMode.Single) { imp.spriteImportMode = SpriteImportMode.Single; dirty = true; }
+                if (imp.alphaIsTransparency != true) { imp.alphaIsTransparency = true; dirty = true; }
+                if (dirty) imp.SaveAndReimport();
+            }
+            var s = AssetDatabase.LoadAssetAtPath<Sprite>(p);
+            if (s != null) sprites.Add(s);
+            else Debug.LogWarning("[Level4] Rainer-Foto nicht gefunden: " + p);
+        }
+        return sprites.ToArray();
+    }
+
+    void BuildRainerGuardIcon(RectTransform parent, int index, Sprite[] sprites)
+    {
+        // Boden-Schatten unter dem Foto.
+        MakeAnchored(parent, "Shadow", new Vector2(3f, -3f), new Vector2(100f, 100f))
+            .gameObject.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.35f);
+
+        Color[] accent =
+        {
+            new Color(0.95f, 0.20f, 0.18f),
+            new Color(0.95f, 0.48f, 0.04f),
+            new Color(0.15f, 0.80f, 0.30f),
+            new Color(0.45f, 0.75f, 1.00f),
+            new Color(0.90f, 0.78f, 0.08f),
+        };
+        Color ac = accent[index % accent.Length];
+
+        // Frame: voll-grosser farbiger Hintergrund (= "Umrandung" – auch wenn er
+        // jetzt komplett vom Foto ueberdeckt ist, bleibt er als Markierung da).
+        var frameRT = MakeAnchored(parent, "Frame", Vector2.zero, new Vector2(100f, 100f));
+        var frame   = frameRT.gameObject.AddComponent<Image>();
+        frame.color = ac;
+
+        // Foto in Frame-Groesse – preserveAspect aus, fuellt das ganze Quadrat.
+        var photoRT = MakeAnchored(frameRT, "Photo", Vector2.zero, new Vector2(100f, 100f));
+        var photo   = photoRT.gameObject.AddComponent<Image>();
+        photo.preserveAspect = false;
+        if (sprites != null && sprites.Length > 0)
+            photo.sprite = sprites[index % sprites.Length];
+        else
+            photo.color = new Color(0.35f, 0.35f, 0.40f);
     }
 
     void BuildGuardIcon(RectTransform parent, int index)
