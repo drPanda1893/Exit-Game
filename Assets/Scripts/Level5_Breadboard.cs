@@ -21,7 +21,8 @@ public class Level5_Breadboard : MonoBehaviour
 
     [Header("UI")]
     [SerializeField] private TextMeshProUGUI statusText;
-    [SerializeField] private Image           burnerFlame; // Bunsenbrenner-Flamme (dunkel→orange)
+    [SerializeField] private Button          leverButton;    // HUD-Hebel (nach Puzzle aktiv)
+    [SerializeField] private RectTransform   leverHandleUI;  // dreht sich beim Klick -90°
 
     [Header("Verhalten")]
     [Tooltip("Standalone-Szene: nach Lösung Fade-To-Black + Level 6 laden. "
@@ -30,6 +31,8 @@ public class Level5_Breadboard : MonoBehaviour
 
     /// <summary>Feuert genau einmal, sobald der Schaltkreis geschlossen ist.</summary>
     public event Action OnPuzzleSolved;
+    /// <summary>Feuert genau einmal, nachdem der HUD-Hebel betätigt wurde.</summary>
+    public event Action OnLeverPulled;
 
     // ── Puzzle-Definition ─────────────────────────────────────────────────
     // TileType: 0=Leer  1=Gerade  2=Ecke  3=Quelle(fix)  4=Ziel(fix)
@@ -76,6 +79,7 @@ public class Level5_Breadboard : MonoBehaviour
     private int   selRow = 2, selCol = 1;
     private bool  solved;
     private bool  active;
+    private bool  leverPulled;
 
     private static readonly Color ColOn  = new Color(0.18f, 0.92f, 0.38f);
     private static readonly Color ColOff = new Color(0.22f, 0.26f, 0.32f);
@@ -86,9 +90,11 @@ public class Level5_Breadboard : MonoBehaviour
 
     void OnEnable()
     {
-        solved = false;
-        active = false;
-        if (statusText) statusText.text = string.Empty;
+        solved      = false;
+        active      = false;
+        leverPulled = false;
+        if (statusText)   statusText.text        = string.Empty;
+        if (leverButton)  leverButton.interactable = false;
 
         if (BigYahuDialogSystem.Instance != null)
             BigYahuDialogSystem.Instance.ShowDialog(new[]
@@ -105,6 +111,8 @@ public class Level5_Breadboard : MonoBehaviour
     {
         if (curRot == null) StartPuzzle();
         WireUpTileClicks();
+        if (leverButton != null)
+            leverButton.onClick.AddListener(OnLeverButtonClicked);
     }
 
     // Build-Skript registriert Lambda-Listener auf den Tile-Buttons. Lambdas
@@ -301,8 +309,40 @@ public class Level5_Breadboard : MonoBehaviour
     {
         solved = true;
         active = false;
-        if (statusText) statusText.text = "Schaltkreis geschlossen!  Bunsenbrenner aktiviert!";
+        if (statusText) statusText.text = "Schaltkreis geschlossen!  Hebel betätigen!";
         StartCoroutine(SolveRoutine());
+    }
+
+    void OnLeverButtonClicked()
+    {
+        if (leverPulled) return;
+        leverPulled = true;
+        if (leverButton) leverButton.interactable = false;
+        StartCoroutine(LeverPullUIRoutine());
+    }
+
+    IEnumerator LeverPullUIRoutine()
+    {
+        // Handle von vertikal (0°) auf horizontal (-90°) drehen
+        if (leverHandleUI != null)
+        {
+            float t = 0f;
+            Quaternion from = leverHandleUI.localRotation;
+            Quaternion to   = Quaternion.Euler(0f, 0f, -90f);
+            while (t < 1f)
+            {
+                t += Time.deltaTime * 2.5f;
+                leverHandleUI.localRotation = Quaternion.Slerp(from, to, Mathf.SmoothStep(0f, 1f, t));
+                yield return null;
+            }
+            leverHandleUI.localRotation = to;
+        }
+        else
+        {
+            yield return new WaitForSeconds(0.3f);
+        }
+
+        OnLeverPulled?.Invoke();
     }
 
     IEnumerator SolveRoutine()
@@ -312,19 +352,8 @@ public class Level5_Breadboard : MonoBehaviour
             foreach (var tr in tileRoots)
                 if (tr != null) PaintInterior(tr, ColOn);
 
-        // Bunsenbrenner-Flamme leuchtet auf
-        if (burnerFlame != null)
-        {
-            float t = 0f;
-            Color dark   = new Color(0.20f, 0.15f, 0.08f);
-            Color bright = new Color(1.00f, 0.48f, 0.02f);
-            while (t < 1f)
-            {
-                t += Time.deltaTime * 1.2f;
-                burnerFlame.color = Color.Lerp(dark, bright, Mathf.SmoothStep(0, 1, t));
-                yield return null;
-            }
-        }
+        // Hebel-Button freischalten
+        if (leverButton != null) leverButton.interactable = true;
 
         yield return new WaitForSeconds(0.8f);
 

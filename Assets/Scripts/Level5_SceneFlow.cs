@@ -63,7 +63,10 @@ public class Level5_SceneFlow : MonoBehaviour
         if (breadboardCanvas != null) breadboardCanvas.SetActive(false);
 
         if (breadboard != null)
+        {
             breadboard.OnPuzzleSolved += OnBreadboardSolved;
+            breadboard.OnLeverPulled  += OnHudLeverPulled;
+        }
 
         BigYahuDialogSystem.Instance?.ShowDialog(new[]
         {
@@ -75,7 +78,10 @@ public class Level5_SceneFlow : MonoBehaviour
     void OnDestroy()
     {
         if (breadboard != null)
+        {
             breadboard.OnPuzzleSolved -= OnBreadboardSolved;
+            breadboard.OnLeverPulled  -= OnHudLeverPulled;
+        }
     }
 
     void Update()
@@ -92,10 +98,7 @@ public class Level5_SceneFlow : MonoBehaviour
                 break;
 
             case State.LeverReady:
-                bool nearLever = leverSpot != null && leverSpot.PlayerNearby;
-                if (leverPrompt != null) leverPrompt.SetActive(nearLever);
-                if (nearLever && kb != null && kb.eKey.wasPressedThisFrame)
-                    StartCoroutine(LeverPulledRoutine());
+                // Lever ist im HUD – OnHudLeverPulled übernimmt, kein E-Key nötig.
                 break;
 
             case State.Pickup:
@@ -144,25 +147,27 @@ public class Level5_SceneFlow : MonoBehaviour
         StartCoroutine(PuzzleSolvedRoutine());
     }
 
-    // Puzzle gelöst → kurze Pause, Canvas weg, Hebel aktivieren
+    void OnHudLeverPulled() => StartCoroutine(LeverPulledRoutine());
+
+    // Puzzle gelöst → Canvas BLEIBT offen damit der HUD-Hebel klickbar ist
     IEnumerator PuzzleSolvedRoutine()
     {
-        yield return new WaitForSeconds(1.2f);
-        if (breadboardCanvas != null) breadboardCanvas.SetActive(false);
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible   = false;
+        yield return new WaitForSeconds(0.8f);
         CurrentState = State.LeverReady;
         BigYahuDialogSystem.Instance?.ShowDialog(new[]
         {
-            "Big Yahu: Schaltkreis repariert! Jetzt den Hebel links an der Tür umlegen!"
+            "Big Yahu: Schaltkreis repariert! Klick jetzt den Hebel rechts im Panel!"
         });
     }
 
-    // Hebel gedrückt → animieren, dann Tür aufmachen
+    // HUD-Hebel betätigt → Canvas schließen, dann Tür aufmachen
     IEnumerator LeverPulledRoutine()
     {
         CurrentState = State.Pickup;
-        if (leverPrompt != null) leverPrompt.SetActive(false);
+        if (leverPrompt      != null) leverPrompt.SetActive(false);
+        if (breadboardCanvas != null) breadboardCanvas.SetActive(false);
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible   = false;
 
         if (leverHandle != null)
         {

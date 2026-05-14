@@ -348,8 +348,8 @@ public class BuildLevel5Workshop : EditorWindow
         // Türöffnung ist 1.6m breit, also linke + rechte Front-Seitenpaneele
         Box("ShedFrontL",    new Vector3(-2.55f, 1.6f, 4f), new Vector3(1.9f, 3.2f, 0.20f), planks, root);
         Box("ShedFrontR",    new Vector3( 2.55f, 1.6f, 4f), new Vector3(1.9f, 3.2f, 0.20f), planks, root);
-        // Türsturz oben
-        Box("ShedLintel",    new Vector3(0f, 2.85f, 4f), new Vector3(1.8f, 0.7f, 0.22f), planksDark, root);
+        // Türsturz oben (Breite = Türöffnung 3.2 m)
+        Box("ShedLintel",    new Vector3(0f, 2.85f, 4f), new Vector3(3.2f, 0.7f, 0.22f), planksDark, root);
 
         // KEIN Dach – würde die Top-Down-Sicht ins Innere blockieren.
         // Nur Querbalken als Atmosphäre.
@@ -363,20 +363,21 @@ public class BuildLevel5Workshop : EditorWindow
 
         // ── Tür (geschlossen, schwenkt nach innen auf) ──────────────────────
         // Pivot am linken Türrahmen-Pfosten (Scharnier) – Drehung um Y öffnet die Tür.
+        // Öffnungsbreite = 3.2 m (ShedFrontL rechte Kante x=-1.6 bis ShedFrontR linke Kante x=1.6).
         var doorPivot = new GameObject("ShedDoorPivot");
         doorPivot.transform.SetParent(root);
-        doorPivot.transform.position = new Vector3(-0.8f, 1.2f, 4f);
+        doorPivot.transform.position = new Vector3(-1.6f, 1.2f, 4f);
 
-        // Türblatt – Mitte des Türrahmens (Weltposition); Box() setzt Weltkoordinaten.
-        Box("ShedDoor", new Vector3(0f, 1.2f, 4f), new Vector3(1.6f, 2.4f, 0.10f),
+        // Türblatt – deckt die gesamte 3.2 m-Öffnung ab.
+        Box("ShedDoor", new Vector3(0f, 1.2f, 4f), new Vector3(3.2f, 2.4f, 0.10f),
             planksDark, doorPivot.transform, col: true);
-        // Querbretter
-        Box("DoorPlank1", new Vector3(0f, 1.5f, 3.94f), new Vector3(1.55f, 0.05f, 0.02f),
+        // Querbretter (Breite an Türblatt angepasst)
+        Box("DoorPlank1", new Vector3(0f, 1.5f, 3.94f), new Vector3(3.1f, 0.05f, 0.02f),
             brass, doorPivot.transform, col: false);
-        Box("DoorPlank2", new Vector3(0f, 0.9f, 3.94f), new Vector3(1.55f, 0.05f, 0.02f),
+        Box("DoorPlank2", new Vector3(0f, 0.9f, 3.94f), new Vector3(3.1f, 0.05f, 0.02f),
             brass, doorPivot.transform, col: false);
-        // Türknauf rechts
-        Cyl("DoorKnob", new Vector3(0.65f, 1.2f, 3.92f), new Vector3(0.10f, 0.04f, 0.10f),
+        // Türknauf rechts (verschoben an rechte Türkante)
+        Cyl("DoorKnob", new Vector3(1.3f, 1.2f, 3.92f), new Vector3(0.10f, 0.04f, 0.10f),
             brass, doorPivot.transform, rot: Quaternion.Euler(90f, 0f, 0f), col: false);
 
         // ── Breadboard-Terminal an der Tür (visueller Hinweis) ──────────────
@@ -635,8 +636,9 @@ public class BuildLevel5Workshop : EditorWindow
 
         BuildBreadboardBackground(canvasGO.transform);
         BuildToolBoard(canvasGO.transform);
-        Image burnerFlame = null;
-        BuildBurnerShowcase(canvasGO.transform, out burnerFlame);
+        Button        leverButton    = null;
+        RectTransform leverHandleUI  = null;
+        BuildHudLever(canvasGO.transform, out leverButton, out leverHandleUI);
 
         TextMeshProUGUI statusText = null;
         RectTransform[] tileRoots = null;
@@ -647,8 +649,9 @@ public class BuildLevel5Workshop : EditorWindow
         scriptGO.transform.SetParent(canvasGO.transform, false);
         var breadboard = scriptGO.AddComponent<Level5_Breadboard>();
         var so   = new SerializedObject(breadboard);
-        so.FindProperty("statusText").objectReferenceValue  = statusText;
-        so.FindProperty("burnerFlame").objectReferenceValue = burnerFlame;
+        so.FindProperty("statusText").objectReferenceValue    = statusText;
+        so.FindProperty("leverButton").objectReferenceValue   = leverButton;
+        so.FindProperty("leverHandleUI").objectReferenceValue = leverHandleUI;
         var tileRootsProp = so.FindProperty("tileRoots");
         tileRootsProp.arraySize = tileRoots.Length;
         for (int i = 0; i < tileRoots.Length; i++)
@@ -700,31 +703,61 @@ public class BuildLevel5Workshop : EditorWindow
             "WERKZEUGWAND", 11f, new Color(0.50f, 0.35f, 0.12f));
     }
 
-    void BuildBurnerShowcase(Transform parent, out Image burnerFlameOut)
+    void BuildHudLever(Transform parent, out Button leverButtonOut, out RectTransform leverHandleUIOut)
     {
-        var panel = MakeAnchored(parent, "BurnerPanel", new Vector2(820f, 0f), new Vector2(220f, 700f));
+        var panel = MakeAnchored(parent, "LeverPanel", new Vector2(820f, 0f), new Vector2(220f, 700f));
         panel.gameObject.AddComponent<Image>().color = new Color(0.10f, 0.08f, 0.06f);
 
-        var bench = MakeAnchored(panel, "Bench", new Vector2(0f, -160f), new Vector2(210f, 220f));
-        bench.gameObject.AddComponent<Image>().color = new Color(0.20f, 0.16f, 0.10f);
+        AddLabel(panel, "LeverLbl", new Vector2(0f, 270f), new Vector2(200f, 26f),
+            "TOR-HEBEL", 13f, new Color(0.55f, 0.35f, 0.10f));
+        AddLabel(panel, "InstrLbl", new Vector2(0f, 245f), new Vector2(200f, 18f),
+            "KLICK ZUM ÖFFNEN", 9f, new Color(0.40f, 0.30f, 0.10f));
 
-        var foot = MakeAnchored(bench, "BurnerFoot", new Vector2(20f, -78f), new Vector2(50f, 10f));
-        foot.gameObject.AddComponent<Image>().color = new Color(0.30f, 0.28f, 0.24f);
-        MakeAnchored(bench, "BurnerTube", new Vector2(20f, 10f), new Vector2(14f, 200f))
-            .gameObject.AddComponent<Image>().color = new Color(0.32f, 0.30f, 0.26f);
-        MakeAnchored(bench, "AirRing", new Vector2(20f, -30f), new Vector2(22f, 12f))
-            .gameObject.AddComponent<Image>().color = new Color(0.40f, 0.36f, 0.30f);
-        MakeAnchored(bench, "Nozzle", new Vector2(20f, 110f), new Vector2(18f, 14f))
-            .gameObject.AddComponent<Image>().color = new Color(0.28f, 0.26f, 0.22f);
+        // Gehäuse-Hintergrund
+        var housing = MakeAnchored(panel, "LeverHousing", new Vector2(0f, 40f), new Vector2(90f, 230f));
+        housing.gameObject.AddComponent<Image>().color = new Color(0.18f, 0.15f, 0.11f);
 
-        var flame1 = MakeAnchored(bench, "Flame1", new Vector2(20f, 148f), new Vector2(20f, 52f));
-        flame1.gameObject.AddComponent<Image>().color = new Color(0.15f, 0.12f, 0.08f);
-        burnerFlameOut = flame1.gameObject.GetComponent<Image>();
+        // Sockel
+        MakeAnchored(panel, "LeverBaseBar", new Vector2(0f, -65f), new Vector2(70f, 18f))
+            .gameObject.AddComponent<Image>().color = new Color(0.28f, 0.24f, 0.18f);
 
-        AddLabel(panel, "BurnerLbl", new Vector2(0f, 210f), new Vector2(200f, 22f),
-            "BUNSENBRENNER", 11f, new Color(0.55f, 0.35f, 0.10f));
-        AddLabel(panel, "StatusLbl", new Vector2(0f, 185f), new Vector2(200f, 18f),
-            "STATUS: INAKTIV", 9f, new Color(0.40f, 0.30f, 0.10f));
+        // ── Hebel-Handle (rotiert beim Klick) ─────────────────────────────
+        // pivot = (0.5, 0) → Drehpunkt am unteren Ende des Stabs
+        var pivotGO = new GameObject("LeverHandleUI");
+        pivotGO.transform.SetParent(panel, false);
+        var pivotRT = pivotGO.AddComponent<RectTransform>();
+        pivotRT.anchorMin         = pivotRT.anchorMax = new Vector2(0.5f, 0.5f);
+        pivotRT.pivot             = new Vector2(0.5f, 0f);   // Drehpunkt unten
+        pivotRT.anchoredPosition  = new Vector2(0f, -55f);   // Fußpunkt in Panel-Koords
+        pivotRT.sizeDelta         = new Vector2(22f, 130f);
+        pivotGO.AddComponent<Image>().color = new Color(0.45f, 0.38f, 0.28f);
+        leverHandleUIOut = pivotRT;
+
+        // Griffstück oben am Handle
+        var gripGO = new GameObject("Grip");
+        gripGO.transform.SetParent(pivotGO.transform, false);
+        var gripRT = gripGO.AddComponent<RectTransform>();
+        gripRT.anchorMin = gripRT.anchorMax = gripRT.pivot = new Vector2(0.5f, 0.5f);
+        gripRT.anchoredPosition = new Vector2(0f, 60f);   // lokal = Spitze des Stabs
+        gripRT.sizeDelta = new Vector2(60f, 24f);
+        gripGO.AddComponent<Image>().color = new Color(0.65f, 0.48f, 0.18f);
+
+        // ── Button (transparent, überdeckt Gehäuse-Bereich) ───────────────
+        var btnGO = new GameObject("LeverButton");
+        btnGO.transform.SetParent(panel, false);
+        var btnRT = btnGO.AddComponent<RectTransform>();
+        btnRT.anchorMin = btnRT.anchorMax = btnRT.pivot = new Vector2(0.5f, 0.5f);
+        btnRT.anchoredPosition = new Vector2(0f, 40f);
+        btnRT.sizeDelta = new Vector2(160f, 280f);
+        btnGO.AddComponent<Image>().color = Color.clear;
+        var btn = btnGO.AddComponent<Button>();
+        var cols = btn.colors;
+        cols.normalColor      = Color.clear;
+        cols.highlightedColor = new Color(1f, 1f, 1f, 0.08f);
+        cols.pressedColor     = new Color(1f, 1f, 1f, 0.18f);
+        cols.disabledColor    = Color.clear;
+        btn.colors = cols;
+        leverButtonOut = btn;
     }
 
     void BuildGamePanel(Transform parent, out RectTransform[] tileRoots, out TextMeshProUGUI statusOut)
