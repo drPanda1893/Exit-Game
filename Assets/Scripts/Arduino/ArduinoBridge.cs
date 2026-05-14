@@ -353,7 +353,7 @@ public class ArduinoBridge : MonoBehaviour
 
     void ParseAndEnqueue(string line)
     {
-        if (logIncoming) Debug.Log($"[ArduinoBridge] ← {line}");
+        if (logIncoming && !IsNoisyTelemetry(line)) Debug.Log($"[ArduinoBridge] ← {line}");
 
         // Format 1: Text-Kommandos (Level1/2/3)
         if (line.StartsWith("KEY:", StringComparison.Ordinal))
@@ -405,6 +405,19 @@ public class ArduinoBridge : MonoBehaviour
     {
         if (_handlers.TryGetValue(cmd, out var list))
             foreach (var h in list) h?.Invoke(payload);
+    }
+
+    // Sensor-Telemetrie, die mit >1 Hz reinkommt, fluten sonst die Konsole.
+    // Auslöser-Events (BLOW, RESET, named COLOR) sollen weiterhin sichtbar bleiben.
+    static bool IsNoisyTelemetry(string line)
+    {
+        if (string.IsNullOrEmpty(line)) return false;
+        if (line.StartsWith("TEMP:",      StringComparison.Ordinal)) return true;
+        if (line.StartsWith("10:TEMP:",   StringComparison.Ordinal)) return true;
+        if (line.StartsWith("HUMIDITY:",  StringComparison.Ordinal)) return true;
+        if (line.StartsWith("COLOR:RGB:", StringComparison.Ordinal)) return true;
+        if (line.StartsWith("30:JOY:",    StringComparison.Ordinal)) return true;
+        return false;
     }
 
     // ── Hilfsmethoden ─────────────────────────────────────────────────────────

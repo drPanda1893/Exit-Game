@@ -692,11 +692,14 @@ public class BuildLevel1PrisonCell : LevelBuilderBase
         blanket.transform.localScale    = new Vector3(1.04f, 0.09f, 1.72f);
         blanket.GetComponent<Renderer>().material = blanketCodeMat;
 
-        // "662" — Häftlingsnummer groß auf der Decke aufgedruckt (Top-Down sichtbar)
+        // "662" — Häftlingsnummer auf der Decke. Ein flach gelegter 3D-Text auf einer
+        // horizontalen Flaeche laesst sich von einer Top-Down-Kamera geometrisch nicht
+        // gleichzeitig richtig herum UND nicht gespiegelt darstellen. Loesung: Billboard,
+        // d.h. der Text dreht sich pro Frame zur Kamera (CameraFacingText.cs).
         GameObject codeGO = new GameObject("BlanketCode_662");
         codeGO.transform.SetParent(g.transform);
-        codeGO.transform.localPosition = new Vector3(0f, 0.572f, -0.08f); // knapp über Decke
-        codeGO.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);  // nach oben zeigend, korrekt ausgerichtet
+        codeGO.transform.localPosition = new Vector3(0f, 0.62f, -0.08f); // schwebt knapp ueber der Decke
+        codeGO.AddComponent<CameraFacingText>();
         TextMeshPro tmp = codeGO.AddComponent<TextMeshPro>();
         tmp.text             = "662";
         tmp.fontStyle        = FontStyles.Bold;

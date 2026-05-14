@@ -1339,7 +1339,7 @@ public class BuildLevel2MaintenanceRoom : EditorWindow
         var dustInstructGO  = new GameObject("InstructionText");
         dustInstructGO.transform.SetParent(dustPanelGO.transform, false);
         var dustInstructTMP = dustInstructGO.AddComponent<TextMeshProUGUI>();
-        dustInstructTMP.text      = "Hauche den Sensor an oder reib den Staub mit der Maus weg!";
+        dustInstructTMP.text      = "Meint Joshi das mit pusten?";
         dustInstructTMP.fontSize  = 26f;
         dustInstructTMP.alignment = TextAlignmentOptions.Center;
         dustInstructTMP.color     = new Color(1f, 0.9f, 0.7f);

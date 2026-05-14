@@ -84,28 +84,15 @@ public class Level6_FinalGate : MonoBehaviour
 
         EnsureArduinoBridge();
 
-        // Arduino-Thermistor (Cmd 0x10 – gleich wie Level 2) sofort scharf schalten,
-        // damit ab Level-6-Start durchgehend "10:TEMP:<C>" gesendet wird und die
-        // Werte in der Konsole sichtbar sind – auch bevor der Spieler am Tor steht.
+        // Thermistor NICHT sofort starten – erst wenn der Spieler am Tor steht
+        // und das Heat-Panel oeffnet (siehe OpenHeatPanel). Handler/Listener
+        // werden trotzdem hier registriert, damit der erste Wert sofort ankommt.
         if (ArduinoBridge.Instance != null)
         {
             tempHandler = OnTemperatureFromArduino;
             ArduinoBridge.Instance.RegisterHandler(arduinoCmdId, tempHandler);
             ArduinoBridge.Instance.OnConnectionChanged += HandleArduinoConnectionChanged;
             arduinoSubscribed = true;
-
-            Debug.Log($"[Level6] ArduinoBridge gefunden. Port={ArduinoBridge.Instance.PortName}, " +
-                      $"connected={ArduinoBridge.Instance.IsConnected}");
-
-            // START wird wiederholt gesendet, weil Arduino beim Oeffnen des
-            // Serial-Ports oft kurz resetet und das erste Kommando verlieren kann.
-            RequestArduinoStart();
-        }
-        else
-        {
-            Debug.LogWarning("[Level6] ArduinoBridge.Instance ist NULL – kein Thermistor-Empfang. " +
-                             "Wurde Level 6 direkt gestartet ohne Level 1 davor? " +
-                             "Die Bridge wird normalerweise dort erzeugt und per DontDestroyOnLoad mitgenommen.");
         }
 
         if (BigYahuDialogSystem.Instance)
@@ -159,7 +146,8 @@ public class Level6_FinalGate : MonoBehaviour
             return;
         }
 
-        RequestArduinoStart();
+        // Nach (Re-)Connect nur neu starten, wenn der Spieler bereits im Heat-Panel ist.
+        if (state == State.Heating) RequestArduinoStart();
     }
 
     void RequestArduinoStart()
@@ -181,7 +169,6 @@ public class Level6_FinalGate : MonoBehaviour
             if (bridge.IsConnected)
             {
                 bridge.Send(arduinoCmdId, "START");
-                Debug.Log($"[Level6] Thermistor {arduinoCmdId:X2}:START gesendet (Versuch {attempt}).");
                 yield return new WaitForSeconds(attempt == 1 ? 1.2f : 0.75f);
 
                 if (arduinoLastUpdateTime > 0f &&
@@ -209,11 +196,6 @@ public class Level6_FinalGate : MonoBehaviour
             arduinoConnected      = true;
             arduinoLastTempC      = tempC;
             arduinoLastUpdateTime = Time.time;
-
-            // Jeden Sensor-Wert direkt in der Unity-Konsole ausgeben.
-            // Marker zeigt, ob der Balken gerade wandert (>= Schwelle).
-            string marker = tempC >= heatThresholdC ? "BRENNER" : "SENSOR";
-            Debug.Log($"[Level6] {marker} – {tempC:F1} °C");
         }
     }
 
@@ -258,7 +240,8 @@ public class Level6_FinalGate : MonoBehaviour
         Cursor.visible   = true;
         Cursor.lockState = CursorLockMode.None;
         EventSystem.current?.SetSelectedGameObject(null);
-        // Thermistor laeuft bereits seit Start() – kein zweites 10:START noetig.
+        // Thermistor erst hier starten – der Spieler ist jetzt am Tor.
+        RequestArduinoStart();
     }
 
     void HandleHeat()
