@@ -20,7 +20,7 @@ using System.Collections;
 /// </summary>
 public class Level5_SceneFlow : MonoBehaviour
 {
-    public enum State { Outside, Solving, Pickup, ReturnToExit, Done }
+    public enum State { Outside, Solving, LeverReady, Pickup, ReturnToExit, Done }
 
     [Header("Türinteraktion (am Schuppen)")]
     public DustyWallSpot doorSpot;
@@ -30,6 +30,11 @@ public class Level5_SceneFlow : MonoBehaviour
     [Header("Breadboard-Overlay")]
     public GameObject       breadboardCanvas;   // Canvas-Wurzel, initial inaktiv
     public Level5_Breadboard breadboard;        // Puzzle-Script
+
+    [Header("Hebel (nach Puzzle-Lösung)")]
+    public DustyWallSpot leverSpot;
+    public GameObject    leverPrompt;    // "[E] Hebel umlegen"
+    public GameObject    leverHandle;    // LeverPivot – dreht sich nach vorne
 
     [Header("Bunsenbrenner-Pickup im Schuppen")]
     public DustyWallSpot brennerSpot;
@@ -50,6 +55,7 @@ public class Level5_SceneFlow : MonoBehaviour
     void Start()
     {
         if (doorPrompt    != null) doorPrompt.SetActive(false);
+        if (leverPrompt   != null) leverPrompt.SetActive(false);
         if (brennerPrompt != null) brennerPrompt.SetActive(false);
         if (exitPrompt    != null) exitPrompt.SetActive(false);
         if (exitMarker    != null) exitMarker.SetActive(false);
@@ -83,6 +89,13 @@ public class Level5_SceneFlow : MonoBehaviour
                 if (doorPrompt != null) doorPrompt.SetActive(nearDoor);
                 if (nearDoor && kb != null && kb.eKey.wasPressedThisFrame)
                     OpenBreadboard();
+                break;
+
+            case State.LeverReady:
+                bool nearLever = leverSpot != null && leverSpot.PlayerNearby;
+                if (leverPrompt != null) leverPrompt.SetActive(nearLever);
+                if (nearLever && kb != null && kb.eKey.wasPressedThisFrame)
+                    StartCoroutine(LeverPulledRoutine());
                 break;
 
             case State.Pickup:
@@ -128,19 +141,45 @@ public class Level5_SceneFlow : MonoBehaviour
 
     void OnBreadboardSolved()
     {
-        StartCoroutine(DoorOpensRoutine());
+        StartCoroutine(PuzzleSolvedRoutine());
     }
 
-    IEnumerator DoorOpensRoutine()
+    // Puzzle gelöst → kurze Pause, Canvas weg, Hebel aktivieren
+    IEnumerator PuzzleSolvedRoutine()
     {
-        // Kurze Pause damit Spieler das Erfolgs-Feedback sieht
         yield return new WaitForSeconds(1.2f);
-
         if (breadboardCanvas != null) breadboardCanvas.SetActive(false);
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible   = false;
+        CurrentState = State.LeverReady;
+        BigYahuDialogSystem.Instance?.ShowDialog(new[]
+        {
+            "Big Yahu: Schaltkreis repariert! Jetzt den Hebel links an der Tür umlegen!"
+        });
+    }
 
-        // Tür "öffnet sich": animiert nach oben rotieren (oder einfach deaktivieren)
+    // Hebel gedrückt → animieren, dann Tür aufmachen
+    IEnumerator LeverPulledRoutine()
+    {
+        CurrentState = State.Pickup;
+        if (leverPrompt != null) leverPrompt.SetActive(false);
+
+        if (leverHandle != null)
+        {
+            float t = 0f;
+            Quaternion start = leverHandle.transform.localRotation;
+            Quaternion end   = start * Quaternion.Euler(-90f, 0f, 0f);
+            while (t < 1f)
+            {
+                t += Time.deltaTime * 2.5f;
+                leverHandle.transform.localRotation =
+                    Quaternion.Slerp(start, end, Mathf.SmoothStep(0f, 1f, t));
+                yield return null;
+            }
+        }
+
+        yield return new WaitForSeconds(0.3f);
+
         if (doorObject != null)
         {
             float t = 0f;
@@ -153,14 +192,11 @@ public class Level5_SceneFlow : MonoBehaviour
                     Quaternion.Slerp(start, end, Mathf.SmoothStep(0f, 1f, t));
                 yield return null;
             }
-            // Collider aus, damit Spieler hineingehen kann
             foreach (var c in doorObject.GetComponentsInChildren<Collider>())
                 c.enabled = false;
         }
 
-        // Brenner sichtbar/aktiv machen
         if (brennerGlow != null) brennerGlow.enabled = true;
-        CurrentState = State.Pickup;
 
         BigYahuDialogSystem.Instance?.ShowDialog(new[]
         {

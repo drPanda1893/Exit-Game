@@ -127,6 +127,8 @@ public class BuildLevel5Workshop : EditorWindow
         // Trigger-Zonen (proximity)
         var doorSpot    = AddSpotTrigger(scene, root.transform,
                           new Vector3(0f, 1f, 1.2f), new Vector3(3.0f, 2.0f, 2.0f), "DoorSpot");
+        var leverSpot   = AddSpotTrigger(scene, root.transform,
+                          shedParts.leverPos, new Vector3(1.5f, 2.0f, 1.5f), "LeverSpot");
         var brennerSpot = AddSpotTrigger(scene, root.transform,
                           interior.brennerPos + new Vector3(0f, 0f, -1.0f),
                           new Vector3(2.2f, 2.0f, 1.6f), "BrennerSpot");
@@ -136,6 +138,8 @@ public class BuildLevel5Workshop : EditorWindow
         // Prompt-Canvases
         var doorPrompt    = BuildPromptCanvas(scene, "[ E ]  Schaltung reparieren",
                             new Color(0.55f, 0.85f, 1.0f));
+        var leverPrompt   = BuildPromptCanvas(scene, "[ E ]  Hebel umlegen",
+                            new Color(0.55f, 0.95f, 0.40f));
         var brennerPrompt = BuildPromptCanvas(scene, "[ E ]  Bunsenbrenner aufnehmen",
                             new Color(1.0f, 0.65f, 0.20f));
         var exitPrompt    = BuildPromptCanvas(scene, "Zum Hof zurück …",
@@ -155,6 +159,9 @@ public class BuildLevel5Workshop : EditorWindow
         flow.doorObject       = shedParts.door;
         flow.breadboardCanvas = breadboardCanvas;
         flow.breadboard       = breadboardScript;
+        flow.leverSpot        = leverSpot;
+        flow.leverPrompt      = leverPrompt;
+        flow.leverHandle      = shedParts.leverHandle;
         flow.brennerSpot      = brennerSpot;
         flow.brennerPrompt    = brennerPrompt;
         flow.brennerObject    = interior.brennerObject;
@@ -311,8 +318,10 @@ public class BuildLevel5Workshop : EditorWindow
 
     struct ShedParts
     {
-        public GameObject door;       // Tür-Pivot zum Drehen
-        public Transform  interior;   // Mittelpunkt-Transform des Innenraums
+        public GameObject door;         // Tür-Pivot zum Drehen
+        public Transform  interior;     // Mittelpunkt-Transform des Innenraums
+        public GameObject leverHandle;  // LeverPivot – wird nach Puzzle-Lösung gedreht
+        public Vector3    leverPos;     // Weltposition des Hebels (für Trigger-Platzierung)
     }
 
     ShedParts BuildShed(Transform root)
@@ -389,7 +398,34 @@ public class BuildLevel5Workshop : EditorWindow
         interior.transform.SetParent(root);
         interior.transform.position = new Vector3(0f, 0f, 7f);
 
-        return new ShedParts { door = doorPivot, interior = interior.transform };
+        // ── Hebel links neben der Tür ──────────────────────────────────────
+        // Sockel (fest, kein Collider nötig)
+        Box("LeverBase", new Vector3(-1.6f, 0.55f, 3.7f),
+            new Vector3(0.22f, 1.1f, 0.22f), iron, root);
+        // Pivot-Punkt = Basis des beweglichen Griffs
+        var leverPivot = new GameObject("LeverPivot");
+        leverPivot.transform.SetParent(root);
+        leverPivot.transform.position = new Vector3(-1.6f, 1.1f, 3.7f);
+        // Griff-Stab (hängt vom Pivot nach oben – Weltpos y=1.55 = Mitte des Stabs)
+        Cyl("LeverHandle", new Vector3(-1.6f, 1.55f, 3.7f),
+            new Vector3(0.09f, 0.45f, 0.09f), iron, leverPivot.transform,
+            rot: Quaternion.identity, col: false);
+        // Handgriff-Querstab oben
+        Box("LeverGrip", new Vector3(-1.6f, 1.95f, 3.7f),
+            new Vector3(0.22f, 0.09f, 0.14f), brass, leverPivot.transform, col: false);
+        // Kleines Kontrollicht am Sockel (immer sichtbar, Atmosphäre)
+        Box("LeverLight", new Vector3(-1.6f, 1.12f, 3.64f),
+            new Vector3(0.08f, 0.08f, 0.02f),
+            Emit(new Color(0.15f, 0.75f, 0.25f), new Color(0.30f, 1.0f, 0.35f), 2f),
+            root, col: false);
+
+        return new ShedParts
+        {
+            door        = doorPivot,
+            interior    = interior.transform,
+            leverHandle = leverPivot,
+            leverPos    = new Vector3(-1.6f, 1.1f, 3.7f),
+        };
     }
 
     void AddSignText(Transform root, Vector3 worldPos, string text)

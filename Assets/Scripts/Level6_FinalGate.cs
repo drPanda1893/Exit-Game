@@ -343,6 +343,8 @@ public class Level6_FinalGate : MonoBehaviour
     /// </summary>
     public void ShowWinScreen()
     {
+        Cursor.visible   = true;
+        Cursor.lockState = CursorLockMode.None;
         GameManager.Instance?.StopTimer();
         if (timerText && GameManager.Instance != null)
         {
