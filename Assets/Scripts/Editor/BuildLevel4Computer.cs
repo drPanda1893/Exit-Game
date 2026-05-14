@@ -354,9 +354,9 @@ public class BuildLevel4Computer : EditorWindow
             wallRTs.Add(block);
 
             // Highlight oben und links (3D-Effekt)
-            MakeAnchored(block, "Light", new Vector2(-size.x*0.5f + 2f, size.y*0.5f - 2f),
+            MakeAnchored(block, "Light", new Vector2(2f, size.y*0.5f - 2f),
                 new Vector2(size.x, 3f)).gameObject.AddComponent<Image>().color = blockLight;
-            MakeAnchored(block, "Shadow", new Vector2(size.x*0.5f - 2f, -size.y*0.5f + 2f),
+            MakeAnchored(block, "Shadow", new Vector2(size.x*0.5f - 2f, 2f),
                 new Vector2(3f, size.y)).gameObject.AddComponent<Image>().color = blockShadow;
 
             // Fugen-Muster auf dem Block
