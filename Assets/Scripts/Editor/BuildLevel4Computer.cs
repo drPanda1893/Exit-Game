@@ -280,16 +280,24 @@ public class BuildLevel4Computer : EditorWindow
 
     void BuildWallBorder(Transform parent)
     {
-        // Halloween-Mauer: tiefschwarz mit gluehend-orangen Zinnen.
-        Color wallCol  = new Color(0.05f, 0.03f, 0.06f);
-        Color crownCol = new Color(0.95f, 0.45f, 0.05f);
+        // Gefängnismauer: deutlich sichtbares Betongrau mit orangen Zinnen.
+        Color wallCol  = new Color(0.28f, 0.25f, 0.22f);
+        Color wallInner = new Color(0.22f, 0.19f, 0.16f);   // innerer Schattensaum
+        Color crownCol = new Color(0.95f, 0.50f, 0.05f);
         float w = 1280f, h = 720f;
+        const float thick = 36f;
 
-        // Rahmen-Streifen direkt am Canvas-Rand.
-        MakeAnchored(parent, "WallTop",    new Vector2(0,     h*0.5f-8),  new Vector2(w, 16f)).gameObject.AddComponent<Image>().color = wallCol;
-        MakeAnchored(parent, "WallBottom", new Vector2(0,    -h*0.5f+8),  new Vector2(w, 16f)).gameObject.AddComponent<Image>().color = wallCol;
-        MakeAnchored(parent, "WallLeft",   new Vector2(-w*0.5f+8, 0),     new Vector2(16f, h)).gameObject.AddComponent<Image>().color = wallCol;
-        MakeAnchored(parent, "WallRight",  new Vector2( w*0.5f-8, 0),     new Vector2(16f, h)).gameObject.AddComponent<Image>().color = wallCol;
+        // Rahmen-Streifen direkt am Canvas-Rand (dick genug zum Erkennen).
+        MakeAnchored(parent, "WallTop",    new Vector2(0,     h*0.5f-thick*0.5f), new Vector2(w, thick)).gameObject.AddComponent<Image>().color = wallCol;
+        MakeAnchored(parent, "WallBottom", new Vector2(0,    -h*0.5f+thick*0.5f), new Vector2(w, thick)).gameObject.AddComponent<Image>().color = wallCol;
+        MakeAnchored(parent, "WallLeft",   new Vector2(-w*0.5f+thick*0.5f, 0),    new Vector2(thick, h)).gameObject.AddComponent<Image>().color = wallCol;
+        MakeAnchored(parent, "WallRight",  new Vector2( w*0.5f-thick*0.5f, 0),    new Vector2(thick, h)).gameObject.AddComponent<Image>().color = wallCol;
+
+        // Innerer Schattensaum (gibt Tiefe)
+        MakeAnchored(parent, "WallTopIn",    new Vector2(0,     h*0.5f-thick-3),  new Vector2(w, 6f)).gameObject.AddComponent<Image>().color = wallInner;
+        MakeAnchored(parent, "WallBottomIn", new Vector2(0,    -h*0.5f+thick+3),  new Vector2(w, 6f)).gameObject.AddComponent<Image>().color = wallInner;
+        MakeAnchored(parent, "WallLeftIn",   new Vector2(-w*0.5f+thick+3, 0),     new Vector2(6f, h)).gameObject.AddComponent<Image>().color = wallInner;
+        MakeAnchored(parent, "WallRightIn",  new Vector2( w*0.5f-thick-3, 0),     new Vector2(6f, h)).gameObject.AddComponent<Image>().color = wallInner;
 
         // Orange Zinnen oben und unten, jetzt ueber die volle Breite.
         int teeth = 30;
@@ -305,10 +313,10 @@ public class BuildLevel4Computer : EditorWindow
 
     List<RectTransform> BuildObstacles(Transform parent)
     {
-        // Halloween-Hindernisse: tiefschwarze Sarkophag-Bloecke mit orangem Glow.
-        Color blockColor  = new Color(0.08f, 0.04f, 0.10f);
-        Color blockShadow = new Color(0.03f, 0.01f, 0.05f);
-        Color blockLight  = new Color(0.95f, 0.45f, 0.05f);
+        // Beton-Blöcke – hell genug um klar vom dunklen Boden (0.09–0.13) abzustechen.
+        Color blockColor  = new Color(0.32f, 0.28f, 0.24f);   // mittleres Betongrau
+        Color blockShadow = new Color(0.16f, 0.13f, 0.11f);   // dunklerer Beton (Schatten)
+        Color blockLight  = new Color(0.95f, 0.55f, 0.10f);   // oranger Highlight-Streifen
 
         // Hindernisse jetzt auch in den Seiten-Korridoren, damit das ganze
         // 1280x720-Feld bespielbar bleibt und nicht nur die Mitte interessant ist.

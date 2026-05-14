@@ -330,7 +330,7 @@ public class Level4_StealthMinigame : MonoBehaviour
         guards[i].anchoredPosition += guardDir[i] * spd * dt;
 
         // Spielfeldrand-Bounce
-        const float margin = 18f;
+        const float margin = 42f;
         Vector2 p = guards[i].anchoredPosition;
         if (p.x <= areaRect.xMin + margin) { guardDir[i].x =  Mathf.Abs(guardDir[i].x); p.x = areaRect.xMin + margin; }
         if (p.x >= areaRect.xMax - margin) { guardDir[i].x = -Mathf.Abs(guardDir[i].x); p.x = areaRect.xMax - margin; }
@@ -359,7 +359,7 @@ public class Level4_StealthMinigame : MonoBehaviour
 
     void BounceOnBorder(int i)
     {
-        const float margin = 18f;
+        const float margin = 42f;
         Vector2 p = guards[i].anchoredPosition;
         if (p.x < areaRect.xMin + margin) { guardDir[i].x =  Mathf.Abs(guardDir[i].x); p.x = areaRect.xMin + margin; }
         if (p.x > areaRect.xMax - margin) { guardDir[i].x = -Mathf.Abs(guardDir[i].x); p.x = areaRect.xMax - margin; }
